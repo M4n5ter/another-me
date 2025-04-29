@@ -21,7 +21,7 @@ func main() {
 	ctx := context.Background()
 
 	chatModel, err := deepseek.NewChatModel(ctx, &deepseek.ChatModelConfig{
-		APIKey: "PLACEHOLDER_KEY",
+		APIKey: "sk-xxx",
 		Model:  "deepseek-chat",
 		// 设置返回格式为 JSON
 		// ResponseFormatType: deepseek.ResponseFormatTypeJSONObject,

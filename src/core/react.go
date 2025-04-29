@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"math"
 	"os"
+	"slices"
 
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/components/tool"
@@ -60,7 +61,8 @@ func NewReActWithConfig(chatModel model.ToolCallingChatModel, config *ReActConfi
 
 			// 如果设置了消息查看器，则调用消息查看器
 			if config.MessageViewer != nil {
-				config.MessageViewer(res)
+				readonly := slices.Clone(res)
+				config.MessageViewer(readonly)
 			}
 			return res
 		},
