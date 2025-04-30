@@ -24,7 +24,7 @@ type OrchestratorState struct {
 	Interests      []string
 	PendingTasks   []any // 由信息收集器识别的任务
 	NeedsUserInput bool
-	LastRunOutput  any // 上次运行的工作代理的输出
+	LastRunOutput  any // 上次运行的 Worker Agent 的输出
 	ShouldSleep    bool
 }
 
@@ -91,36 +91,83 @@ func (o *Orchestrator) Run(ctx context.Context, input OrchestratorInput) (*Orche
 // buildAndCompileGraph 定义了用于编排的 Eino 图结构。
 func (o *Orchestrator) buildAndCompileGraph(ctx context.Context) error {
 	graphBuilder := compose.NewGraph[OrchestratorInput, OrchestratorState](compose.WithGenLocalState(func(ctx context.Context) *OrchestratorState {
+		// TODO: 也许应该在这里从数据库加载状态
+
 		return &OrchestratorState{}
 	}))
 
 	// --- 定义节点 ---
 	// 根据输入加载初始状态的节点（例如，从负载中获取 UserID）
-	_ = graphBuilder.AddLambdaNode("load_state", compose.InvokableLambda(o.loadState))
+	err := graphBuilder.AddLambdaNode("load_state", compose.InvokableLambda(o.loadState))
+	if err != nil {
+		o.logger.Error("添加 load_state 节点失败", "error", err)
+		return err
+	}
 
 	// 根据触发器和状态决定主要任务的节点
-	_ = graphBuilder.AddLambdaNode("dispatch_task", compose.InvokableLambda(o.dispatchTaskLogic))
+	err = graphBuilder.AddLambdaNode("dispatch_task", compose.InvokableLambda(o.dispatchTaskLogic), compose.WithStatePreHandler(func(ctx context.Context, input OrchestratorInput, state *OrchestratorState) (OrchestratorInput, error) {
+		// TODO: 也许可以将输入更新到状态中，并且还可以将状态更新到数据库: input -> state -> db
+		return input, nil
+	}))
+	if err != nil {
+		o.logger.Error("添加 dispatch_task 节点失败", "error", err)
+		return err
+	}
 
 	// 调用工作代理的节点
-	_ = graphBuilder.AddLambdaNode("call_info_gatherer", compose.InvokableLambda(o.callWorkerAgent(o.infoGatherer)))
-	_ = graphBuilder.AddLambdaNode("call_user_interactor", compose.InvokableLambda(o.callWorkerAgent(o.userInteractor)))
-	_ = graphBuilder.AddLambdaNode("call_learner", compose.InvokableLambda(o.callWorkerAgent(o.learner)))
+	err = graphBuilder.AddLambdaNode("call_info_gatherer", compose.InvokableLambda(o.callWorkerAgent(o.infoGatherer)))
+	if err != nil {
+		o.logger.Error("添加 call_info_gatherer 节点失败", "error", err)
+		return err
+	}
 
-	// 将工作代理输出合并回主状态的节点
-	_ = graphBuilder.AddLambdaNode("merge_worker_output", compose.InvokableLambda(o.mergeWorkerOutput))
+	err = graphBuilder.AddLambdaNode("call_user_interactor", compose.InvokableLambda(o.callWorkerAgent(o.userInteractor)))
+	if err != nil {
+		o.logger.Error("添加 call_user_interactor 节点失败", "error", err)
+		return err
+	}
+
+	err = graphBuilder.AddLambdaNode("call_learner", compose.InvokableLambda(o.callWorkerAgent(o.learner)))
+	if err != nil {
+		o.logger.Error("添加 call_learner 节点失败", "error", err)
+		return err
+	}
+
+	// 将 Worker Agent 的输出合并回主状态的节点
+	err = graphBuilder.AddLambdaNode("merge_worker_output", compose.InvokableLambda(o.mergeWorkerOutput))
+	if err != nil {
+		o.logger.Error("添加 merge_worker_output 节点失败", "error", err)
+		return err
+	}
 
 	// 决定编排器是否应休眠的节点
-	_ = graphBuilder.AddLambdaNode("decide_sleep", compose.InvokableLambda(o.decideSleep))
+	err = graphBuilder.AddLambdaNode("decide_sleep", compose.InvokableLambda(o.decideSleep))
+	if err != nil {
+		o.logger.Error("添加 decide_sleep 节点失败", "error", err)
+		return err
+	}
 
 	// 在结束前保存最终状态的节点（可选，可以是 decide_sleep 的一部分）
-	_ = graphBuilder.AddLambdaNode("save_state", compose.InvokableLambda(o.saveState))
+	err = graphBuilder.AddLambdaNode("save_state", compose.InvokableLambda(o.saveState))
+	if err != nil {
+		o.logger.Error("添加 save_state 节点失败", "error", err)
+		return err
+	}
 
 	// --- 定义边和分支 ---
-	_ = graphBuilder.AddEdge(compose.START, "load_state")
-	_ = graphBuilder.AddEdge("load_state", "dispatch_task")
+	err = graphBuilder.AddEdge(compose.START, "load_state")
+	if err != nil {
+		o.logger.Error("添加 START 到 load_state 边失败", "error", err)
+		return err
+	}
+
+	err = graphBuilder.AddEdge("load_state", "dispatch_task")
+	if err != nil {
+		o.logger.Error("添加 load_state 到 dispatch_task 边失败", "error", err)
+		return err
+	}
 
 	// 从 dispatch_task 分支到不同的 Worker Agent 或直接到休眠决策
-
 	dispatchBranch := compose.NewGraphBranch[*OrchestratorState](
 		// 条件函数：检查状态以决定下一个节点
 		func(ctx context.Context, state *OrchestratorState) (string, error) {
@@ -146,22 +193,41 @@ func (o *Orchestrator) buildAndCompileGraph(ctx context.Context) error {
 			"decide_sleep":         true,
 		},
 	)
-	_ = graphBuilder.AddBranch("dispatch_task", dispatchBranch)
+	err = graphBuilder.AddBranch("dispatch_task", dispatchBranch)
+	if err != nil {
+		o.logger.Error("添加 dispatch_task 分支失败", "error", err)
+		return err
+	}
 
 	// 从工作节点到合并输出的边
-	_ = graphBuilder.AddEdge("call_info_gatherer", "merge_worker_output")
-	_ = graphBuilder.AddEdge("call_user_interactor", "merge_worker_output")
-	_ = graphBuilder.AddEdge("call_learner", "merge_worker_output")
+	err = graphBuilder.AddEdge("call_info_gatherer", "merge_worker_output")
+	if err != nil {
+		o.logger.Error("添加 call_info_gatherer 到 merge_worker_output 边失败", "error", err)
+		return err
+	}
 
 	// 合并后，循环回到分派任务或决定休眠
 	// 选项 1：在工作代理运行后始终重新评估任务
 	// _ = graphBuilder.AddEdge("merge_worker_output", "dispatch_task")
 	// 选项 2：合并后直接进入休眠决策（更简单的第一步）
-	_ = graphBuilder.AddEdge("merge_worker_output", "decide_sleep")
+	err = graphBuilder.AddEdge("merge_worker_output", "decide_sleep")
+	if err != nil {
+		o.logger.Error("添加 merge_worker_output 到 decide_sleep 边失败", "error", err)
+		return err
+	}
 
 	// 从休眠决策到保存状态，然后结束
-	_ = graphBuilder.AddEdge("decide_sleep", "save_state")
-	_ = graphBuilder.AddEdge("save_state", compose.END) // 使用 agent.END
+	err = graphBuilder.AddEdge("decide_sleep", "save_state")
+	if err != nil {
+		o.logger.Error("添加 decide_sleep 到 save_state 边失败", "error", err)
+		return err
+	}
+
+	err = graphBuilder.AddEdge("save_state", compose.END) // 使用 agent.END
+	if err != nil {
+		o.logger.Error("添加 save_state 到 END 边失败", "error", err)
+		return err
+	}
 
 	// 编译图
 	compiled, err := graphBuilder.Compile(ctx)
