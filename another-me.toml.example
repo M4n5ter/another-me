@@ -1,7 +1,7 @@
 locale = "zh"
 
 [surreal]
-db_url = "ws://localhost:8000"
+db_url = "memory://"
 namespace = "test"
 database = "test"
 username = "root"
