@@ -6,9 +6,9 @@ toolchain go1.24.2
 
 require (
 	github.com/cloudwego/eino v0.3.27
-	github.com/cloudwego/eino-ext/components/model/deepseek v0.0.0-20250424061409-ccd60fbc7c1c
+	github.com/cloudwego/eino-ext/components/model/deepseek v0.0.0-20250429121045-a2545a66f5cf
 	github.com/cloudwego/eino-ext/components/tool/mcp v0.0.0-20250429121045-a2545a66f5cf
-	github.com/mark3labs/mcp-go v0.24.1
+	github.com/mark3labs/mcp-go v0.25.0
 	github.com/spf13/viper v1.20.1
 	github.com/surrealdb/surrealdb.go v0.3.2
 )
