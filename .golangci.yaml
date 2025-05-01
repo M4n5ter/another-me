@@ -1,0 +1,41 @@
+version: "2"
+output:
+  formats:
+    text:
+      path: stdout
+linters:
+  disable:
+    - errcheck
+    - ineffassign
+    - staticcheck
+    - unused
+  settings:
+    govet:
+      disable:
+        - stdmethods
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - .*\.mock\.go$
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    gofumpt:
+      extra-rules: true
+  exclusions:
+    generated: lax
+    paths:
+      - .*\.mock\.go$
+      - third_party$
+      - builtin$
+      - examples$
