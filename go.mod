@@ -7,6 +7,10 @@ toolchain go1.24.2
 require (
 	github.com/cloudwego/eino v0.3.27
 	github.com/cloudwego/eino-ext/components/model/deepseek v0.0.0-20250424061409-ccd60fbc7c1c
+	github.com/cloudwego/eino-ext/components/tool/mcp v0.0.0-20250429121045-a2545a66f5cf
+	github.com/mark3labs/mcp-go v0.24.1
+	github.com/spf13/viper v1.20.1
+	github.com/surrealdb/surrealdb.go v0.3.2
 )
 
 require (
@@ -22,6 +26,7 @@ require (
 	github.com/go-openapi/swag v0.19.5 // indirect
 	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
 	github.com/gofrs/uuid v4.4.0+incompatible // indirect
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/goph/emperror v0.17.2 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/invopop/yaml v0.1.0 // indirect
@@ -44,12 +49,11 @@ require (
 	github.com/spf13/afero v1.12.0 // indirect
 	github.com/spf13/cast v1.7.1 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
-	github.com/spf13/viper v1.20.1 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
-	github.com/surrealdb/surrealdb.go v0.3.2 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/yargevad/filepathx v1.0.0 // indirect
+	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.9.0 // indirect
 	golang.org/x/arch v0.11.0 // indirect

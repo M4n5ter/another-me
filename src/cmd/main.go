@@ -37,23 +37,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// but, err := browseruse.NewBrowserUseTool(ctx, &browseruse.Config{
-	// 	Headless: true,
-	// })
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-
-	// thinkingTool, err := sequentialthinking.NewTool()
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-
-	// am, err := core.ReAct(chatModel, core.WithTools([]tool.BaseTool{thinkingTool}), core.WithMaxLoop(10), core.WithSystemPrompt("你是一个 golang 开发专家."))
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-
 	am, err := core.NewAnotherMe(chatModel, nil, core.WithTool(tool.NewTaskEvaluatorTool()))
 	if err != nil {
 		slog.Error("failed to create another me", "error", err)
