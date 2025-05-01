@@ -168,7 +168,7 @@ func (o *Orchestrator) buildAndCompileGraph(ctx context.Context) error {
 	}
 
 	// 从 dispatch_task 分支到不同的 Worker Agent 或直接到休眠决策
-	dispatchBranch := compose.NewGraphBranch[*OrchestratorState](
+	dispatchBranch := compose.NewGraphBranch(
 		// 条件函数：检查状态以决定下一个节点
 		func(ctx context.Context, state *OrchestratorState) (string, error) {
 			if state.NeedsUserInput {
