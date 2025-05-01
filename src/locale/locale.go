@@ -1,6 +1,7 @@
 package locale
 
 import (
+	"strings"
 	"sync"
 
 	"github.com/m4n5ter/another-me/src/locale/en"
@@ -18,6 +19,21 @@ var (
 	locale       = LocaleZH
 	locale_mutex sync.RWMutex
 )
+
+func SetLocaleFromStr(str string) {
+	locale_mutex.Lock()
+	defer locale_mutex.Unlock()
+
+	str = strings.ToLower(str)
+	switch str {
+	case "zh":
+		locale = LocaleZH
+	case "en":
+		locale = LocaleEN
+	default:
+		locale = LocaleZH
+	}
+}
 
 func SetLocale(l Locale) {
 	locale_mutex.Lock()

@@ -1,6 +1,10 @@
 package agent
 
-import "context"
+import (
+	"context"
+
+	"github.com/cloudwego/eino/schema"
+)
 
 // Agent 定义了所有 Worker Agent 的接口。
 type Agent interface {
@@ -9,4 +13,9 @@ type Agent interface {
 	// 使用 'any' 提供灵活性，但推荐使用具体类型或结构体，
 	// 在可能的情况下，为具体的实现提供具体类型。
 	Run(ctx context.Context, input any) (any, error)
+}
+
+type StreamableAgent interface {
+	Agent
+	Stream(ctx context.Context, input any) (*schema.StreamReader[any], error)
 }

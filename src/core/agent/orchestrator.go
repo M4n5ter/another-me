@@ -10,6 +10,19 @@ import (
 	"github.com/m4n5ter/another-me/src/core/trigger"
 )
 
+// Orchestrator 协调不同的 Worker Agent。
+type Orchestrator struct {
+	// Worker Agents
+	infoGatherer   Agent // 信息收集器
+	userInteractor Agent // 用户交互器
+	learner        Agent // 学习器
+
+	// Eino Graph
+	compiledGraph compose.Runnable[OrchestratorInput, OrchestratorState]
+
+	logger *slog.Logger
+}
+
 // OrchestratorInput 定义了编排器图的输入。
 // 可能包括触发器类型、用户数据等。
 type OrchestratorInput struct {
@@ -26,19 +39,6 @@ type OrchestratorState struct {
 	NeedsUserInput bool
 	LastRunOutput  any // 上次运行的 Worker Agent 的输出
 	ShouldSleep    bool
-}
-
-// Orchestrator 协调不同的 Worker Agent。
-type Orchestrator struct {
-	logger *slog.Logger
-
-	// Worker Agents
-	infoGatherer   Agent // 信息收集器
-	userInteractor Agent // 用户交互器
-	learner        Agent // 学习器
-
-	// Eino Graph
-	compiledGraph compose.Runnable[OrchestratorInput, OrchestratorState]
 }
 
 // NewOrchestrator 创建一个新的编排器代理。

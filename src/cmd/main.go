@@ -5,29 +5,36 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"log/slog"
+	"os"
 
 	"github.com/cloudwego/eino-ext/components/model/deepseek"
 	"github.com/cloudwego/eino/schema"
+	"github.com/m4n5ter/another-me/src/conf"
 	"github.com/m4n5ter/another-me/src/core"
+	"github.com/m4n5ter/another-me/src/core/db"
 	"github.com/m4n5ter/another-me/src/locale"
 	"github.com/m4n5ter/another-me/src/tool"
+	"github.com/spf13/viper"
 )
 
 func main() {
-	locale.SetLocale(locale.LocaleZH)
+	locale.SetLocaleFromStr(conf.GetLocale())
+
+	surrealDBConfig := conf.GetSurrealDBConfig()
+	db.SetDBs(surrealDBConfig)
 
 	ctx := context.Background()
 
 	chatModel, err := deepseek.NewChatModel(ctx, &deepseek.ChatModelConfig{
-		APIKey: "sk-xxx",
-		Model:  "deepseek-chat",
+		APIKey: viper.GetString("deepseek.api_key"),
+		Model:  viper.GetString("deepseek.model"),
 		// 设置返回格式为 JSON
 		// ResponseFormatType: deepseek.ResponseFormatTypeJSONObject,
 	})
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("failed to create chat model", "error", err)
+		os.Exit(1)
 	}
 
 	// but, err := browseruse.NewBrowserUseTool(ctx, &browseruse.Config{
@@ -49,7 +56,8 @@ func main() {
 
 	am, err := core.NewAnotherMe(chatModel, nil, core.WithTool(tool.NewTaskEvaluatorTool()))
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("failed to create another me", "error", err)
+		os.Exit(1)
 	}
 
 	var msgReader *schema.StreamReader[*schema.Message]
@@ -57,7 +65,8 @@ func main() {
 		schema.UserMessage("用Go实现一个Lisp解释器."),
 	})
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("failed to stream", "error", err)
+		os.Exit(1)
 	}
 
 	slog.Info("start to stream")
@@ -71,7 +80,7 @@ func main() {
 			}
 			// error
 			slog.Error("failed to recv", "error", err)
-			return
+			os.Exit(1)
 		}
 
 		fmt.Print(msg.Content)

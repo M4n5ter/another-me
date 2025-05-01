@@ -1,0 +1,12 @@
+locale = "zh"
+
+[surreal]
+db_url = "ws://localhost:8000"
+namespace = "test"
+database = "test"
+username = "root"
+password = "root"
+
+[deepseek]
+api_key = "sk-xxx"
+model = "deepseek-chat"
