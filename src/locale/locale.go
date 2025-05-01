@@ -59,6 +59,8 @@ func AnotherMeSystemPrompt() string {
 	}
 }
 
+// --- 任务评估工具 ---
+
 func TaskEvaluatorDescription() string {
 	locale := GetLocale()
 	switch locale {
@@ -92,5 +94,115 @@ func TaskEvaluatorArgContextDescription() string {
 		return en.TaskEvaluatorArgContextDescription
 	default:
 		return zh.TaskEvaluatorArgContextDescription
+	}
+}
+
+// --- Fetch 工具 ---
+
+func FetchToolDescription() string {
+	locale := GetLocale()
+	switch locale {
+	case LocaleZH:
+		return zh.FetchToolDescription
+	case LocaleEN:
+		return en.FetchToolDescription
+	default:
+		return zh.FetchToolDescription
+	}
+}
+
+func FetchToolArgURLDescription() string {
+	locale := GetLocale()
+	switch locale {
+	case LocaleZH:
+		return zh.FetchToolArgURLDescription
+	case LocaleEN:
+		return en.FetchToolArgURLDescription
+	default:
+		return zh.FetchToolArgURLDescription
+	}
+}
+
+func FetchToolArgMaxLengthDescription() string {
+	locale := GetLocale()
+	switch locale {
+	case LocaleZH:
+		return zh.FetchToolArgMaxLengthDescription
+	case LocaleEN:
+		return en.FetchToolArgMaxLengthDescription
+	default:
+		return zh.FetchToolArgMaxLengthDescription
+	}
+}
+
+func FetchToolArgStartIndexDescription() string {
+	locale := GetLocale()
+	switch locale {
+	case LocaleZH:
+		return zh.FetchToolArgStartIndexDescription
+	case LocaleEN:
+		return en.FetchToolArgStartIndexDescription
+	default:
+		return zh.FetchToolArgStartIndexDescription
+	}
+}
+
+func FetchToolArgRawDescription() string {
+	locale := GetLocale()
+	switch locale {
+	case LocaleZH:
+		return zh.FetchToolArgRawDescription
+	case LocaleEN:
+		return en.FetchToolArgRawDescription
+	default:
+		return zh.FetchToolArgRawDescription
+	}
+}
+
+func FetchToolArgIgnoreRobotsTxtDescription() string {
+	locale := GetLocale()
+	switch locale {
+	case LocaleZH:
+		return zh.FetchToolArgIgnoreRobotsTxtDescription
+	case LocaleEN:
+		return en.FetchToolArgIgnoreRobotsTxtDescription
+	default:
+		return zh.FetchToolArgIgnoreRobotsTxtDescription
+	}
+}
+
+func FetchToolArgUserAgentDescription() string {
+	locale := GetLocale()
+	switch locale {
+	case LocaleZH:
+		return zh.FetchToolArgUserAgentDescription
+	case LocaleEN:
+		return en.FetchToolArgUserAgentDescription
+	default:
+		return zh.FetchToolArgUserAgentDescription
+	}
+}
+
+func FetchToolArgProxyURLDescription() string {
+	locale := GetLocale()
+	switch locale {
+	case LocaleZH:
+		return zh.FetchToolArgProxyURLDescription
+	case LocaleEN:
+		return en.FetchToolArgProxyURLDescription
+	default:
+		return zh.FetchToolArgProxyURLDescription
+	}
+}
+
+func FetchToolArgIsManualRequestDescription() string {
+	locale := GetLocale()
+	switch locale {
+	case LocaleZH:
+		return zh.FetchToolArgIsManualRequestDescription
+	case LocaleEN:
+		return en.FetchToolArgIsManualRequestDescription
+	default:
+		return zh.FetchToolArgIsManualRequestDescription
 	}
 }

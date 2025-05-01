@@ -58,11 +58,13 @@ func getMCP(ctx context.Context, cli *client.Client, name, version string) ([]to
 		Version: version,
 	}
 
-	_, err = cli.Initialize(ctx, initRequest)
+	response, err := cli.Initialize(ctx, initRequest)
 	if err != nil {
 		logger.Error("初始化 MCP 客户端失败", "error", err)
 		return nil, err
 	}
+
+	logger.Info("初始化 MCP 客户端成功", "response", response)
 
 	tools, err := einomcp.GetTools(ctx, &einomcp.Config{Cli: cli})
 	if err != nil {
