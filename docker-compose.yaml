@@ -1,0 +1,15 @@
+services:
+  surrealdb:
+    env_file:
+      - .env
+    entrypoint:
+      - /surreal 
+      - start 
+      - --user
+      - $SURREALDB_USER
+      - --pass
+      - $SURREALDB_PASSWORD
+    image: surrealdb/surrealdb:latest
+    ports:
+      - 8000:8000
+    restart: unless-stopped
