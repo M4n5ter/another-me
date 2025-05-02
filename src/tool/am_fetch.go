@@ -71,50 +71,49 @@ var _ tool.InvokableTool = (*AMFetchTool)(nil)
 func (t *AMFetchTool) Info(ctx context.Context) (*schema.ToolInfo, error) {
 	return &schema.ToolInfo{
 		Name: "am_fetch",
-		Desc: locale.FetchToolDescription(), // "获取指定 URL 的内容。可以简化 HTML 或返回原始数据。"
+		Desc: locale.FetchToolDescription(), // 获取指定 URL 的内容。可以简化 HTML 或返回原始数据。
 		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
 			"url": {
-				Desc:     locale.FetchToolArgURLDescription(), // "要获取内容的 URL。"
+				Desc:     locale.FetchToolArgURLDescription(), // 要获取内容的 URL。
 				Type:     schema.String,
 				Required: true,
 			},
 			"max_length": {
-				Desc:     locale.FetchToolArgMaxLengthDescription(), // "返回内容的最大字符数（默认：10000）。"
+				Desc:     locale.FetchToolArgMaxLengthDescription(), // 返回内容的最大字符数（默认：10000）。
 				Type:     schema.Number,
 				Required: false,
 			},
 			"start_index": {
-				Desc:     locale.FetchToolArgStartIndexDescription(), // "获取内容的起始字符索引（默认：0）。用于分页。"
+				Desc:     locale.FetchToolArgStartIndexDescription(), // 获取内容的起始字符索引（默认：0）。用于分页。
 				Type:     schema.Number,
 				Required: false,
 			},
 			"raw": {
-				Desc:     locale.FetchToolArgRawDescription(), // "如果为 true，返回原始内容（例如 HTML），而不是尝试简化它（默认：false）。"
+				Desc:     locale.FetchToolArgRawDescription(), // 如果为 true，返回原始内容（例如 HTML），而不是尝试简化它（默认：false）。
 				Type:     schema.Boolean,
 				Required: false,
 			},
 			"ignore_robots_txt": {
-				Desc:     locale.FetchToolArgIgnoreRobotsTxtDescription(), // "如果为 true，忽略站点的 robots.txt 规则（默认：false）。请负责任地使用。"
+				Desc:     locale.FetchToolArgIgnoreRobotsTxtDescription(), // 如果为 true，忽略站点的 robots.txt 规则（默认：false）。请负责任地使用。
 				Type:     schema.Boolean,
 				Required: false,
 			},
 			"user_agent": {
-				Desc:     locale.FetchToolArgUserAgentDescription(), // "用于请求的自定义 User-Agent 字符串。根据上下文（自主 vs 手动）默认设置。"
+				Desc:     locale.FetchToolArgUserAgentDescription(), // 用于请求的自定义 User-Agent 字符串。根据上下文（自主 vs 手动）默认设置。
 				Type:     schema.String,
 				Required: false,
 			},
 			"proxy_url": {
-				Desc:     locale.FetchToolArgProxyURLDescription(), // "用于请求的可选代理 URL（例如，'http://user:pass@host:port'）。如果未设置，则使用环境代理。"
+				Desc:     locale.FetchToolArgProxyURLDescription(), // 用于请求的可选代理 URL（例如，'http://user:pass@host:port'）。如果未设置，则使用环境代理。
 				Type:     schema.String,
 				Required: false,
 			},
 			"is_manual_request": {
-				Desc:     locale.FetchToolArgIsManualRequestDescription(), // "指示请求是否由用户操作手动触发（影响默认 User-Agent 和 robots.txt 检查行为）。"
+				Desc:     locale.FetchToolArgIsManualRequestDescription(), // 指示请求是否由用户操作手动触发（影响默认 User-Agent 和 robots.txt 检查行为）。
 				Type:     schema.Boolean,
 				Required: false,
 			},
 		}),
-		// 返回值字段已移除，因为参考的 task_evaluator.go 中未使用
 	}, nil
 }
 
@@ -281,10 +280,7 @@ func (t *AMFetchTool) InvokableRun(ctx context.Context, argumentsInJSON string, 
 		returnedContent = ""
 		message += " 起始索引超出内容长度。"
 	} else {
-		endIndex := args.StartIndex + args.MaxLength
-		if endIndex > contentLength {
-			endIndex = contentLength // 防止索引越界
-		}
+		endIndex := min(args.StartIndex+args.MaxLength, contentLength)
 		returnedContent = string(contentRunes[args.StartIndex:endIndex])
 
 		if endIndex < contentLength {
