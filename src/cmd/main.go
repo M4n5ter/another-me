@@ -37,7 +37,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	am, err := core.NewAnotherMe(chatModel, nil, core.WithTool(tool.NewTaskEvaluatorTool()))
+	am, err := core.NewAnotherMe(chatModel, nil, core.WithTool(tool.NewAMFetchTool()))
 	if err != nil {
 		slog.Error("failed to create another me", "error", err)
 		os.Exit(1)
@@ -45,7 +45,7 @@ func main() {
 
 	var msgReader *schema.StreamReader[*schema.Message]
 	msgReader, err = am.Stream(ctx, []*schema.Message{
-		schema.UserMessage("用Go实现一个Lisp解释器."),
+		schema.UserMessage("查看一下 Hacker News 的 top 5 文章"),
 	})
 	if err != nil {
 		slog.Error("failed to stream", "error", err)
