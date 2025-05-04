@@ -13,3 +13,29 @@ services:
     ports:
       - 8000:8000
     restart: unless-stopped
+
+  another-me-pg:
+    build:
+      context: .
+      dockerfile: Postgres.Dockerfile
+      args:
+        ALL_PROXY: ${ALL_PROXY:-}
+      extra_hosts:
+        - "host.docker.internal:host-gateway"
+    container_name: another-me-pg
+    env_file:
+      - .env # Make sure POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB are in .env
+    environment:
+      # You can provide defaults here if they aren't in .env
+      POSTGRES_USER: ${POSTGRES_USER:-pguser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pgpassword}
+      POSTGRES_DB: ${POSTGRES_DB:-another_me_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - another-me-pg_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  another-me-pg_data:
+    driver: local
