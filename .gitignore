@@ -26,6 +26,12 @@ go.work.sum
 # env file
 .env
 
+# VSCode
+.vscode/
+
+# IntelliJ IDEA
+.idea/
+
 # temp
 temp/
 tmp/

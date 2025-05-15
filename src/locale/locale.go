@@ -206,3 +206,17 @@ func FetchToolArgIsManualRequestDescription() string {
 		return zh.FetchToolArgIsManualRequestDescription
 	}
 }
+
+// --- ComputerUse 工具 ---
+
+func ScreenshotDescription() string {
+	locale := GetLocale()
+	switch locale {
+	case LocaleZH:
+		return zh.ScreenshotDescription
+	case LocaleEN:
+		return en.ScreenshotDescription
+	default:
+		return zh.ScreenshotDescription
+	}
+}

@@ -1,41 +1,121 @@
-version: "2"
+version: "2" 
+
+run:
+  go: "1.24"
+
 output:
   formats:
     text:
-      path: stdout
+      print-issued-lines: true
+      print-linter-name: true
+  show-stats: true
+
 linters:
-  disable:
-    - errcheck
-    - ineffassign
-    - staticcheck
-    - unused
-  settings:
-    govet:
-      disable:
-        - stdmethods
-  exclusions:
-    generated: lax
-    presets:
-      - comments
-      - common-false-positives
-      - legacy
-      - std-error-handling
-    paths:
-      - .*\.mock\.go$
-      - third_party$
-      - builtin$
-      - examples$
-formatters:
+  default: none
   enable:
-    - gofmt
-    - goimports
+    # --- 格式化与基础检查 ---
+    - govet # 分析 Go 源码并报告可疑的构造
+    - revive # 强大的风格检查器，可配置性高，替代 golint
+    - staticcheck # 大量静态分析检查 (SA*)
+    - unused # 检查未使用的代码
+    - ineffassign # 检查无效的赋值操作
+    - copyloopvar # 检查循环变量是否被正确捕获 (替代已移除的 exportloopref)
+
+    # --- 编码规范相关 (sentinel.mdc) ---
+    - sloglint # 检查 slog 日志库的正确使用 (符合 sentinel.mdc 日志规范)
+    - errorlint # 检查 fmt.Errorf 格式化字符串中是否正确使用了 %w
+    - errcheck # 检查未处理的错误 
+    - bodyclose # 检查 HTTP 响应体是否关闭
+    - durationcheck # 检查不当的持续时间（duration）使用方式
+    - goconst # 查找重复的字符串，建议提取为常量
+    - unconvert # 移除不必要的类型转换
+    - depguard # 检查并限制包的导入
+
+    # --- 潜在问题与改进 ---
+    - asciicheck # 检查非 ASCII 字符
+    - dogsled # 检查空白标识符的不当使用
+    - dupl # 检查重复代码
+    - gocritic # 提供额外的代码检查，很有用
+    - gocyclo # 检查函数复杂度
+    - nolintlint # 检查 //nolint 指令的有效性和格式
+    - prealloc # 查找可能需要预分配切片的地方以提高性能
+    - rowserrcheck # 检查 sql.Rows/sql.Row 的 Err() 是否被检查
+    - sqlclosecheck # 检查 sql.Rows/sql.Stmt 是否关闭
+    - wrapcheck # 检查错误包装
+    - tparallel # 检查测试是否正确使用了 t.Parallel()
+    - nestif # 报告深度嵌套的 if 语句
+
   settings:
-    gofumpt:
-      extra-rules: true
+    errcheck:
+      check-blank: true
+      exclude-functions:
+        - io/ioutil.ReadFile
+        - io.Copy(*bytes.Buffer)
+        - io.Copy(os.Stdout)
+        - (io.Closer).Close
+        - (*github.com/qdrant/go-client/qdrant.Client).Close
+        - (net/http.ResponseWriter).Write
+        - (net.Conn).Close
+        - github.com/json-iterator/go.Marshal
+        - (*github.com/json-iterator/go.Encoder).Encode
+        
+    sloglint:
+      static-msg: true
+    gocyclo:
+      min-complexity: 40
+    misspell:
+      locale: "US"
+    revive:
+      rules:
+        - name: comment-spacings
+        - name: dot-imports
+          severity: warning
+          disabled: false
+          exclude: [""]
+          arguments:
+            - allowed-packages: ["github.com/m4n5ter/mindscape/pkg/option"]
+        - name: blank-imports
+        - name: error-naming
+        - name: error-return
+        - name: error-strings
+        - name: exported
+        - name: var-naming
+        - name: function-result-limit
+          arguments: [3]
+    staticcheck:
+      dot-import-whitelist:
+        - "github.com/m4n5ter/mindscape/pkg/option"
+    wrapcheck:
+      ignore-sig-regexps:
+        - \\.Errorf$
+        - \\errors\\.New$
+        - \\errors\\.Unwrap$
+        - \\errors\\.Is$
+        - \\errors\\.As$
+    nolintlint:
+      allow-unused: false
+      require-explanation: true
+      require-specific: true
+    depguard:
+      rules:
+        deny-log:
+          deny:
+            - pkg: "log$"
+              desc: "禁止使用标准库 log，请使用 log/slog"
+            - pkg: "encoding/json"
+              desc: '禁止使用标准库 encoding/json，请使用 json "github.com/json-iterator/go"'
+    nestif:
+      min-complexity: 20
   exclusions:
-    generated: lax
-    paths:
-      - .*\.mock\.go$
-      - third_party$
-      - builtin$
-      - examples$
+    rules:
+      - path: _test\.go
+        linters:
+          - gocyclo
+          - errcheck
+          - dupl
+          - gosec
+          - unused
+
+issues:
+  max-issues-per-linter: 0 # 0 表示禁用
+  max-same-issues: 0 # 0 表示禁用

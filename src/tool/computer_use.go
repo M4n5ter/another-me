@@ -2,31 +2,51 @@ package tool
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"fmt"
+	"image"
 	"image/png"
+	"log/slog"
 
 	"github.com/go-vgo/robotgo"
+	"github.com/m4n5ter/another-me/src/locale"
+	"github.com/mark3labs/mcp-go/mcp"
 )
 
+var ScreenshotTool = mcp.NewTool("computer_use",
+	mcp.WithDescription(locale.ScreenshotDescription()),
+)
+
+// TODO: 其它MCP工具定义
+
 type ComputerUseTool struct {
+	logger *slog.Logger
+}
+
+func NewComputerUseTool(logger *slog.Logger) ComputerUseTool {
+	return ComputerUseTool{logger: logger.WithGroup("computer_use_tool")}
 }
 
 // Screenshot 捕获一张默认桌面的截图: png base64 url
-func (c *ComputerUseTool) Screenshot() (string, error) {
+func (c *ComputerUseTool) Screenshot() (base64PNGURL string, rect image.Rectangle, err error) {
 	rgba, err := robotgo.Capture()
 	if err != nil {
-		return "", fmt.Errorf("failed to capture screenshot: %w", err)
+		c.logger.Error("Failed to capture screen", "error", err)
+		return "", image.Rectangle{}, fmt.Errorf("failed to capture screen: %w", err)
 	}
-	buf := new(bytes.Buffer)
 
+	rect = rgba.Bounds()
+
+	buf := new(bytes.Buffer)
 	err = png.Encode(buf, rgba)
 	if err != nil {
-		return "", fmt.Errorf("failed to encode screenshot: %w", err)
+		c.logger.Error("Failed to encode screenshot", "error", err)
+		return "", rect, fmt.Errorf("failed to encode screenshot: %w", err)
 	}
 
 	base64PNG := base64.StdEncoding.EncodeToString(buf.Bytes())
-	return fmt.Sprintf("data:image/png;base64,%s", base64PNG), nil
+	return fmt.Sprintf("data:image/png;base64,%s", base64PNG), rect, nil
 }
 
 // MoveMouse 移动鼠标
@@ -152,6 +172,203 @@ func (c *ComputerUseTool) KeyTap(keys ...Key) {
 func (c *ComputerUseTool) KeySleepMilli(ms int) {
 	robotgo.KeySleep = ms
 }
+
+// ---- MCP 工具定义开始 ----
+
+func (c *ComputerUseTool) ScreenshotMCP(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	base64PNGURL, _, err := c.Screenshot()
+	if err != nil {
+		return nil, err
+	}
+
+	return mcp.NewToolResultText(base64PNGURL), nil
+}
+
+func (c *ComputerUseTool) MoveMouseMCP(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	x, ok := request.Params.Arguments["x"].(int)
+	if !ok {
+		return nil, fmt.Errorf("x is not an int")
+	}
+
+	y, ok := request.Params.Arguments["y"].(int)
+	if !ok {
+		return nil, fmt.Errorf("y is not an int")
+	}
+
+	c.MoveMouse(x, y)
+
+	newX, newY := c.MouseLocation()
+
+	return mcp.NewToolResultText(fmt.Sprintf("current mouse location: x: %d, y: %d", newX, newY)), nil
+}
+
+func (c *ComputerUseTool) MouseLocationMCP(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	x, y := c.MouseLocation()
+	return mcp.NewToolResultText(fmt.Sprintf("current mouse location: x: %d, y: %d", x, y)), nil
+}
+
+func (c *ComputerUseTool) DragMCP(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	x, ok := request.Params.Arguments["x"].(int)
+	if !ok {
+		return nil, fmt.Errorf("x is not an int")
+	}
+
+	y, ok := request.Params.Arguments["y"].(int)
+	if !ok {
+		return nil, fmt.Errorf("y is not an int")
+	}
+
+	c.Drag(x, y)
+
+	newX, newY := c.MouseLocation()
+
+	return mcp.NewToolResultText(fmt.Sprintf("current mouse location: x: %d, y: %d", newX, newY)), nil
+}
+
+func (c *ComputerUseTool) ScrollMCP(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	toy, ok := request.Params.Arguments["toy"].(int)
+	if !ok {
+		return nil, fmt.Errorf("toy is not an int")
+	}
+
+	num, ok := request.Params.Arguments["num"].(int)
+	if !ok {
+		return nil, fmt.Errorf("num is not an int")
+	}
+
+	msSleep, ok := request.Params.Arguments["msSleep"].(int)
+	if !ok {
+		return nil, fmt.Errorf("msSleep is not an int")
+	}
+
+	tox, ok := request.Params.Arguments["tox"].(int)
+	if !ok {
+		return nil, fmt.Errorf("tox is not an int")
+	}
+
+	c.Scroll(toy, num, msSleep, tox)
+
+	return mcp.NewToolResultText(fmt.Sprintf("scroll success")), nil
+}
+
+func (c *ComputerUseTool) ScrollRelativeMCP(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	x, ok := request.Params.Arguments["x"].(int)
+	if !ok {
+		return nil, fmt.Errorf("x is not an int")
+	}
+
+	y, ok := request.Params.Arguments["y"].(int)
+	if !ok {
+		return nil, fmt.Errorf("y is not an int")
+	}
+
+	msDeplay, ok := request.Params.Arguments["msDeplay"].(int)
+	if !ok {
+		return nil, fmt.Errorf("msDeplay is not an int")
+	}
+
+	c.ScrollRelative(x, y, msDeplay)
+
+	return mcp.NewToolResultText(fmt.Sprintf("scroll success")), nil
+}
+
+func (c *ComputerUseTool) ScrollDirectionMCP(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	x, ok := request.Params.Arguments["x"].(int)
+	if !ok {
+		return nil, fmt.Errorf("x is not an int")
+	}
+
+	direction, ok := request.Params.Arguments["direction"].(string)
+	if !ok {
+		return nil, fmt.Errorf("direction is not a string")
+	}
+
+	c.ScrollDirection(x, Direction(direction))
+
+	return mcp.NewToolResultText(fmt.Sprintf("scroll success")), nil
+}
+
+func (c *ComputerUseTool) ClickMCP(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	button, ok := request.Params.Arguments["button"].(string)
+	if !ok {
+		return nil, fmt.Errorf("button is not a string")
+	}
+
+	double, ok := request.Params.Arguments["double"].(bool)
+	if !ok {
+		return nil, fmt.Errorf("double is not a bool")
+	}
+
+	c.Click(MouseButton(button), double)
+
+	return mcp.NewToolResultText(fmt.Sprintf("click success")), nil
+}
+
+func (c *ComputerUseTool) ToggleMouseButtonMCP(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	button, ok := request.Params.Arguments["button"].(string)
+	if !ok {
+		return nil, fmt.Errorf("button is not a string")
+	}
+
+	up, ok := request.Params.Arguments["up"].(bool)
+	if !ok {
+		return nil, fmt.Errorf("up is not a bool")
+	}
+
+	c.ToggleMouseButton(MouseButton(button), up)
+
+	return mcp.NewToolResultText(fmt.Sprintf("toggle mouse button success")), nil
+}
+
+func (c *ComputerUseTool) ToggleKeyMCP(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	up, ok := request.Params.Arguments["up"].(bool)
+	if !ok {
+		return nil, fmt.Errorf("up is not a bool")
+	}
+
+	keys, ok := request.Params.Arguments["keys"].([]string)
+	if !ok {
+		return nil, fmt.Errorf("keys is not a []string")
+	}
+
+	keys2 := make([]Key, 0, len(keys))
+	for _, key := range keys {
+		keys2 = append(keys2, Key(key))
+	}
+
+	c.ToggleKey(up, keys2...)
+
+	return mcp.NewToolResultText(fmt.Sprintf("toggle key success")), nil
+}
+
+func (c *ComputerUseTool) KeyTapMCP(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	keys, ok := request.Params.Arguments["keys"].([]string)
+	if !ok {
+		return nil, fmt.Errorf("keys is not a []string")
+	}
+
+	keys2 := make([]Key, 0, len(keys))
+	for _, key := range keys {
+		keys2 = append(keys2, Key(key))
+	}
+
+	c.KeyTap(keys2...)
+
+	return mcp.NewToolResultText(fmt.Sprintf("key tap success")), nil
+}
+
+func (c *ComputerUseTool) KeySleepMilliMCP(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	ms, ok := request.Params.Arguments["ms"].(int)
+	if !ok {
+		return nil, fmt.Errorf("ms is not an int")
+	}
+
+	c.KeySleepMilli(ms)
+
+	return mcp.NewToolResultText(fmt.Sprintf("key sleep milli success")), nil
+}
+
+// ---- MCP 工具定义结束 ----
 
 type MouseButton string
 
