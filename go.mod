@@ -6,13 +6,13 @@ toolchain go1.24.3
 
 require (
 	github.com/JohannesKaufmann/html-to-markdown v1.6.0
-	github.com/cloudwego/eino v0.3.31
-	github.com/cloudwego/eino-ext/components/model/deepseek v0.0.0-20250513023651-7b19c6ffbf4a
-	github.com/cloudwego/eino-ext/components/tool/mcp v0.0.0-20250513023651-7b19c6ffbf4a
+	github.com/cloudwego/eino v0.3.33
+	github.com/cloudwego/eino-ext/components/model/deepseek v0.0.0-20250514085234-473e80da5261
+	github.com/cloudwego/eino-ext/components/tool/mcp v0.0.0-20250514085234-473e80da5261
 	github.com/go-shiori/go-readability v0.0.0-20250217085726-9f5bf5ca7612
 	github.com/go-vgo/robotgo v0.110.7
 	github.com/google/uuid v1.6.0
-	github.com/mark3labs/mcp-go v0.27.0
+	github.com/mark3labs/mcp-go v0.27.1
 	github.com/spf13/viper v1.20.1
 	github.com/surrealdb/surrealdb.go v0.3.2
 	github.com/temoto/robotstxt v1.1.2
@@ -58,7 +58,7 @@ require (
 	github.com/nikolalohinski/gonja v1.5.3 // indirect
 	github.com/oasdiff/yaml v0.0.0-20250309154309-f31be36b4037 // indirect
 	github.com/oasdiff/yaml3 v0.0.0-20250309153720-d2182401db90 // indirect
-	github.com/ollama/ollama v0.6.8 // indirect
+	github.com/ollama/ollama v0.7.0 // indirect
 	github.com/otiai10/gosseract v2.2.1+incompatible // indirect
 	github.com/otiai10/mint v1.6.3 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
