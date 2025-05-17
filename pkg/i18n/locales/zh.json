@@ -46,9 +46,5 @@
     "tool.gui.key_tap.description": "按下按键。",
     "tool.gui.key_tap.arg.keys": "按键，例如: [\"ctrl\", \"alt\", \"a\"]",
     "tool.gui.key_sleep_milli.description": "按键休眠(毫秒)。",
-    "tool.gui.key_sleep_milli.arg.ms": "休眠时间(毫秒)",
-
-    "tool.task_evaluator.description": "**重要**\n如果前一条消息是 'task_evaluator' 工具调用, 则不应调用此工具。\n\n**任务评估器**\n完成任务或细化任务。\n\n当满足以下条件时，应调用此工具：\n- 用户所有的要求都已完全满足 (设置 is_complete=true)\n- 避免不必要的迭代、冗余或浪费。\n- 需要额外的输入/澄清 (设置 is_complete=false 并提供 'context')\n\n当 is_complete=true 时, 'context' 将被忽略, 因为对话将终止。\n当 is_complete=false 时, 你的 'context' 将被作为下一个提示词, 用来细化任务。\n提供清晰、可操作的 'context' 来指导下一步, 'context' 应当用于指导自己更好地完成任务。",
-    "tool.task_evaluator.arg.is_complete": "最终完成状态。仅当所有要求都完全满足时设置为 true。",
-    "tool.task_evaluator.arg.context": "'context' 提供了在任务不完整时所需的指导:\n- 缺失元素的清晰描述\n- 需要澄清的具体问题\n- 完成任务的剩余步骤\n可选当任务完成时。当 'is_complete' 为 false 时, 'context' 将在下一次作为提示词给你。"
+    "tool.gui.key_sleep_milli.arg.ms": "休眠时间(毫秒)"
 } 
