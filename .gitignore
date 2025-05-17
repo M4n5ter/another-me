@@ -38,3 +38,9 @@ tmp/
 
 # another-me.toml
 another-me.toml
+
+# cursor
+.cursor/rules/isolation_rules/
+
+# memory-bank
+memory-bank/
