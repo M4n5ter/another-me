@@ -81,11 +81,11 @@ func TestNewManager_NoLocalesLoaded(t *testing.T) {
 	assert.Contains(t, err.Error(), "没有加载任何翻译", "错误信息应包含 '没有加载任何翻译'")
 
 	// 案例2：包含 locales 目录但没有任何 .json 文件
-	nonJsonFS := createTestFS(t, map[string]string{
+	nonJSONFS := createTestFS(t, map[string]string{
 		"notes.txt": "some notes",
 	})
 
-	m, err = NewManager(nonJsonFS, "en")
+	m, err = NewManager(nonJSONFS, "en")
 	assert.Error(t, err, "当 FS 中没有 json 文件时，NewManager 应返回错误")
 	assert.Nil(t, m, "当 FS 中没有 json 文件时，Manager 应为 nil")
 	assert.Contains(t, err.Error(), "没有加载任何翻译", "错误信息应包含 '没有加载任何翻译'")

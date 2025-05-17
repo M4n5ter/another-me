@@ -37,11 +37,7 @@ func TestParameterDefinition(t *testing.T) {
 
 	// 测试带枚举值的参数
 	enumParam := ParameterDefinition{
-		Name:        "color",
-		Type:        ParamTypeString,
-		Description: map[string]string{"en": "Color choice", "zh": "颜色选择"},
-		Required:    false,
-		EnumValues:  []any{"red", "green", "blue"},
+		EnumValues: []any{"red", "green", "blue"},
 	}
 
 	assert.Equal(t, 3, len(enumParam.EnumValues), "枚举值数量应为 3")
@@ -49,10 +45,6 @@ func TestParameterDefinition(t *testing.T) {
 
 	// 测试数组参数
 	arrayParam := ParameterDefinition{
-		Name:        "items",
-		Type:        ParamTypeArray,
-		Description: map[string]string{"en": "List of items", "zh": "物品列表"},
-		Required:    true,
 		Items: &ParameterDefinition{
 			Type:        ParamTypeString,
 			Description: map[string]string{"en": "Item name", "zh": "物品名称"},
@@ -64,10 +56,6 @@ func TestParameterDefinition(t *testing.T) {
 
 	// 测试对象参数
 	objectParam := ParameterDefinition{
-		Name:        "user",
-		Type:        ParamTypeObject,
-		Description: map[string]string{"en": "User info", "zh": "用户信息"},
-		Required:    true,
 		Properties: []ParameterDefinition{
 			{
 				Name:        "name",

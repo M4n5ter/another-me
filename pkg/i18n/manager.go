@@ -3,12 +3,13 @@ package i18n
 import (
 	"context"
 	"embed"
-	"encoding/json"
 	"fmt"
 	"io/fs"
 	"log/slog"
 	"strings"
 	"sync"
+
+	json "github.com/json-iterator/go"
 )
 
 //go:embed all:locales
@@ -81,8 +82,8 @@ func (m *Manager) loadTranslationsFromFS(fsys fs.FS, dirPath string) error {
 	for _, entry := range entries {
 		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".json") {
 			lang := strings.ToLower(strings.TrimSuffix(entry.Name(), ".json")) // 从文件名提取语言代码
-			filePath := entry.Name()                                            // 直接使用 entry.Name() 作为路径
-			if dirPath != "." { // 如果 dirPath 不是根目录，则拼接
+			filePath := entry.Name()                                           // 直接使用 entry.Name() 作为路径
+			if dirPath != "." {                                                // 如果 dirPath 不是根目录，则拼接
 				filePath = strings.Join([]string{dirPath, entry.Name()}, "/")
 			}
 

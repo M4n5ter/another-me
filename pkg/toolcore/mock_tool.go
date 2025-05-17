@@ -2,8 +2,9 @@ package toolcore
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+
+	json "github.com/json-iterator/go"
 )
 
 // MockTool 是一个用于测试的简单 Tool 实现。

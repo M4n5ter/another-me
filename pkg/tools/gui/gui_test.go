@@ -101,9 +101,10 @@ func TestGUITool_Schema(t *testing.T) {
 	// 验证参数
 	var xParam, yParam *toolcore.ParameterDefinition
 	for _, param := range schema2.InputParameters {
-		if param.Name == "x" {
+		switch param.Name {
+		case "x":
 			xParam = &param
-		} else if param.Name == "y" {
+		case "y":
 			yParam = &param
 		}
 	}

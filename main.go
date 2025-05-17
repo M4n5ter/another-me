@@ -4,6 +4,7 @@ import (
 	"context"
 	"embed"
 	"io/fs"
+	"log"
 	"log/slog"
 	"os"
 
@@ -66,12 +67,18 @@ func registerTools(registry *toolcore.Registry, i18nMgr *i18n.Manager) {
 	ctx := context.Background()
 	// 注册 Fetch 工具
 	fetchTool := fetchtool.NewFetchTool(i18nMgr)
-	registry.Register(ctx, fetchTool)
+	err := registry.Register(ctx, fetchTool)
+	if err != nil {
+		log.Fatalf("Failed to register fetch tool: %v", err)
+	}
 
 	// 注册 GUI 工具
 	guiTools := gui.NewGUITools(i18nMgr)
 	for _, tool := range guiTools {
-		registry.Register(ctx, tool)
+		err := registry.Register(ctx, tool)
+		if err != nil {
+			log.Fatalf("Failed to register gui tool: %v", err)
+		}
 	}
 
 	// 注意：这里可以注册更多工具

@@ -14,9 +14,9 @@ type PredefinedChatResponse struct {
 	ErrorToReturn  error                          // 当次 Chat 调用需要直接返回的初始错误。如果非 nil，则 ChunksToReturn 通常为空。
 }
 
-// MockChatAdapter 是 llminterface.ChatAdapter 的一个 mock 实现，主要用于测试。
+// ChatAdapter 是 llminterface.ChatAdapter 的一个 mock 实现，主要用于测试。
 // 它可以配置为返回预定义的响应，或者通过自定义函数来模拟 Chat 方法的行为。
-type MockChatAdapter struct {
+type ChatAdapter struct {
 	mu sync.RWMutex // mu 用于保护对 mock 内部状态的并发访问，例如调用计数和预设响应队列。
 
 	// --- GetFrameworkName 的配置 ---
@@ -41,8 +41,8 @@ type MockChatAdapter struct {
 }
 
 // NewMockChatAdapter 创建并返回一个新的 MockChatAdapter 实例。
-func NewMockChatAdapter() *MockChatAdapter {
-	return &MockChatAdapter{
+func NewMockChatAdapter() *ChatAdapter {
+	return &ChatAdapter{
 		RecordedChatInputs:      make([]llminterface.ChatInput, 0),
 		predefinedChatResponses: make([]*PredefinedChatResponse, 0),
 	}
@@ -51,7 +51,7 @@ func NewMockChatAdapter() *MockChatAdapter {
 // --- 接口实现: GetFrameworkName ---
 
 // GetFrameworkName 返回预设的框架名称 (FrameworkNameResult)。
-func (m *MockChatAdapter) GetFrameworkName() string {
+func (m *ChatAdapter) GetFrameworkName() string {
 	m.mu.RLock() // 使用读锁，因为 FrameworkNameResult 通常是只读的
 	defer m.mu.RUnlock()
 	return m.FrameworkNameResult
@@ -61,7 +61,7 @@ func (m *MockChatAdapter) GetFrameworkName() string {
 
 // Chat 实现了 llminterface.ChatAdapter 接口的 Chat 方法。
 // 它会记录调用参数，并根据预设的 ChatFunc 或 PredefinedChatResponses 返回响应。
-func (m *MockChatAdapter) Chat(ctx context.Context, input llminterface.ChatInput) (<-chan llminterface.ChatOutputChunk, error) {
+func (m *ChatAdapter) Chat(ctx context.Context, input llminterface.ChatInput) (<-chan llminterface.ChatOutputChunk, error) {
 	m.mu.Lock() // 写锁保护 RecordedChatInputs 和 chatCallCount 的修改
 	// 记录调用
 	m.RecordedChatInputs = append(m.RecordedChatInputs, input)
@@ -111,7 +111,7 @@ func (m *MockChatAdapter) Chat(ctx context.Context, input llminterface.ChatInput
 // --- Mock 辅助方法 ---
 
 // SetFrameworkName 设置 GetFrameworkName 方法的返回值。
-func (m *MockChatAdapter) SetFrameworkName(name string) {
+func (m *ChatAdapter) SetFrameworkName(name string) {
 	m.mu.Lock() // 写锁
 	defer m.mu.Unlock()
 	m.FrameworkNameResult = name
@@ -121,7 +121,7 @@ func (m *MockChatAdapter) SetFrameworkName(name string) {
 // 每次调用 Chat 方法（且 ChatFunc 未设置时）会按顺序使用这些响应。
 // chunks: 如果调用成功，将在返回的 channel 上发送的 ChatOutputChunk 序列。
 // initialErr: 如果希望 Chat 方法直接返回错误，则设置此参数；否则设为 nil。
-func (m *MockChatAdapter) AddPredefinedChatResponse(chunks []llminterface.ChatOutputChunk, initialErr error) {
+func (m *ChatAdapter) AddPredefinedChatResponse(chunks []llminterface.ChatOutputChunk, initialErr error) {
 	m.mu.Lock() // 写锁
 	defer m.mu.Unlock()
 	m.predefinedChatResponses = append(m.predefinedChatResponses, &PredefinedChatResponse{
@@ -131,7 +131,7 @@ func (m *MockChatAdapter) AddPredefinedChatResponse(chunks []llminterface.ChatOu
 }
 
 // ClearPredefinedChatResponses 清空所有预定义的聊天响应并重置调用计数。
-func (m *MockChatAdapter) ClearPredefinedChatResponses() {
+func (m *ChatAdapter) ClearPredefinedChatResponses() {
 	m.mu.Lock() // 写锁
 	defer m.mu.Unlock()
 	m.predefinedChatResponses = make([]*PredefinedChatResponse, 0)
@@ -139,14 +139,14 @@ func (m *MockChatAdapter) ClearPredefinedChatResponses() {
 }
 
 // ClearRecordedChatInputs 清空所有已记录的 Chat 输入。
-func (m *MockChatAdapter) ClearRecordedChatInputs() {
+func (m *ChatAdapter) ClearRecordedChatInputs() {
 	m.mu.Lock() // 写锁
 	defer m.mu.Unlock()
 	m.RecordedChatInputs = make([]llminterface.ChatInput, 0)
 }
 
 // GetChatCallCount 返回 Chat 方法被调用的总次数。
-func (m *MockChatAdapter) GetChatCallCount() int {
+func (m *ChatAdapter) GetChatCallCount() int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.chatCallCount
@@ -154,7 +154,7 @@ func (m *MockChatAdapter) GetChatCallCount() int {
 
 // GetLastRecordedChatInput 返回最后一次调用 Chat 方法时传入的参数。
 // 如果 Chat 从未被调用，则第二个返回值为 false。
-func (m *MockChatAdapter) GetLastRecordedChatInput() (llminterface.ChatInput, bool) {
+func (m *ChatAdapter) GetLastRecordedChatInput() (llminterface.ChatInput, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if len(m.RecordedChatInputs) == 0 {
@@ -165,7 +165,7 @@ func (m *MockChatAdapter) GetLastRecordedChatInput() (llminterface.ChatInput, bo
 
 // GetRecordedChatInputAt 返回第 n 次（从0开始计数）调用 Chat 方法时传入的参数。
 // 如果指定的调用次数无效（例如 Chat 调用次数不足），则第二个返回值为 false。
-func (m *MockChatAdapter) GetRecordedChatInputAt(index int) (llminterface.ChatInput, bool) {
+func (m *ChatAdapter) GetRecordedChatInputAt(index int) (llminterface.ChatInput, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if index < 0 || index >= len(m.RecordedChatInputs) {

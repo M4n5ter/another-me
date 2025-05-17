@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"image/png"
 	"log/slog"
 	"strings"
 
 	"github.com/go-vgo/robotgo"
+	json "github.com/json-iterator/go"
 	"github.com/m4n5ter/another-me/pkg/i18n"
 	"github.com/m4n5ter/another-me/pkg/toolcore"
 )

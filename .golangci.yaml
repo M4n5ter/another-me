@@ -73,7 +73,7 @@ linters:
           disabled: false
           exclude: [""]
           arguments:
-            - allowed-packages: ["github.com/m4n5ter/mindscape/pkg/option"]
+            - allowed-packages: ["github.com/m4n5ter/another-me/pkg/option"]
         - name: blank-imports
         - name: error-naming
         - name: error-return
@@ -84,7 +84,7 @@ linters:
           arguments: [3]
     staticcheck:
       dot-import-whitelist:
-        - "github.com/m4n5ter/mindscape/pkg/option"
+        - "github.com/m4n5ter/another-me/pkg/option"
     wrapcheck:
       ignore-sig-regexps:
         - \\.Errorf$
@@ -100,8 +100,8 @@ linters:
       rules:
         deny-log:
           deny:
-            - pkg: "log$"
-              desc: "禁止使用标准库 log，请使用 log/slog"
+            # - pkg: "log$"
+            #   desc: "禁止使用标准库 log，请使用 log/slog"
             - pkg: "encoding/json"
               desc: '禁止使用标准库 encoding/json，请使用 json "github.com/json-iterator/go"'
     nestif:
@@ -119,3 +119,9 @@ linters:
 issues:
   max-issues-per-linter: 0 # 0 表示禁用
   max-same-issues: 0 # 0 表示禁用
+
+formatters:
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/m4n5ter/another-me

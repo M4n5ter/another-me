@@ -2,7 +2,6 @@ package fetchtool
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -13,9 +12,11 @@ import (
 
 	md "github.com/JohannesKaufmann/html-to-markdown"
 	"github.com/go-shiori/go-readability"
+	json "github.com/json-iterator/go"
+	"github.com/temoto/robotstxt"
+
 	"github.com/m4n5ter/another-me/pkg/i18n"
 	"github.com/m4n5ter/another-me/pkg/toolcore"
-	"github.com/temoto/robotstxt"
 )
 
 const (
@@ -27,12 +28,12 @@ const (
 
 // FetchTool 实现 toolcore.Tool 接口，用于从 URL 获取内容
 type FetchTool struct {
-	logger   *slog.Logger
-	i18nMgr  *i18n.Manager
+	logger  *slog.Logger
+	i18nMgr *i18n.Manager
 }
 
-// FetchToolArgs 定义了 FetchTool 的参数
-type FetchToolArgs struct {
+// Args 定义了 FetchTool 的参数
+type Args struct {
 	URL             string `json:"url"`                         // 要获取的 URL
 	MaxLength       int    `json:"max_length,omitempty"`        // 返回内容的最大字符数
 	StartIndex      int    `json:"start_index,omitempty"`       // 返回内容的起始索引
@@ -43,8 +44,8 @@ type FetchToolArgs struct {
 	IsManualRequest bool   `json:"is_manual_request,omitempty"` // 指示请求是否由用户操作手动触发
 }
 
-// FetchToolResult 定义了成功结果的结构
-type FetchToolResult struct {
+// Result 定义了成功结果的结构
+type Result struct {
 	URL            string `json:"url"`                        // 已获取的 URL
 	Content        string `json:"content"`                    // 获取到的内容（可能已简化/截断）
 	OriginalLength int    `json:"original_length"`            // 截断前原始内容的总长度
@@ -120,23 +121,23 @@ func (t *FetchTool) createParamDef(ctx context.Context, name string, paramType t
 }
 
 // createOutputParameters 创建输出参数定义
-func (t *FetchTool) createOutputParameters(ctx context.Context) []toolcore.ParameterDefinition {
+func (t *FetchTool) createOutputParameters(_ context.Context) []toolcore.ParameterDefinition {
 	// 可以从i18n系统获取这些描述，但为简化起见，这里使用硬编码的描述
 	contentDesc := map[string]string{
 		"en": "The fetched content, possibly simplified or truncated",
 		"zh": "获取的内容，可能已简化或截断",
 	}
-	
+
 	urlDesc := map[string]string{
 		"en": "The URL that was fetched",
 		"zh": "已获取的 URL",
 	}
-	
+
 	originalLengthDesc := map[string]string{
 		"en": "Total length of the original content before truncation",
 		"zh": "截断前原始内容的总长度",
 	}
-	
+
 	// 其他输出参数的描述...
 
 	return []toolcore.ParameterDefinition{
@@ -164,7 +165,7 @@ func (t *FetchTool) createOutputParameters(ctx context.Context) []toolcore.Param
 
 // Call 实现 toolcore.Tool 接口的 Call 方法
 func (t *FetchTool) Call(ctx context.Context, inputJSON string) (string, error) {
-	var args FetchToolArgs
+	var args Args
 	if err := json.Unmarshal([]byte(inputJSON), &args); err != nil {
 		t.logger.Error("解析参数失败", "error", err, "input", inputJSON)
 		return "", fmt.Errorf("无效的 JSON 输入: %w", err)
@@ -237,7 +238,11 @@ func (t *FetchTool) Call(ctx context.Context, inputJSON string) (string, error) 
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		t.logger.Error("收到非 2xx 状态码", "url", args.URL, "status", resp.Status)
-		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 1024)) // 读取部分响应体以获取上下文信息
+		bodyBytes, err := io.ReadAll(io.LimitReader(resp.Body, 1024)) // 读取部分响应体以获取上下文信息
+		if err != nil {
+			t.logger.Error("读取响应体失败", "url", args.URL, "error", err)
+			return "", fmt.Errorf("从 %s 读取响应体失败: %w", args.URL, err)
+		}
 		return "", fmt.Errorf("获取 %s 失败: 状态 %s, 响应体: %s", args.URL, resp.Status, string(bodyBytes))
 	}
 
@@ -255,43 +260,13 @@ func (t *FetchTool) Call(ctx context.Context, inputJSON string) (string, error) 
 	originalContent := string(bodyBytes)
 	originalLength := len([]rune(originalContent)) // 使用 rune 计数以获得更准确的字符数
 
-	if !args.Raw && isHTML {
+	switch {
+	case !args.Raw && isHTML:
 		// 尝试简化 HTML
 		t.logger.Debug("尝试简化 HTML 内容", "url", args.URL)
 		article, err := readability.FromReader(strings.NewReader(originalContent), parsedURL)
-		if err == nil && (article.Content != "" || article.TextContent != "") {
-			// 优先尝试将简化后的 HTML (article.Content) 转换为 Markdown
-			if article.Content != "" {
-				converter := md.NewConverter("", true, nil)
-				markdownContent, err := converter.ConvertString(article.Content)
-				if err == nil {
-					content = markdownContent
-					message = "内容已从 HTML 简化并转换为 Markdown。"
-					t.logger.Info("成功简化 HTML 并转换为 Markdown", "url", args.URL, "originalLength", originalLength, "markdownLength", len([]rune(content)))
-				} else {
-					// Markdown 转换失败，回退到纯文本
-					t.logger.Warn("将简化后的 HTML 转换为 Markdown 失败，回退到纯文本", "url", args.URL, "error", err)
-					content = article.TextContent // 使用纯文本
-					message = "内容已从 HTML 简化，但 Markdown 转换失败，返回纯文本。"
-					if content == "" {
-						// 如果连 TextContent 也没有，则认为简化失败
-						t.logger.Warn("简化 HTML 失败，未提取到 Content 或 TextContent", "url", args.URL)
-						content = originalContent
-						message = "无法简化 HTML 内容，返回原始内容 (readability 未提取到 Content 或 TextContent)。"
-					}
-				}
-			} else if article.TextContent != "" {
-				// 如果没有简化后的 HTML (article.Content)，但有纯文本 (article.TextContent)
-				t.logger.Info("简化 HTML 时仅获得纯文本内容", "url", args.URL, "originalLength", originalLength, "simplifiedLength", len([]rune(article.TextContent)))
-				content = article.TextContent
-				message = "内容已从 HTML 简化为纯文本。"
-			} else {
-				// 两个都没有，视为简化失败
-				t.logger.Warn("简化 HTML 失败，未提取到 Content 或 TextContent", "url", args.URL)
-				content = originalContent
-				message = "无法简化 HTML 内容，返回原始内容 (readability 未提取到 Content 或 TextContent)。"
-			}
-		} else {
+
+		if err != nil || (article.Content == "" && article.TextContent == "") {
 			// readability 执行出错或未提取到任何内容
 			content = originalContent
 			message = "无法简化 HTML 内容，返回原始内容。"
@@ -302,8 +277,43 @@ func (t *FetchTool) Call(ctx context.Context, inputJSON string) (string, error) 
 				t.logger.Warn("Readability 未提取到任何内容", "url", args.URL)
 				message += " (Readability 未提取到内容)"
 			}
+			break
 		}
-	} else {
+
+		// 处理成功提取内容的情况
+		switch {
+		case article.Content != "":
+			// 优先尝试将简化后的 HTML (article.Content) 转换为 Markdown
+			converter := md.NewConverter("", true, nil)
+			markdownContent, err := converter.ConvertString(article.Content)
+			if err == nil {
+				content = markdownContent
+				message = "内容已从 HTML 简化并转换为 Markdown。"
+				t.logger.Info("成功简化 HTML 并转换为 Markdown", "url", args.URL, "originalLength", originalLength, "markdownLength", len([]rune(content)))
+			} else {
+				// Markdown 转换失败，回退到纯文本
+				t.logger.Warn("将简化后的 HTML 转换为 Markdown 失败，回退到纯文本", "url", args.URL, "error", err)
+				content = article.TextContent // 使用纯文本
+				message = "内容已从 HTML 简化，但 Markdown 转换失败，返回纯文本。"
+				if content == "" {
+					// 如果连 TextContent 也没有，则认为简化失败
+					t.logger.Warn("简化 HTML 失败，未提取到 Content 或 TextContent", "url", args.URL)
+					content = originalContent
+					message = "无法简化 HTML 内容，返回原始内容 (readability 未提取到 Content 或 TextContent)。"
+				}
+			}
+		case article.TextContent != "":
+			// 如果没有简化后的 HTML (article.Content)，但有纯文本 (article.TextContent)
+			t.logger.Info("简化 HTML 时仅获得纯文本内容", "url", args.URL, "originalLength", originalLength, "simplifiedLength", len([]rune(article.TextContent)))
+			content = article.TextContent
+			message = "内容已从 HTML 简化为纯文本。"
+		default:
+			// 两个都没有，视为简化失败
+			t.logger.Warn("简化 HTML 失败，未提取到 Content 或 TextContent", "url", args.URL)
+			content = originalContent
+			message = "无法简化 HTML 内容，返回原始内容 (readability 未提取到 Content 或 TextContent)。"
+		}
+	default:
 		// 原始请求或非 HTML 内容
 		content = originalContent
 		if args.Raw {
@@ -337,7 +347,7 @@ func (t *FetchTool) Call(ctx context.Context, inputJSON string) (string, error) 
 	}
 
 	// --- 准备结果 ---
-	result := FetchToolResult{
+	result := Result{
 		URL:            args.URL,
 		Content:        returnedContent,
 		OriginalLength: contentLength, // 此处是简化后、应用截断逻辑 *之前* 的内容长度
@@ -460,4 +470,4 @@ func (t *FetchTool) checkRobotsTxt(ctx context.Context, client *http.Client, tar
 }
 
 // 确保 FetchTool 实现了 toolcore.Tool 接口
-var _ toolcore.Tool = (*FetchTool)(nil) 
+var _ toolcore.Tool = (*FetchTool)(nil)

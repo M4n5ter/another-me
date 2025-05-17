@@ -59,6 +59,7 @@ func (r *Registry) Get(name string) (Tool, bool) {
 	return tool, exists
 }
 
+// GetAll 方法返回 Registry 中所有已注册工具的 Tool 实例列表。
 func (r *Registry) GetAll() []Tool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

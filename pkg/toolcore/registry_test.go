@@ -104,9 +104,10 @@ func TestRegistry_ListSchemas(t *testing.T) {
 	// 验证返回的 schemas 内容
 	var tool1Schema, tool2Schema ToolSchema
 	for _, schema := range schemas {
-		if schema.Name == "tool1" {
+		switch schema.Name {
+		case "tool1":
 			tool1Schema = schema
-		} else if schema.Name == "tool2" {
+		case "tool2":
 			tool2Schema = schema
 		}
 	}
