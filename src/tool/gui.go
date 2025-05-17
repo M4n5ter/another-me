@@ -14,11 +14,76 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-var ScreenshotTool = mcp.NewTool("screenshot",
-	mcp.WithDescription(locale.ScreenshotDescription()),
-)
+var (
+	ScreenshotTool = mcp.NewTool("screenshot",
+		mcp.WithDescription(locale.ScreenshotDescription()),
+	)
 
-// TODO: 其它MCP工具定义
+	MoveMouseTool = mcp.NewTool("move_mouse",
+		mcp.WithDescription(locale.MoveMouseDescription()),
+		mcp.WithNumber("x", mcp.Required(), mcp.Description(locale.MoveMouseArgXDescription())),
+		mcp.WithNumber("y", mcp.Required(), mcp.Description(locale.MoveMouseArgYDescription())),
+	)
+
+	MouseLocationTool = mcp.NewTool("mouse_location",
+		mcp.WithDescription(locale.MouseLocationDescription()),
+	)
+
+	DragTool = mcp.NewTool("drag",
+		mcp.WithDescription(locale.DragDescription()),
+		mcp.WithNumber("x", mcp.Required(), mcp.Description(locale.DragArgXDescription())),
+		mcp.WithNumber("y", mcp.Required(), mcp.Description(locale.DragArgYDescription())),
+	)
+
+	ScrollTool = mcp.NewTool("scroll",
+		mcp.WithDescription(locale.ScrollDescription()),
+		mcp.WithNumber("toy", mcp.Required(), mcp.Description(locale.ScrollArgToyDescription())),
+		mcp.WithNumber("num", mcp.Required(), mcp.Description(locale.ScrollArgNumDescription())),
+		mcp.WithNumber("msSleep", mcp.Required(), mcp.Description(locale.ScrollArgMsSleepDescription())),
+		mcp.WithNumber("tox", mcp.Required(), mcp.Description(locale.ScrollArgToxDescription())),
+	)
+
+	ScrollRelativeTool = mcp.NewTool("scroll_relative",
+		mcp.WithDescription(locale.ScrollRelativeDescription()),
+		mcp.WithNumber("x", mcp.Required(), mcp.Description(locale.ScrollRelativeArgXDescription())),
+		mcp.WithNumber("y", mcp.Required(), mcp.Description(locale.ScrollRelativeArgYDescription())),
+		mcp.WithNumber("msDeplay", mcp.Required(), mcp.Description(locale.ScrollRelativeArgMsDeplayDescription())),
+	)
+
+	ScrollDirectionTool = mcp.NewTool("scroll_direction",
+		mcp.WithDescription(locale.ScrollDirectionDescription()),
+		mcp.WithNumber("x", mcp.Required(), mcp.Description(locale.ScrollDirectionArgXDescription())),
+		mcp.WithString("direction", mcp.Required(), mcp.Description(locale.ScrollDirectionArgDirectionDescription())),
+	)
+
+	ClickTool = mcp.NewTool("click",
+		mcp.WithDescription(locale.ClickDescription()),
+		mcp.WithString("button", mcp.Required(), mcp.Description(locale.ClickArgButtonDescription())),
+		mcp.WithBoolean("double", mcp.Required(), mcp.Description(locale.ClickArgDoubleDescription())),
+	)
+
+	ToggleMouseButtonTool = mcp.NewTool("toggle_mouse_button",
+		mcp.WithDescription(locale.ToggleMouseButtonDescription()),
+		mcp.WithString("button", mcp.Required(), mcp.Description(locale.ToggleMouseButtonArgButtonDescription())),
+		mcp.WithBoolean("up", mcp.Required(), mcp.Description(locale.ToggleMouseButtonArgUpDescription())),
+	)
+
+	ToggleKeyTool = mcp.NewTool("toggle_key",
+		mcp.WithDescription(locale.ToggleKeyDescription()),
+		mcp.WithBoolean("up", mcp.Required(), mcp.Description(locale.ToggleKeyArgUpDescription())),
+		mcp.WithString("keys", mcp.Required(), mcp.Description(locale.ToggleKeyArgKeysDescription())),
+	)
+
+	KeyTapTool = mcp.NewTool("key_tap",
+		mcp.WithDescription(locale.KeyTapDescription()),
+		mcp.WithString("keys", mcp.Required(), mcp.Description(locale.KeyTapArgKeysDescription())),
+	)
+
+	KeySleepMilliTool = mcp.NewTool("key_sleep_milli",
+		mcp.WithDescription(locale.KeySleepMilliDescription()),
+		mcp.WithNumber("ms", mcp.Required(), mcp.Description(locale.KeySleepMilliArgMsDescription())),
+	)
+)
 
 type GUITool struct {
 	logger *slog.Logger
