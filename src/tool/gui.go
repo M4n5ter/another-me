@@ -7,12 +7,34 @@ import (
 	"fmt"
 	"image"
 	"image/png"
+	"io"
 	"log/slog"
 
 	"github.com/go-vgo/robotgo"
 	"github.com/m4n5ter/another-me/src/locale"
 	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/mark3labs/mcp-go/server"
 )
+
+var (
+	GUIMCPServer = server.NewMCPServer("gui", "0.0.1",
+		server.WithToolCapabilities(true),
+	)
+)
+
+func init() {
+	GUIMCPServer.AddTools(NewGUITool().MCPServerTools()...)
+}
+
+func GUIIOMCPServer(input io.Reader, output io.WriteCloser) {
+	go func() {
+		s := server.NewStdioServer(GUIMCPServer)
+		err := s.Listen(context.Background(), input, output)
+		if err != nil {
+			slog.Default().Error("GUI I/O MCP server error", "error", err)
+		}
+	}()
+}
 
 var (
 	ScreenshotTool = mcp.NewTool("screenshot",
@@ -53,30 +75,30 @@ var (
 	ScrollDirectionTool = mcp.NewTool("scroll_direction",
 		mcp.WithDescription(locale.ScrollDirectionDescription()),
 		mcp.WithNumber("x", mcp.Required(), mcp.Description(locale.ScrollDirectionArgXDescription())),
-		mcp.WithString("direction", mcp.Required(), mcp.Description(locale.ScrollDirectionArgDirectionDescription())),
+		mcp.WithString("direction", mcp.Required(), mcp.Description(locale.ScrollDirectionArgDirectionDescription()), mcp.Enum(DirectionEnum()...)),
 	)
 
 	ClickTool = mcp.NewTool("click",
 		mcp.WithDescription(locale.ClickDescription()),
-		mcp.WithString("button", mcp.Required(), mcp.Description(locale.ClickArgButtonDescription())),
+		mcp.WithString("button", mcp.Required(), mcp.Description(locale.ClickArgButtonDescription()), mcp.Enum(MouseButtonEnum()...)),
 		mcp.WithBoolean("double", mcp.Required(), mcp.Description(locale.ClickArgDoubleDescription())),
 	)
 
 	ToggleMouseButtonTool = mcp.NewTool("toggle_mouse_button",
 		mcp.WithDescription(locale.ToggleMouseButtonDescription()),
-		mcp.WithString("button", mcp.Required(), mcp.Description(locale.ToggleMouseButtonArgButtonDescription())),
+		mcp.WithString("button", mcp.Required(), mcp.Description(locale.ToggleMouseButtonArgButtonDescription()), mcp.Enum(MouseButtonEnum()...)),
 		mcp.WithBoolean("up", mcp.Required(), mcp.Description(locale.ToggleMouseButtonArgUpDescription())),
 	)
 
 	ToggleKeyTool = mcp.NewTool("toggle_key",
 		mcp.WithDescription(locale.ToggleKeyDescription()),
 		mcp.WithBoolean("up", mcp.Required(), mcp.Description(locale.ToggleKeyArgUpDescription())),
-		mcp.WithString("keys", mcp.Required(), mcp.Description(locale.ToggleKeyArgKeysDescription())),
+		mcp.WithArray("keys", mcp.Required(), mcp.Description(locale.ToggleKeyArgKeysDescription()), mcp.Enum(KeyEnum()...)),
 	)
 
 	KeyTapTool = mcp.NewTool("key_tap",
 		mcp.WithDescription(locale.KeyTapDescription()),
-		mcp.WithString("keys", mcp.Required(), mcp.Description(locale.KeyTapArgKeysDescription())),
+		mcp.WithArray("keys", mcp.Required(), mcp.Description(locale.KeyTapArgKeysDescription()), mcp.Enum(KeyEnum()...)),
 	)
 
 	KeySleepMilliTool = mcp.NewTool("key_sleep_milli",
@@ -89,8 +111,8 @@ type GUITool struct {
 	logger *slog.Logger
 }
 
-func NewGUITool(logger *slog.Logger) GUITool {
-	return GUITool{logger: logger.WithGroup("gui_tool")}
+func NewGUITool() *GUITool {
+	return &GUITool{logger: slog.Default().WithGroup("gui_tool")}
 }
 
 // Screenshot 捕获一张默认桌面的截图: png base64 url
@@ -158,6 +180,10 @@ const (
 	DirectionLeft  Direction = "left"
 	DirectionRight Direction = "right"
 )
+
+func DirectionEnum() []string {
+	return []string{string(DirectionUp), string(DirectionDown), string(DirectionLeft), string(DirectionRight)}
+}
 
 // Click 点击（按下+松开）
 func (c *GUITool) Click(button MouseButton, double bool) {
@@ -239,6 +265,23 @@ func (c *GUITool) KeySleepMilli(ms int) {
 }
 
 // ---- MCP 工具定义开始 ----
+
+func (c *GUITool) MCPServerTools() []server.ServerTool {
+	return []server.ServerTool{
+		{Tool: ScreenshotTool, Handler: c.ScreenshotMCP},
+		{Tool: MoveMouseTool, Handler: c.MoveMouseMCP},
+		{Tool: MouseLocationTool, Handler: c.MouseLocationMCP},
+		{Tool: DragTool, Handler: c.DragMCP},
+		{Tool: ScrollTool, Handler: c.ScrollMCP},
+		{Tool: ScrollRelativeTool, Handler: c.ScrollRelativeMCP},
+		{Tool: ScrollDirectionTool, Handler: c.ScrollDirectionMCP},
+		{Tool: ClickTool, Handler: c.ClickMCP},
+		{Tool: ToggleMouseButtonTool, Handler: c.ToggleMouseButtonMCP},
+		{Tool: ToggleKeyTool, Handler: c.ToggleKeyMCP},
+		{Tool: KeyTapTool, Handler: c.KeyTapMCP},
+		{Tool: KeySleepMilliTool, Handler: c.KeySleepMilliMCP},
+	}
+}
 
 func (c *GUITool) ScreenshotMCP(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	base64PNGURL, _, err := c.Screenshot()
@@ -446,6 +489,10 @@ const (
 	MouseButtonWheelUp    MouseButton = "wheelUp"    // 鼠标滚轮上键?
 )
 
+func MouseButtonEnum() []string {
+	return []string{string(MouseButtonLeft), string(MouseButtonRight), string(MouseButtonWheelLeft), string(MouseButtonWheelRight), string(MouseButtonWheelDown), string(MouseButtonWheelUp)}
+}
+
 type Key string
 
 const (
@@ -635,3 +682,7 @@ const (
 	KeyLightsKbdUp     Key = "lights_kbd_up"     // 提高键盘背光亮度 (Windows 不支持)
 	KeyLightsKbdDown   Key = "lights_kbd_down"   // 降低键盘背光亮度 (Windows 不支持)
 )
+
+func KeyEnum() []string {
+	return []string{string(KeyA), string(KeyB), string(KeyC), string(KeyD), string(KeyE), string(KeyF), string(KeyG), string(KeyH), string(KeyI), string(KeyJ), string(KeyK), string(KeyL), string(KeyM), string(KeyN), string(KeyO), string(KeyP), string(KeyQ), string(KeyR), string(KeyS), string(KeyT), string(KeyU), string(KeyV), string(KeyW), string(KeyX), string(KeyY), string(KeyZ), string(Keya), string(Keyb), string(Keyc), string(Keyd), string(Keye), string(Keyf), string(Keyg), string(Keyh), string(Keyi), string(Keyj), string(Keyk), string(Keyl), string(Keym), string(Keyn), string(Keyo), string(Keyp), string(Keyq), string(Keyr), string(Keys), string(Keyt), string(Keyu), string(Keyv), string(Keyw), string(Keyx), string(Keyy), string(Keyz), string(Key0), string(Key1), string(Key2), string(Key3), string(Key4), string(Key5), string(Key6), string(Key7), string(Key8), string(Key9), string(KeyBackspace), string(KeyDelete), string(KeyEnter), string(KeyTab), string(KeyEsc), string(KeyEscape), string(KeyUp), string(KeyDown), string(KeyRight), string(KeyLeft), string(KeyHome), string(KeyEnd), string(KeyPageUp), string(KeyPageDown), string(KeyF1), string(KeyF2), string(KeyF3), string(KeyF4), string(KeyF5), string(KeyF6), string(KeyF7), string(KeyF8), string(KeyF9), string(KeyF10), string(KeyF11), string(KeyF12), string(KeyF13), string(KeyF14), string(KeyF15), string(KeyF16), string(KeyF17), string(KeyF18), string(KeyF19), string(KeyF20), string(KeyF21), string(KeyF22), string(KeyF23), string(KeyF24), string(KeyCmd), string(KeyLCmd), string(KeyRCmd), string(KeyAlt), string(KeyLAlt), string(KeyRAlt), string(KeyCtrl), string(KeyLCtrl), string(KeyRCtrl), string(KeyControl), string(KeyShift), string(KeyLShift), string(KeyRShift), string(KeyCapsLock), string(KeySpace), string(KeyPrint), string(KeyPrintScreen), string(KeyInsert), string(KeyMenu), string(KeyAudioMute), string(KeyAudioVolDown), string(KeyAudioVolUp), string(KeyAudioPlay), string(KeyAudioStop), string(KeyAudioPause), string(KeyAudioPrev), string(KeyAudioNext), string(KeyAudioRewind), string(KeyAudioForward), string(KeyAudioRepeat), string(KeyAudioRandom), string(KeyNum0), string(KeyNum1), string(KeyNum2), string(KeyNum3), string(KeyNum4), string(KeyNum5), string(KeyNum6), string(KeyNum7), string(KeyNum8), string(KeyNum9), string(KeyNumLock), string(KeyNumDot), string(KeyNumPlus), string(KeyNumMinus), string(KeyNumMultiply), string(KeyNumDivide), string(KeyNumClear), string(KeyNumEnter), string(KeyNumEqual), string(KeyNumpad0), string(KeyNumpad1), string(KeyNumpad2), string(KeyNumpad3), string(KeyNumpad4), string(KeyNumpad5), string(KeyNumpad6), string(KeyNumpad7), string(KeyNumpad8), string(KeyNumpad9), string(KeyLightsMonUp), string(KeyLightsMonDown), string(KeyLightsKbdToggle), string(KeyLightsKbdUp), string(KeyLightsKbdDown)}
+}

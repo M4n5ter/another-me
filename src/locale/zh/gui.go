@@ -56,11 +56,11 @@ const ToggleKeyDescription = "切换按键。"
 
 const ToggleKeyArgUpDescription = "是否抬起"
 
-const ToggleKeyArgKeysDescription = "按键"
+const ToggleKeyArgKeysDescription = `按键，例如: ["ctrl", "alt", "a"]`
 
 const KeyTapDescription = "按下按键。"
 
-const KeyTapArgKeysDescription = "按键"
+const KeyTapArgKeysDescription = `按键，例如: ["ctrl", "alt", "a"]`
 
 const KeySleepMilliDescription = "按键休眠(毫秒)。"
 

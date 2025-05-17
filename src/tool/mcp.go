@@ -2,11 +2,13 @@ package tool
 
 import (
 	"context"
+	"io"
 	"log/slog"
 
 	einomcp "github.com/cloudwego/eino-ext/components/tool/mcp"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/mark3labs/mcp-go/client"
+	"github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
@@ -19,6 +21,19 @@ func StdIOMCP(ctx context.Context, name, version string, command string, env []s
 		return nil, err
 	}
 
+	return getMCP(ctx, cli, name, version)
+}
+
+// IOMCP 使用已有的 io.Reader 和 io.WriteCloser 作为输入和输出，而不是标准输入和输出
+func IOMCP(ctx context.Context, name, version string, input io.Reader, output io.WriteCloser) ([]tool.BaseTool, error) {
+	transport := transport.NewIO(input, output, nil)
+	err := transport.Start(ctx)
+	if err != nil {
+		mcpLogger.Error("启动 I/O MCP 客户端失败", "error", err)
+		return nil, err
+	}
+
+	cli := client.NewClient(transport)
 	return getMCP(ctx, cli, name, version)
 }
 

@@ -56,11 +56,11 @@ const ToggleKeyDescription = "Toggle the key."
 
 const ToggleKeyArgUpDescription = "is up"
 
-const ToggleKeyArgKeysDescription = "keys"
+const ToggleKeyArgKeysDescription = `keys, for example: ["ctrl", "alt", "a"]`
 
 const KeyTapDescription = "Tap the key."
 
-const KeyTapArgKeysDescription = "keys"
+const KeyTapArgKeysDescription = `keys, for example: ["ctrl", "alt", "a"]`
 
 const KeySleepMilliDescription = "Key sleep(milliseconds)."
 
