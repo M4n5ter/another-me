@@ -567,7 +567,7 @@ func (t *Tool) TypeString(inputJSON string) (string, error) {
 	robotgo.TypeStr(args.Content)
 
 	result := map[string]any{
-		"result": fmt.Sprintf("Typed string: %s", args.Content),
+		"result": fmt.Sprintf("输入字符串=%s", args.Content),
 	}
 
 	resultJSON, err := json.Marshal(result)
