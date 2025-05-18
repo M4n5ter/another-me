@@ -7,7 +7,6 @@ import (
 	"github.com/cloudwego/eino/schema"
 
 	"github.com/m4n5ter/another-me/pkg/llminterface"
-	// Ensure option is imported if Some/None are used directly
 )
 
 // ChatInputToEinoMsgs 将 llminterface.ChatInput 转换为 eino 的 []*schema.Message

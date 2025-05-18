@@ -153,90 +153,7 @@ func (a *Agent) Run(ctx context.Context, userInput, conversationID string) (stri
 			a.logger.Debug("Processing chunk", "index", i, "contentPartsCount", len(chunk.ContentParts), "finishReason", chunk.FinishReason, "conversationID", conversationID)
 
 			for _, part := range chunk.ContentParts {
-				if part.Type == llminterface.PartTypeText {
-					llmThinks += part.Text
-					a.logger.Debug("Added text from chunk", "textLength", len(part.Text), "conversationID", conversationID)
-				} else if part.Type == llminterface.PartTypeToolCallRequest && part.ToolCallValues.IsSome() {
-					toolCalls := part.ToolCallValues.Unwrap().Calls
-					a.logger.Debug("Processing tool calls", "count", len(toolCalls), "conversationID", conversationID)
-
-					for _, call := range toolCalls {
-						a.logger.Debug("Tool call details", "id", call.ID, "name", call.Name, "argsLength", len(call.Arguments), "conversationID", conversationID)
-
-						// 如果有ID，这是一个新工具调用或工具调用的开始部分
-						if call.ID != "" {
-							currentToolCallID = call.ID // 更新当前处理的ID
-
-							if existingCall, exists := toolCallsMap[call.ID]; exists {
-								// 已存在相同ID的工具调用，更新信息
-								if call.Name != "" && existingCall.Name == "" {
-									existingCall.Name = call.Name
-								}
-
-								// 追加或替换参数
-								if call.Arguments != "" {
-									if existingCall.Arguments == "" || existingCall.Arguments == "{}" {
-										existingCall.Arguments = call.Arguments
-									} else {
-										// 追加参数，需要小心JSON结构
-										existingCall.Arguments += call.Arguments
-									}
-								}
-
-								toolCallsMap[call.ID] = existingCall
-								a.logger.Debug("Updated existing tool call", "id", call.ID, "name", existingCall.Name, "argsLength", len(existingCall.Arguments), "conversationID", conversationID)
-							} else {
-								// 新工具调用，添加到映射
-								toolCallsMap[call.ID] = call
-								toolCallOrder = append(toolCallOrder, call.ID)
-								a.logger.Debug("Added new tool call", "id", call.ID, "name", call.Name, "conversationID", conversationID)
-							}
-						} else if call.Arguments != "" {
-							// 这是一个只包含参数的chunk
-							switch {
-							case currentToolCallID != "":
-								// 使用当前正在处理的工具调用ID
-								if existingCall, exists := toolCallsMap[currentToolCallID]; exists {
-									// 追加参数
-									if existingCall.Arguments == "" || existingCall.Arguments == "{}" {
-										existingCall.Arguments = call.Arguments
-									} else {
-										existingCall.Arguments += call.Arguments
-									}
-									toolCallsMap[currentToolCallID] = existingCall
-									a.logger.Debug("Appended arguments to current tool call", "id", currentToolCallID, "newArgsLength", len(call.Arguments), "totalArgsLength", len(existingCall.Arguments), "conversationID", conversationID)
-								} else {
-									// 这种情况不应该发生：有当前ID但在map中找不到
-									a.logger.Warn("Found arguments for non-existent tool call ID", "currentID", currentToolCallID, "arguments", call.Arguments, "conversationID", conversationID)
-
-									// 创建一个新条目（应急处理）
-									newCall := llminterface.ToolCall{
-										ID:        currentToolCallID,
-										Arguments: call.Arguments,
-									}
-									toolCallsMap[currentToolCallID] = newCall
-									toolCallOrder = append(toolCallOrder, currentToolCallID)
-								}
-							case len(toolCallOrder) > 0:
-								// 如果没有当前ID但有之前的工具调用，使用最后一个
-								lastID := toolCallOrder[len(toolCallOrder)-1]
-								existingCall := toolCallsMap[lastID]
-
-								// 追加参数
-								if existingCall.Arguments == "" || existingCall.Arguments == "{}" {
-									existingCall.Arguments = call.Arguments
-								} else {
-									existingCall.Arguments += call.Arguments
-								}
-								toolCallsMap[lastID] = existingCall
-								a.logger.Debug("Appended arguments to last tool call", "id", lastID, "newArgsLength", len(call.Arguments), "totalArgsLength", len(existingCall.Arguments), "conversationID", conversationID)
-							default:
-								// 没有工具调用上下文，但收到了参数 - 这是异常情况
-								a.logger.Warn("Received tool call arguments without context", "arguments", call.Arguments, "conversationID", conversationID)
-							}
-						}
-					}
-				}
+				a.processContentPart(part, &llmThinks, toolCallsMap, &toolCallOrder, &currentToolCallID, conversationID)
 			}
 		}
 
@@ -282,22 +199,27 @@ func (a *Agent) Run(ctx context.Context, userInput, conversationID string) (stri
 
 		lastResponseText = llmThinks // 保存最后一次LLM的文本输出，以备没有工具调用时作为最终结果
 
+		// TODOL 结束迭代逻辑还需要改进
 		// 如果没有工具调用，并且LLM给出了结束原因，或者LLM有文本输出但没有结束原因（可能是隐式结束）
 		if len(toolCallsToExecute) == 0 {
-			if finishReason.IsSome() && finishReason.Unwrap() == "stop" {
+			switch {
+			case finishReason.IsSome() && finishReason.Unwrap() == "stop":
 				a.logger.Info("LLM indicated stop, no tool calls. Returning last response.", "conversationID", conversationID, "finishReason", finishReason.Unwrap())
 				return llmThinks, nil
-			} else if finishReason.IsSome() && finishReason.Unwrap() != "tool_calls" {
+			case finishReason.IsSome() && finishReason.Unwrap() != "tool_calls":
 				a.logger.Info("LLM provided a non-tool_calls finish reason, no tool calls. Returning last response.", "conversationID", conversationID, "finishReason", finishReason.Unwrap())
 				return llmThinks, nil
-			} else if llmThinks != "" && !finishReason.IsSome() { // LLM有输出但未明确结束，也可能是最终答案
+			case llmThinks != "" && !finishReason.IsSome():
 				a.logger.Info("LLM provided text output without a finish reason, no tool calls. Assuming this is the final response.", "conversationID", conversationID)
 				return llmThinks, nil
-			} else if llmErr != nil { // 如果流中有错误，并且没有工具调用，则返回错误
-				return llminterface.AggregateTextFromChunks(ctx, outputChan) // 这会返回已聚合的文本和错误
-			}
-			// 如果既没有工具调用，也没有结束信号，也没有错误，并且LLM思考为空，则可能需要继续循环或视为错误
-			if llmThinks == "" && !finishReason.IsSome() {
+			case llmErr != nil:
+				a.logger.Error("LLM stream resulted in an error, and no valid tool calls were made or executed.", "error", llmErr, "conversationID", conversationID)
+				llmThinks, err := llminterface.AggregateTextFromChunks(ctx, outputChan)
+				if err != nil {
+					return "", fmt.Errorf("LLM stream resulted in an error: %w", err)
+				}
+				return llmThinks, nil
+			default:
 				a.logger.Warn("LLM produced no text, no tool calls, and no finish reason. Potential loop or LLM issue.", "conversationID", conversationID)
 				// 可以在这里决定是返回错误还是空响应，或者允许循环继续（可能达到最大迭代）
 				// 为避免无限循环，如果迭代多次仍无进展，外层循环的 maxIterations 会捕获
@@ -388,4 +310,118 @@ func (a *Agent) Run(ctx context.Context, userInput, conversationID string) (stri
 		return lastResponseText, fmt.Errorf("达到最大迭代次数 (%d)，返回最后观察到的LLM输出", a.maxIterations)
 	}
 	return "", fmt.Errorf("达到最大迭代次数 (%d) 且没有LLM的最终响应", a.maxIterations)
+}
+
+// processContentPart 处理单个内容部分，提取文本或处理工具调用
+func (a *Agent) processContentPart(part llminterface.ContentPart, llmThinks *string,
+	toolCallsMap map[string]llminterface.ToolCall, toolCallOrder *[]string,
+	currentToolCallID *string, conversationID string,
+) {
+	if part.Type == llminterface.PartTypeText {
+		*llmThinks += part.Text
+		a.logger.Debug("Added text from chunk", "textLength", len(part.Text), "conversationID", conversationID)
+	} else if part.Type == llminterface.PartTypeToolCallRequest && part.ToolCallValues.IsSome() {
+		toolCalls := part.ToolCallValues.Unwrap().Calls
+		a.logger.Debug("Processing tool calls", "count", len(toolCalls), "conversationID", conversationID)
+
+		for _, call := range toolCalls {
+			a.processToolCall(call, toolCallsMap, toolCallOrder, currentToolCallID, conversationID)
+		}
+	}
+}
+
+// processToolCall 处理单个工具调用
+func (a *Agent) processToolCall(call llminterface.ToolCall,
+	toolCallsMap map[string]llminterface.ToolCall, toolCallOrder *[]string,
+	currentToolCallID *string, conversationID string,
+) {
+	a.logger.Debug("Tool call details", "id", call.ID, "name", call.Name, "argsLength", len(call.Arguments), "conversationID", conversationID)
+
+	// 如果有ID，这是一个新工具调用或工具调用的开始部分
+	if call.ID != "" {
+		*currentToolCallID = call.ID // 更新当前处理的ID
+
+		if existingCall, exists := toolCallsMap[call.ID]; exists {
+			// 已存在相同ID的工具调用，更新信息
+			if call.Name != "" && existingCall.Name == "" {
+				existingCall.Name = call.Name
+			}
+
+			// 追加或替换参数
+			if call.Arguments != "" {
+				if existingCall.Arguments == "" || existingCall.Arguments == "{}" {
+					existingCall.Arguments = call.Arguments
+				} else {
+					// 追加参数，需要小心JSON结构
+					existingCall.Arguments += call.Arguments
+				}
+			}
+
+			toolCallsMap[call.ID] = existingCall
+			a.logger.Debug("Updated existing tool call", "id", call.ID, "name", existingCall.Name,
+				"argsLength", len(existingCall.Arguments), "conversationID", conversationID)
+		} else {
+			// 新工具调用，添加到映射
+			toolCallsMap[call.ID] = call
+			*toolCallOrder = append(*toolCallOrder, call.ID)
+			a.logger.Debug("Added new tool call", "id", call.ID, "name", call.Name, "conversationID", conversationID)
+		}
+	} else if call.Arguments != "" {
+		// 这是一个只包含参数的chunk
+		a.processToolCallArguments(call, toolCallsMap, toolCallOrder, *currentToolCallID, conversationID)
+	}
+}
+
+// processToolCallArguments 处理工具调用参数
+func (a *Agent) processToolCallArguments(call llminterface.ToolCall,
+	toolCallsMap map[string]llminterface.ToolCall, toolCallOrder *[]string,
+	currentToolCallID, conversationID string,
+) {
+	switch {
+	case currentToolCallID != "":
+		// 使用当前正在处理的工具调用ID
+		if existingCall, exists := toolCallsMap[currentToolCallID]; exists {
+			// 追加参数
+			if existingCall.Arguments == "" || existingCall.Arguments == "{}" {
+				existingCall.Arguments = call.Arguments
+			} else {
+				existingCall.Arguments += call.Arguments
+			}
+			toolCallsMap[currentToolCallID] = existingCall
+			a.logger.Debug("Appended arguments to current tool call", "id", currentToolCallID,
+				"newArgsLength", len(call.Arguments), "totalArgsLength", len(existingCall.Arguments),
+				"conversationID", conversationID)
+		} else {
+			// 这种情况不应该发生：有当前ID但在map中找不到
+			a.logger.Warn("Found arguments for non-existent tool call ID", "currentID", currentToolCallID,
+				"arguments", call.Arguments, "conversationID", conversationID)
+
+			// 创建一个新条目（应急处理）
+			newCall := llminterface.ToolCall{
+				ID:        currentToolCallID,
+				Arguments: call.Arguments,
+			}
+			toolCallsMap[currentToolCallID] = newCall
+			*toolCallOrder = append(*toolCallOrder, currentToolCallID)
+		}
+	case len(*toolCallOrder) > 0:
+		// 如果没有当前ID但有之前的工具调用，使用最后一个
+		lastID := (*toolCallOrder)[len(*toolCallOrder)-1]
+		existingCall := toolCallsMap[lastID]
+
+		// 追加参数
+		if existingCall.Arguments == "" || existingCall.Arguments == "{}" {
+			existingCall.Arguments = call.Arguments
+		} else {
+			existingCall.Arguments += call.Arguments
+		}
+		toolCallsMap[lastID] = existingCall
+		a.logger.Debug("Appended arguments to last tool call", "id", lastID,
+			"newArgsLength", len(call.Arguments), "totalArgsLength", len(existingCall.Arguments),
+			"conversationID", conversationID)
+	default:
+		// 没有工具调用上下文，但收到了参数 - 这是异常情况
+		a.logger.Warn("Received tool call arguments without context",
+			"arguments", call.Arguments, "conversationID", conversationID)
+	}
 }
