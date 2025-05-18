@@ -45,6 +45,10 @@
     "tool.gui.toggle_key.arg.keys": "keys, for example: [\"ctrl\", \"alt\", \"a\"]",
     "tool.gui.key_tap.description": "Tap the key.",
     "tool.gui.key_tap.arg.keys": "keys, for example: [\"ctrl\", \"alt\", \"a\"]",
+    "tool.gui.type_string.description": "Type the string.",
+    "tool.gui.type_string.arg.content": "content",
     "tool.gui.key_sleep_milli.description": "Key sleep(milliseconds).",
-    "tool.gui.key_sleep_milli.arg.ms": "sleep time(milliseconds)"
+    "tool.gui.key_sleep_milli.arg.ms": "sleep time(milliseconds)",
+    "tool.gui.sleep_milli.description": "Sleep(milliseconds).",
+    "tool.gui.sleep_milli.arg.ms": "sleep time(milliseconds)"
 } 
