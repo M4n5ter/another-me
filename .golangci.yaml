@@ -25,9 +25,9 @@ formatters:
           replacement: 'a[b:]'
     goimports:
       local-prefixes:
-        - github.com/m4n5ter/mindscape
+        - github.com/m4n5ter/another-me
     gofumpt:
-      module-path: github.com/m4n5ter/mindscape
+      module-path: github.com/m4n5ter/another-me
       extra-rules: true
 
 linters:
