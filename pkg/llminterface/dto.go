@@ -29,9 +29,9 @@ type ImageURLContent struct {
 
 // ContentPart 代表多模态消息中的一个独立部分，例如一段文本或一个图像。
 type ContentPart struct {
-	Type     ContentPartType  `json:"type"`               // 内容部分的类型 (例如 "text", "image_url")
-	Text     string           `json:"text,omitempty"`       // 当 Type 为 PartTypeText 时，此字段包含文本内容。
-	ImageURL *ImageURLContent `json:"image_url,omitempty"`  // 当 Type 为 PartTypeImageURL 时，此字段包含图像 URL 的详细信息。
+	Type     ContentPartType  `json:"type"`                // 内容部分的类型 (例如 "text", "image_url")
+	Text     string           `json:"text,omitempty"`      // 当 Type 为 PartTypeText 时，此字段包含文本内容。
+	ImageURL *ImageURLContent `json:"image_url,omitempty"` // 当 Type 为 PartTypeImageURL 时，此字段包含图像 URL 的详细信息。
 }
 
 // MessageRole 定义了消息在对话历史中的角色。
@@ -52,8 +52,8 @@ type InputMessage struct {
 
 // ChatInput 代表对 LLM 进行一次交互的完整输入。
 type ChatInput struct {
-	Messages       []InputMessage `json:"messages"`       // 要发送给 LLM 的消息序列
-	ConversationID string         `json:"-"`              // 会话ID，用于适配器内部追踪和管理会话状态 (例如关联到框架的会话记忆)，不直接发送给LLM。
+	Messages       []InputMessage `json:"messages"` // 要发送给 LLM 的消息序列
+	ConversationID string         `json:"-"`        // 会话ID，用于适配器内部追踪和管理会话状态 (例如关联到框架的会话记忆)，不直接发送给LLM。
 	// 注意：模型名称 (Model), 最大令牌数 (MaxTokens), 温度 (Temperature) 等参数
 	//      预计在具体的 ChatAdapter 实现中进行配置，或者通过其所适配的框架的原生机制进行设置，
 	//      而不是在这个通用的 ChatInput 结构中定义。
@@ -65,4 +65,4 @@ type ChatOutputChunk struct {
 	TextDelta    string  `json:"text_delta"`              // 此数据块中增量生成的文本部分。
 	Error        error   `json:"-"`                       // 在处理此数据块或终止流时发生的错误。如果非nil，则流在此处被视为失败。
 	FinishReason *string `json:"finish_reason,omitempty"` // 流结束的原因 (例如 "stop", "length")。通常在指示流终止的最后一个块中出现。
-} 
+}

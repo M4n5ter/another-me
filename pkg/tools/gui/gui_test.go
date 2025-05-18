@@ -6,10 +6,11 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/m4n5ter/another-me/pkg/i18n"
-	"github.com/m4n5ter/another-me/pkg/toolcore"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/m4n5ter/another-me/pkg/i18n"
+	"github.com/m4n5ter/another-me/pkg/toolcore"
 )
 
 // 创建测试用的翻译文件系统

@@ -6,9 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/m4n5ter/another-me/pkg/llminterface"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/m4n5ter/another-me/pkg/llminterface"
 )
 
 // TestNewMockChatAdapter 测试创建新的 MockChatAdapter 实例

@@ -10,6 +10,19 @@ output:
       print-linter-name: true
   show-stats: true
 
+formatters:
+  settings:
+    gofmt:
+      simplify: true
+      rewrite-rules:
+        - pattern: 'interface{}'
+          replacement: 'any'
+        - pattern: 'a[b:len(a)]'
+          replacement: 'a[b:]'
+    goimports:
+      local-prefixes:
+        - github.com/m4n5ter/another-me
+
 linters:
   default: none
   enable:
@@ -119,9 +132,3 @@ linters:
 issues:
   max-issues-per-linter: 0 # 0 表示禁用
   max-same-issues: 0 # 0 表示禁用
-
-formatters:
-  settings:
-    goimports:
-      local-prefixes:
-        - github.com/m4n5ter/another-me

@@ -133,7 +133,7 @@ func LanguageFromContext(ctx context.Context) string {
 // 支持使用 {placeholder} 格式的命名参数进行插值。
 // key: 需要翻译的键，例如 "greeting.user"。
 // params: 一个 map，包含需要替换到翻译文本中的参数，例如 map[string]interface{}{"name": "张三"}。
-func (m *Manager) T(ctx context.Context, key string, params map[string]interface{}) string {
+func (m *Manager) T(ctx context.Context, key string, params map[string]any) string {
 	m.mu.RLock() // 读锁定，因为只读取 m.translations 等字段
 
 	currentLang := LanguageFromContext(ctx)
@@ -193,7 +193,7 @@ func (m *Manager) T(ctx context.Context, key string, params map[string]interface
 // params: 传递给 T 方法的参数，也会显示在提示信息中以帮助调试。
 // lang: 尝试获取翻译时使用的语言代码。
 // langCompletelyMissing: 布尔值，指示是否是整个语言的翻译数据都缺失了。
-func (m *Manager) formatMissingKey(key string, params map[string]interface{}, lang string, langCompletelyMissing bool) string {
+func (m *Manager) formatMissingKey(key string, params map[string]any, lang string, langCompletelyMissing bool) string {
 	var suffix string
 	if langCompletelyMissing {
 		suffix = fmt.Sprintf(" (语言 '%s' 的翻译文件缺失或无法加载)", lang)
