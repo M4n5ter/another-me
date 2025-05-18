@@ -9,8 +9,9 @@ type ContentPartType string
 
 // ContentPartType 的常量定义
 const (
-	PartTypeText     ContentPartType = "text"      // 文本类型的内容部分
-	PartTypeImageURL ContentPartType = "image_url" // 图片 URL 类型的内容部分
+	PartTypeText            ContentPartType = "text"              // 文本类型的内容部分
+	PartTypeImageURL        ContentPartType = "image_url"         // 图片 URL 类型的内容部分
+	PartTypeToolCallRequest ContentPartType = "tool_call_request" // LLM发起的工具调用请求
 )
 
 // ImageURLDetail 定义了图像处理的细节级别。
@@ -31,11 +32,24 @@ type ImageURLContent struct {
 	Detail Option[ImageURLDetail] `json:"detail,omitempty"` // 可选：图像处理的细节级别
 }
 
-// ContentPart 代表多模态消息中的一个独立部分，例如一段文本或一个图像。
+// ToolCall 代表一个对特定工具的调用请求。
+type ToolCall struct {
+	ID        string `json:"id"`        // 工具调用的唯一标识符，用于跟踪和匹配工具的调用和响应
+	Name      string `json:"name"`      // 工具的名称，应与已注册的工具名称一致
+	Arguments string `json:"arguments"` // 工具的参数，通常是一个JSON字符串
+}
+
+// ToolCallContent 代表一个或多个工具调用请求。
+type ToolCallContent struct {
+	Calls []ToolCall `json:"calls"` // 工具调用列表
+}
+
+// ContentPart 代表多模态消息中的一个独立部分，例如一段文本、一个图像或一个工具调用请求。
 type ContentPart struct {
-	Type     ContentPartType         `json:"type"`                // 内容部分的类型 (例如 "text", "image_url")
-	Text     string                  `json:"text,omitempty"`      // 当 Type 为 PartTypeText 时，此字段包含文本内容。
-	ImageURL Option[ImageURLContent] `json:"image_url,omitempty"` // 当 Type 为 PartTypeImageURL 时，此字段包含图像 URL 的详细信息。
+	Type           ContentPartType         `json:"type"`                       // 内容部分的类型 (例如 "text", "image_url", "tool_call_request")
+	Text           string                  `json:"text,omitempty"`             // 当 Type 为 PartTypeText 时，此字段包含文本内容。
+	ImageURL       Option[ImageURLContent] `json:"image_url,omitempty"`        // 当 Type 为 PartTypeImageURL 时，此字段包含图像 URL 的详细信息。
+	ToolCallValues Option[ToolCallContent] `json:"tool_call_values,omitempty"` // 当 Type 为 PartTypeToolCallRequest 时，此字段包含工具调用的结构化信息。
 }
 
 // MessageRole 定义了消息在对话历史中的角色。
@@ -51,8 +65,10 @@ const (
 
 // InputMessage 代表发送给 LLM 的单条消息结构，可以包含多个内容部分。
 type InputMessage struct {
-	Role    MessageRole   `json:"role"`    // 消息的角色 (例如 "user", "assistant")
-	Content []ContentPart `json:"content"` // 消息的内容，可以是文本和图像的混合序列
+	Role       MessageRole    `json:"role"`                   // 消息的角色 (例如 "user", "assistant")
+	Content    []ContentPart  `json:"content"`                // 消息的内容，可以是文本和图像的混合序列
+	ToolCallID Option[string] `json:"tool_call_id,omitempty"` // 可选：当 Role 为 RoleToolResult 时，此字段标识此消息响应的是哪个工具调用。
+	ToolName   Option[string] `json:"tool_name,omitempty"`    // 可选：当 Role 为 RoleToolResult 时，此字段指示执行的是哪个工具的名称。
 }
 
 // ChatInput 代表对 LLM 进行一次交互的完整输入。
@@ -65,9 +81,13 @@ type ChatInput struct {
 }
 
 // ChatOutputChunk 代表 LLM 响应流中的一个数据块。
-// 对于非流式调用，调用者需要聚合所有块的 TextDelta 来获得完整响应。
+// 对于非流式调用，调用者需要聚合所有块以获得完整响应。
 type ChatOutputChunk struct {
-	TextDelta    string         `json:"text_delta"`              // 此数据块中增量生成的文本部分。
+	// ContentParts 包含此数据块中的一个或多个内容部分 (例如文本、图像URL)。
+	// 对于纯文本流，通常这里只有一个类型为 PartTypeText 的 ContentPart。
+	// 对于多模态输出或需要发送结构化数据（如工具调用信息，如果以内容形式表示）时，
+	// 这里可以包含多个或不同类型的 ContentPart。
+	ContentParts []ContentPart  `json:"content_parts,omitempty"`
 	Error        error          `json:"-"`                       // 在处理此数据块或终止流时发生的错误。如果非nil，则流在此处被视为失败。
 	FinishReason Option[string] `json:"finish_reason,omitempty"` // 流结束的原因 (例如 "stop", "length")。通常在指示流终止的最后一个块中出现。
 }

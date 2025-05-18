@@ -160,32 +160,47 @@ func TestChatInputJSON(t *testing.T) {
 func TestChatOutputChunkJSON(t *testing.T) {
 	// 测试正常的回复块
 	normalChunk := ChatOutputChunk{
-		TextDelta: "Hello, ",
+		ContentParts: []ContentPart{
+			{
+				Type: PartTypeText,
+				Text: "Hello, ",
+			},
+		},
 	}
 
 	normalJSON, err := json.Marshal(normalChunk)
 	require.NoError(t, err, "Marshal 正常的 ChatOutputChunk 不应返回错误")
 
-	expectedNormalJSON := `{"text_delta":"Hello, "}`
+	expectedNormalJSON := `{"content_parts":[{"type":"text","text":"Hello, "}]}`
 	assert.JSONEq(t, expectedNormalJSON, string(normalJSON), "正常的 ChatOutputChunk 应正确编码为 JSON")
 
 	// 测试带有结束原因的最终块
 	finishReason := "stop"
 	finalChunk := ChatOutputChunk{
-		TextDelta:    "world!",
+		ContentParts: []ContentPart{
+			{
+				Type: PartTypeText,
+				Text: "world!",
+			},
+		},
 		FinishReason: Some(finishReason),
 	}
 
 	finalJSON, err := json.Marshal(finalChunk)
 	require.NoError(t, err, "Marshal 带有结束原因的 ChatOutputChunk 不应返回错误")
 
-	expectedFinalJSON := `{"text_delta":"world!","finish_reason":"stop"}`
+	expectedFinalJSON := `{"content_parts":[{"type":"text","text":"world!"}],"finish_reason":"stop"}`
 	assert.JSONEq(t, expectedFinalJSON, string(finalJSON), "带有结束原因的 ChatOutputChunk 应正确编码为 JSON")
 
 	// 测试带有错误的块
 	errorChunk := ChatOutputChunk{
-		TextDelta: "",
-		Error:     assert.AnError,
+		ContentParts: []ContentPart{
+			{
+				Type: PartTypeText,
+				Text: "",
+			},
+		},
+		Error: assert.AnError,
 	}
 
 	errorJSON, err := json.Marshal(errorChunk)
