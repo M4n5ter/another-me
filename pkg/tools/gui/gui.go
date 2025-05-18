@@ -38,7 +38,9 @@ func NewGUITools(i18nMgr *i18n.Manager) []toolcore.Tool {
 		NewGUIToolWithName(i18nMgr, "toggle_mouse_button"),
 		NewGUIToolWithName(i18nMgr, "toggle_key"),
 		NewGUIToolWithName(i18nMgr, "key_tap"),
+		NewGUIToolWithName(i18nMgr, "type_string"),
 		NewGUIToolWithName(i18nMgr, "key_sleep_milli"),
+		NewGUIToolWithName(i18nMgr, "sleep_milli"),
 	}
 	return tools
 }
@@ -99,8 +101,12 @@ func (t *Tool) Schema(ctx context.Context) (toolcore.ToolSchema, error) {
 		inputParams = t.createToggleKeyParams(ctx)
 	case "key_tap":
 		inputParams = t.createKeyTapParams(ctx)
+	case "type_string":
+		inputParams = t.createTypeStringParams(ctx)
 	case "key_sleep_milli":
 		inputParams = t.createKeySleepMilliParams(ctx)
+	case "sleep_milli":
+		inputParams = t.createSleepMilliParams(ctx)
 	}
 
 	// 返回工具模式
@@ -149,8 +155,12 @@ func (t *Tool) Call(ctx context.Context, inputJSON string) (string, error) {
 		return t.ToggleKey(inputJSON)
 	case "key_tap":
 		return t.KeyTap(inputJSON)
+	case "type_string":
+		return t.TypeString(inputJSON)
 	case "key_sleep_milli":
 		return t.KeySleepMilli(inputJSON)
+	case "sleep_milli":
+		return t.SleepMilli(inputJSON)
 	default:
 		return "", fmt.Errorf("未知的 GUI 工具: %s", t.name)
 	}
@@ -544,6 +554,30 @@ func (t *Tool) KeyTap(inputJSON string) (string, error) {
 	return string(resultJSON), nil
 }
 
+// TypeString 输入字符串
+func (t *Tool) TypeString(inputJSON string) (string, error) {
+	var args struct {
+		Content string `json:"content"`
+	}
+
+	if err := json.Unmarshal([]byte(inputJSON), &args); err != nil {
+		return "", fmt.Errorf("解析参数失败: %w", err)
+	}
+
+	robotgo.TypeStr(args.Content)
+
+	result := map[string]any{
+		"result": fmt.Sprintf("输入字符串=%s", args.Content),
+	}
+
+	resultJSON, err := json.Marshal(result)
+	if err != nil {
+		return "", fmt.Errorf("序列化结果失败: %w", err)
+	}
+
+	return string(resultJSON), nil
+}
+
 // KeySleepMilli 设置按键睡眠时间
 func (t *Tool) KeySleepMilli(inputJSON string) (string, error) {
 	var args struct {
@@ -568,27 +602,31 @@ func (t *Tool) KeySleepMilli(inputJSON string) (string, error) {
 	return string(resultJSON), nil
 }
 
-// 以下是各种参数定义方法
-
-func (t *Tool) createParamDef(ctx context.Context, name string, paramType toolcore.ParameterType,
-	required bool, enumValues []any, descKey string,
-) toolcore.ParameterDefinition {
-	langs := t.i18nMgr.GetSupportedLanguages()
-	descriptions := make(map[string]string, len(langs))
-
-	for _, lang := range langs {
-		langCtx := i18n.ContextWithLanguage(ctx, lang)
-		descriptions[lang] = t.i18nMgr.T(langCtx, descKey, nil)
+// SleepMilli 睡眠 ms 毫秒
+func (t *Tool) SleepMilli(inputJSON string) (string, error) {
+	var args struct {
+		Ms int `json:"ms"`
 	}
 
-	return toolcore.ParameterDefinition{
-		Name:        name,
-		Type:        paramType,
-		Description: descriptions,
-		Required:    required,
-		EnumValues:  enumValues,
+	if err := json.Unmarshal([]byte(inputJSON), &args); err != nil {
+		return "", fmt.Errorf("解析参数失败: %w", err)
 	}
+
+	robotgo.MilliSleep(args.Ms)
+
+	result := map[string]any{
+		"result": fmt.Sprintf("睡眠=%dms", args.Ms),
+	}
+
+	resultJSON, err := json.Marshal(result)
+	if err != nil {
+		return "", fmt.Errorf("序列化结果失败: %w", err)
+	}
+
+	return string(resultJSON), nil
 }
+
+// 以下是各种参数定义方法
 
 func (t *Tool) createMoveMouseParams(ctx context.Context) []toolcore.ParameterDefinition {
 	return []toolcore.ParameterDefinition{
@@ -655,9 +693,41 @@ func (t *Tool) createKeyTapParams(ctx context.Context) []toolcore.ParameterDefin
 	}
 }
 
+func (t *Tool) createTypeStringParams(ctx context.Context) []toolcore.ParameterDefinition {
+	return []toolcore.ParameterDefinition{
+		t.createParamDef(ctx, "content", toolcore.ParamTypeString, true, nil, "tool.gui.type_string.arg.content"),
+	}
+}
+
 func (t *Tool) createKeySleepMilliParams(ctx context.Context) []toolcore.ParameterDefinition {
 	return []toolcore.ParameterDefinition{
 		t.createParamDef(ctx, "ms", toolcore.ParamTypeInteger, true, nil, "tool.gui.key_sleep_milli.arg.ms"),
+	}
+}
+
+func (t *Tool) createSleepMilliParams(ctx context.Context) []toolcore.ParameterDefinition {
+	return []toolcore.ParameterDefinition{
+		t.createParamDef(ctx, "ms", toolcore.ParamTypeInteger, true, nil, "tool.gui.sleep_milli.arg.ms"),
+	}
+}
+
+func (t *Tool) createParamDef(ctx context.Context, name string, paramType toolcore.ParameterType,
+	required bool, enumValues []any, descKey string,
+) toolcore.ParameterDefinition {
+	langs := t.i18nMgr.GetSupportedLanguages()
+	descriptions := make(map[string]string, len(langs))
+
+	for _, lang := range langs {
+		langCtx := i18n.ContextWithLanguage(ctx, lang)
+		descriptions[lang] = t.i18nMgr.T(langCtx, descKey, nil)
+	}
+
+	return toolcore.ParameterDefinition{
+		Name:        name,
+		Type:        paramType,
+		Description: descriptions,
+		Required:    required,
+		EnumValues:  enumValues,
 	}
 }
 

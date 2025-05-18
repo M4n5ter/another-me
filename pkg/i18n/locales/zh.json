@@ -45,6 +45,10 @@
     "tool.gui.toggle_key.arg.keys": "按键，例如: [\"ctrl\", \"alt\", \"a\"]",
     "tool.gui.key_tap.description": "按下按键。",
     "tool.gui.key_tap.arg.keys": "按键，例如: [\"ctrl\", \"alt\", \"a\"]",
+    "tool.gui.type_string.description": "输入字符串。",
+    "tool.gui.type_string.arg.content": "内容",
     "tool.gui.key_sleep_milli.description": "按键休眠(毫秒)。",
-    "tool.gui.key_sleep_milli.arg.ms": "休眠时间(毫秒)"
+    "tool.gui.key_sleep_milli.arg.ms": "休眠时间(毫秒)",
+    "tool.gui.sleep_milli.description": "睡眠(毫秒)。",
+    "tool.gui.sleep_milli.arg.ms": "睡眠时间(毫秒)"
 } 
