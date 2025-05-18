@@ -1,0 +1,37 @@
+name: Go CI
+
+on: [push, pull_request]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.3'
+
+      - name: robotgo's dependencies
+        # https://github.com/go-vgo/robotgo#ubuntu
+        run: |
+          sudo apt update
+          sudo apt install -y libx11-dev xorg-dev libxtst-dev
+          sudo apt install -y xsel xclip
+          sudo apt install -y libpng++-dev
+          sudo apt install -y xcb libxcb-xkb-dev x11-xkb-utils libx11-xcb-dev libxkbcommon-x11-dev libxkbcommon-dev
+
+      - name: Build
+        run: go build -v ./...
+
+      - name: Run unit tests
+        run: make test-unit
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: latest
+          # args: --timeout=5m
+          # only-new-issues: true
