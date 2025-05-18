@@ -11,6 +11,10 @@ output:
   show-stats: true
 
 formatters:
+  enable:
+    - gofmt
+    - goimports
+    - gofumpt
   settings:
     gofmt:
       simplify: true
@@ -21,7 +25,10 @@ formatters:
           replacement: 'a[b:]'
     goimports:
       local-prefixes:
-        - github.com/m4n5ter/another-me
+        - github.com/m4n5ter/mindscape
+    gofumpt:
+      module-path: github.com/m4n5ter/mindscape
+      extra-rules: true
 
 linters:
   default: none
@@ -128,6 +135,8 @@ linters:
           - dupl
           - gosec
           - unused
+          - wrapcheck
+          - gocritic
 
 issues:
   max-issues-per-linter: 0 # 0 表示禁用

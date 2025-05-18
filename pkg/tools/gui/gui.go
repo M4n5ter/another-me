@@ -571,8 +571,8 @@ func (t *Tool) KeySleepMilli(inputJSON string) (string, error) {
 // 以下是各种参数定义方法
 
 func (t *Tool) createParamDef(ctx context.Context, name string, paramType toolcore.ParameterType,
-	required bool, enumValues []any, descKey string) toolcore.ParameterDefinition {
-
+	required bool, enumValues []any, descKey string,
+) toolcore.ParameterDefinition {
 	langs := t.i18nMgr.GetSupportedLanguages()
 	descriptions := make(map[string]string, len(langs))
 

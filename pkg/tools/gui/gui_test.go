@@ -26,7 +26,7 @@ func createTestFS(t *testing.T) fs.FS {
 				"tool.gui.move_mouse.arg.y": "y coordinate",
 				"tool.gui.mouse_location.description": "Get the current mouse location."
 			}`),
-			Mode: 0644,
+			Mode: 0o644,
 		},
 		"zh.json": &fstest.MapFile{
 			Data: []byte(`{
@@ -36,7 +36,7 @@ func createTestFS(t *testing.T) fs.FS {
 				"tool.gui.move_mouse.arg.y": "y坐标",
 				"tool.gui.mouse_location.description": "获取鼠标当前位置。"
 			}`),
-			Mode: 0644,
+			Mode: 0o644,
 		},
 	}
 

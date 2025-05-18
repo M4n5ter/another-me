@@ -19,7 +19,7 @@ func createTestFS(t *testing.T, files map[string]string) fs.FS {
 	for name, content := range files {
 		testFS[name] = &fstest.MapFile{
 			Data: []byte(content),
-			Mode: 0644,
+			Mode: 0o644,
 		}
 	}
 

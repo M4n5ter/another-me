@@ -23,14 +23,14 @@ func createTestFS(t *testing.T) fs.FS {
 				"tool.fetch.description": "Fetches content from a given URL.",
 				"tool.fetch.arg.url": "The URL to fetch content from."
 			}`),
-			Mode: 0644,
+			Mode: 0o644,
 		},
 		"zh.json": &fstest.MapFile{
 			Data: []byte(`{
 				"tool.fetch.description": "从给定的 URL 获取内容。",
 				"tool.fetch.arg.url": "要从中获取内容的 URL。"
 			}`),
-			Mode: 0644,
+			Mode: 0o644,
 		},
 	}
 
