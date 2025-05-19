@@ -91,3 +91,20 @@ type ChatOutputChunk struct {
 	Error        error          `json:"-"`                       // 在处理此数据块或终止流时发生的错误。如果非nil，则流在此处被视为失败。
 	FinishReason Option[string] `json:"finish_reason,omitempty"` // 流结束的原因 (例如 "stop", "length")。通常在指示流终止的最后一个块中出现。
 }
+
+// LLMResponse 表示从LLM获取的完整响应
+// 它代表了所有ChatOutputChunk合并后的最终结果
+type LLMResponse struct {
+	// Content 包含合并后的完整内容，按照接收顺序组织
+	Content []ContentPart `json:"content,omitempty"`
+
+	// FullText 是所有文本内容的快捷访问方式
+	// 它将所有PartTypeText类型的ContentPart合并成一个字符串
+	FullText string `json:"full_text,omitempty"`
+
+	// Error 如果在获取响应过程中发生错误，此字段将包含该错误
+	Error error `json:"-"`
+
+	// FinishReason 表示LLM生成停止的原因
+	FinishReason Option[string] `json:"finish_reason,omitempty"`
+}
