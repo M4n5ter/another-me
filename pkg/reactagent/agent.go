@@ -5,9 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
+	"strings"
+
+	json "github.com/json-iterator/go"
 
 	"github.com/m4n5ter/another-me/pkg/llminterface"
-
 	. "github.com/m4n5ter/another-me/pkg/option"
 	"github.com/m4n5ter/another-me/pkg/toolcore"
 )
@@ -480,8 +483,16 @@ func (a *Agent) processToolCallForStreaming(call llminterface.ToolCall,
 				if existingCall.Arguments == "" || existingCall.Arguments == "{}" {
 					existingCall.Arguments = call.Arguments
 				} else {
-					// 追加参数，需要小心JSON结构
-					existingCall.Arguments += call.Arguments
+					// 合并参数，安全处理JSON结构
+					mergedArgs, err := mergeJSONArgs(existingCall.Arguments, call.Arguments)
+					if err != nil {
+						a.logger.Warn("Failed to merge tool call arguments properly", "id", call.ID,
+							"error", err, "conversationID", conversationID)
+						// 回退到简单拼接，但记录警告
+						existingCall.Arguments += call.Arguments
+					} else {
+						existingCall.Arguments = mergedArgs
+					}
 				}
 			}
 
@@ -513,7 +524,16 @@ func (a *Agent) processToolCallArgumentsForStreaming(call llminterface.ToolCall,
 			if existingCall.Arguments == "" || existingCall.Arguments == "{}" {
 				existingCall.Arguments = call.Arguments
 			} else {
-				existingCall.Arguments += call.Arguments
+				// 合并参数，安全处理JSON结构
+				mergedArgs, err := mergeJSONArgs(existingCall.Arguments, call.Arguments)
+				if err != nil {
+					a.logger.Warn("Failed to merge tool call arguments properly", "id", currentToolCallID,
+						"error", err, "conversationID", conversationID)
+					// 回退到简单拼接，但记录警告
+					existingCall.Arguments += call.Arguments
+				} else {
+					existingCall.Arguments = mergedArgs
+				}
 			}
 			toolCallsMap[currentToolCallID] = existingCall
 			a.logger.Debug("Appended arguments to current tool call", "id", currentToolCallID,
@@ -541,7 +561,16 @@ func (a *Agent) processToolCallArgumentsForStreaming(call llminterface.ToolCall,
 		if existingCall.Arguments == "" || existingCall.Arguments == "{}" {
 			existingCall.Arguments = call.Arguments
 		} else {
-			existingCall.Arguments += call.Arguments
+			// 合并参数，安全处理JSON结构
+			mergedArgs, err := mergeJSONArgs(existingCall.Arguments, call.Arguments)
+			if err != nil {
+				a.logger.Warn("Failed to merge tool call arguments properly", "id", lastID,
+					"error", err, "conversationID", conversationID)
+				// 回退到简单拼接，但记录警告
+				existingCall.Arguments += call.Arguments
+			} else {
+				existingCall.Arguments = mergedArgs
+			}
 		}
 		toolCallsMap[lastID] = existingCall
 		a.logger.Debug("Appended arguments to last tool call", "id", lastID,
@@ -552,4 +581,70 @@ func (a *Agent) processToolCallArgumentsForStreaming(call llminterface.ToolCall,
 		a.logger.Warn("Received tool call arguments without context",
 			"arguments", call.Arguments, "conversationID", conversationID)
 	}
+}
+
+// mergeJSONArgs 尝试合并两个JSON参数片段，以安全的方式处理JSON结构
+// 常见情况包括:
+// 1. 两个完整的JSON对象合并
+// 2. 一个JSON前缀和一个JSON后缀合并
+// 3. 处理流式传输中的JSON片段
+func mergeJSONArgs(existing, new string) (string, error) {
+	// 如果现有参数为空，直接返回新参数
+	if existing == "" || existing == "{}" {
+		return new, nil
+	}
+
+	// 如果新参数为空，直接返回现有参数
+	if new == "" {
+		return existing, nil
+	}
+
+	// 首先尝试作为完整的JSON对象处理
+	var existingMap, newMap map[string]any
+
+	// 检查现有参数是否为有效JSON
+	if err := json.Unmarshal([]byte(existing), &existingMap); err == nil {
+		// 现有参数是有效的JSON对象
+
+		// 检查新参数是否为有效JSON
+		if err := json.Unmarshal([]byte(new), &newMap); err == nil {
+			// 两者都是有效的JSON对象，合并它们
+			maps.Copy(existingMap, newMap)
+
+			// 将合并后的映射转换回JSON字符串
+			merged, err := json.Marshal(existingMap)
+			if err != nil {
+				return "", fmt.Errorf("合并JSON后无法序列化: %w", err)
+			}
+
+			return string(merged), nil
+		}
+	}
+
+	// 如果不能作为完整的JSON对象处理，尝试作为流式JSON片段处理
+
+	// 检查是否是直接拼接可以形成有效JSON的情况
+	combined := existing + new
+	var combinedMap map[string]any
+	if err := json.Unmarshal([]byte(combined), &combinedMap); err == nil {
+		return combined, nil
+	}
+
+	// 特殊处理常见的流式传输模式，例如拼接不完整的JSON
+	// 检查现有字符串是否以花括号开始但没有结束
+	if strings.HasPrefix(existing, "{") && !strings.HasSuffix(strings.TrimSpace(existing), "}") {
+		// 现有字符串可能是不完整的JSON对象前缀
+		// 检查新字符串是否能够完成这个JSON对象
+		if !strings.HasPrefix(new, "{") && (strings.Contains(new, "}") || strings.HasSuffix(new, "}")) {
+			// 新字符串可能是JSON对象的后缀部分
+			combined := existing + new
+			var testMap map[string]any
+			if err := json.Unmarshal([]byte(combined), &testMap); err == nil {
+				return combined, nil
+			}
+		}
+	}
+
+	// 如果上述尝试都失败，回退到简单拼接，并返回错误以便调用者记录
+	return existing + new, fmt.Errorf("无法安全合并JSON参数，回退到简单拼接")
 }

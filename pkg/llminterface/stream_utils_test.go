@@ -174,7 +174,8 @@ func TestMergeChatOutputChunks(t *testing.T) {
 		merged, err := MergeChatOutputChunks(ctx, chunkChan)
 
 		assert.Error(t, err, "上下文取消应返回错误")
-		assert.True(t, errors.Is(err, context.DeadlineExceeded), "错误应为 context.DeadlineExceeded")
+		assert.True(t, errors.Is(err, ErrStreamCanceled), "错误应包含 ErrStreamCanceled")
+		assert.True(t, errors.Is(err, context.DeadlineExceeded), "错误应包含原始上下文错误 DeadlineExceeded")
 		assert.Len(t, merged.ContentParts, 1, "合并结果应包含取消前收到的内容")
 		assert.Equal(t, "部分数据", merged.ContentParts[0].Text, "应包含取消前收到的文本")
 		assert.True(t, errors.Is(merged.Error, context.DeadlineExceeded), "合并结果的 Error 应为 context.DeadlineExceeded")
@@ -351,7 +352,41 @@ func TestAggregateTextFromChunks(t *testing.T) {
 		text, err := AggregateTextFromChunks(ctx, chunkChan)
 
 		assert.Error(t, err, "上下文取消应返回错误")
-		assert.True(t, errors.Is(err, context.DeadlineExceeded), "错误应为 context.DeadlineExceeded")
+		assert.True(t, errors.Is(err, ErrStreamCanceled), "错误应包含 ErrStreamCanceled")
+		assert.True(t, errors.Is(err, context.DeadlineExceeded), "错误应包含原始上下文错误 DeadlineExceeded")
 		assert.Equal(t, "取消前的文本", text, "应返回取消前的所有文本")
+	})
+	
+	// 测试带初始容量参数
+	t.Run("with initial capacity", func(t *testing.T) {
+		chunks := []ChatOutputChunk{
+			{
+				ContentParts: []ContentPart{
+					{Type: PartTypeText, Text: "测试"},
+				},
+			},
+			{
+				ContentParts: []ContentPart{
+					{Type: PartTypeText, Text: "初始"},
+				},
+			},
+			{
+				ContentParts: []ContentPart{
+					{Type: PartTypeText, Text: "容量"},
+				},
+			},
+		}
+
+		chunkChan := make(chan ChatOutputChunk, len(chunks))
+		for _, chunk := range chunks {
+			chunkChan <- chunk
+		}
+		close(chunkChan)
+
+		// 使用自定义初始容量
+		text, err := AggregateTextFromChunks(context.Background(), chunkChan, 100)
+
+		require.NoError(t, err, "带初始容量参数的聚合应成功")
+		assert.Equal(t, "测试初始容量", text, "应正确聚合所有文本")
 	})
 }

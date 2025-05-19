@@ -6,9 +6,13 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 
 	. "github.com/m4n5ter/another-me/pkg/option"
 )
+
+// ErrStreamCanceled 表示流处理被取消
+var ErrStreamCanceled = errors.New("stream processing canceled")
 
 // MergeChatOutputChunks 从提供的 channel 中聚合所有 ChatOutputChunk，
 // 并返回一个包含所有累积内容部分的单个 ChatOutputChunk。
@@ -28,10 +32,13 @@ import (
 //     此时错误信息会封装在返回的 ChatOutputChunk 的 Error 字段中。
 //     通常，当此 error 非 nil 时，表示聚合未正常完成。
 func MergeChatOutputChunks(ctx context.Context, chunkChan <-chan ChatOutputChunk) (ChatOutputChunk, error) {
-	var accumulatedParts []ContentPart
+	// 预分配一个合理的初始容量，避免频繁扩容
+	accumulatedParts := make([]ContentPart, 0, 16)
 	var finalFinishReason Option[string]
 	var lastError error
+	var mutex sync.Mutex // 保护对共享状态的并发访问
 
+	// 使用 select+for 模式以支持更及时的上下文取消检测
 	for {
 		select {
 		case <-ctx.Done():
@@ -39,43 +46,58 @@ func MergeChatOutputChunks(ctx context.Context, chunkChan <-chan ChatOutputChunk
 			return ChatOutputChunk{
 				ContentParts: accumulatedParts,
 				Error:        ctx.Err(),
-				FinishReason: finalFinishReason, // 保留可能已收到的 FinishReason
-			}, fmt.Errorf("context canceled: %w", ctx.Err())
+				FinishReason: finalFinishReason,
+			}, fmt.Errorf("%w: %w", ErrStreamCanceled, ctx.Err())
+
 		case chunk, ok := <-chunkChan:
 			if !ok {
 				// Channel 已关闭，聚合完成
 				return ChatOutputChunk{
 					ContentParts: accumulatedParts,
-					Error:        lastError, // 如果在关闭前最后一个块有错误，也记录下来
+					Error:        lastError,
 					FinishReason: finalFinishReason,
-				}, nil // Channel 正常关闭，即使最后一个块有错误，聚合本身是"完成"的
+				}, nil
 			}
 
-			// 首先处理内容部分，即使块有错误，也要先将其内容添加到累积结果中
+			// 使用互斥锁保护共享状态的修改
+			mutex.Lock()
+
+			// 首先处理内容部分
 			if len(chunk.ContentParts) > 0 {
 				accumulatedParts = append(accumulatedParts, chunk.ContentParts...)
 			}
 
+			// 更新完成原因（如果有）
 			if chunk.FinishReason.IsSome() {
 				finalFinishReason = chunk.FinishReason
 			}
 
-			// 然后检查块内错误
+			// 处理错误
 			if chunk.Error != nil {
-				// 如果块内有错误，记录下来。
-				// 如果错误是 io.EOF，这通常表示流的正常结束，类似于 channel 关闭。
-				// 其他错误则更严重。
 				lastError = chunk.Error
+
+				// 如果是严重错误（非EOF），立即返回但仍保留已处理的内容
 				if !errors.Is(chunk.Error, io.EOF) {
-					// 对于非 EOF 错误，我们立即停止并返回，但包含该 chunk 的内容
-					return ChatOutputChunk{
-						ContentParts: accumulatedParts, // 返回已累积的部分，包括当前 chunk 的内容
+					result := ChatOutputChunk{
+						ContentParts: accumulatedParts,
 						Error:        chunk.Error,
-						FinishReason: chunk.FinishReason.Or(finalFinishReason), // 使用当前 chunk 或之前记录的
-					}, chunk.Error
+						FinishReason: chunk.FinishReason.Or(finalFinishReason),
+					}
+					mutex.Unlock()
+					return result, chunk.Error
 				}
-				// 如果是 io.EOF，则行为类似于 channel 关闭，我们将在下一次迭代或 select case 中处理。
-				// 实际上，通常 io.EOF 错误后，channel 会很快关闭。
+				// EOF 错误视为流的自然结束，继续处理
+			}
+			mutex.Unlock()
+
+			// 如果收到明确的完成信号，可以提前退出循环
+			if chunk.FinishReason.IsSome() && (chunk.FinishReason.Unwrap() == "stop" ||
+				chunk.FinishReason.Unwrap() == "length" || chunk.FinishReason.Unwrap() == "content_filter") {
+				return ChatOutputChunk{
+					ContentParts: accumulatedParts,
+					Error:        lastError,
+					FinishReason: finalFinishReason,
+				}, nil
 			}
 		}
 	}
@@ -90,64 +112,150 @@ func MergeChatOutputChunks(ctx context.Context, chunkChan <-chan ChatOutputChunk
 //
 //	ctx: 用于控制取消操作的上下文。
 //	chunkChan: 一个只读的 channel，从中接收 ChatOutputChunk 数据块。
+//	options...: 可选参数，如初始容量预估等。
 //
 // 返回值:
 //   - string: 连接所有文本部分的字符串。如果没有文本部分，返回空字符串。
 //   - error: 如果在聚合过程中发生错误（例如上下文取消或 channel 中出现错误），则返回第一个遇到的错误。
 //     如果聚合成功完成（没有错误或只有 io.EOF），则返回 nil。
-func AggregateTextFromChunks(ctx context.Context, chunkChan <-chan ChatOutputChunk) (string, error) {
-	var fullTextBuilder strings.Builder
+func AggregateTextFromChunks(ctx context.Context, chunkChan <-chan ChatOutputChunk, initialCapacity ...int) (string, error) {
+	// 预估初始容量，提高内存使用效率
+	capacity := 1024 // 默认初始容量
+	if len(initialCapacity) > 0 && initialCapacity[0] > 0 {
+		capacity = initialCapacity[0]
+	}
+
+	fullTextBuilder := strings.Builder{}
+	fullTextBuilder.Grow(capacity) // 预分配内存
+
 	var firstError error
-	var finalFinishReason Option[string]
+	var mutex sync.Mutex // 保护对共享状态的并发访问
+
+	buffer := make([]byte, 0, 256)
+
+	// 添加文本到builder的辅助函数，处理缓冲区逻辑
+	appendToBuilder := func(text string) {
+		if len(buffer)+len(text) > cap(buffer) {
+			// 缓冲区将溢出，先刷新
+			fullTextBuilder.Write(buffer)
+			buffer = buffer[:0] // 重置缓冲区
+		}
+		buffer = append(buffer, text...)
+	}
+
+	// 最终刷新缓冲区
+	flushBuffer := func() {
+		if len(buffer) > 0 {
+			fullTextBuilder.Write(buffer)
+		}
+	}
 
 	for {
 		select {
 		case <-ctx.Done():
-			return fullTextBuilder.String(), ctx.Err()
+			mutex.Lock()
+			flushBuffer() // 确保刷新任何缓冲的内容
+			result := fullTextBuilder.String()
+			mutex.Unlock()
+			return result, fmt.Errorf("%w: %w", ErrStreamCanceled, ctx.Err())
+
 		case chunk, ok := <-chunkChan:
 			if !ok { // Channel closed
-				return fullTextBuilder.String(), firstError
+				mutex.Lock()
+				flushBuffer() // 确保刷新任何缓冲的内容
+				result := fullTextBuilder.String()
+				mutex.Unlock()
+				return result, firstError
 			}
 
-			// 首先处理文本内容
+			mutex.Lock()
+			// 处理文本内容
 			for _, part := range chunk.ContentParts {
-				if part.Type == PartTypeText {
-					fullTextBuilder.WriteString(part.Text)
+				if part.Type == PartTypeText && part.Text != "" {
+					appendToBuilder(part.Text)
 				}
 			}
 
-			if chunk.FinishReason.IsSome() {
-				finalFinishReason = chunk.FinishReason
+			// 处理错误
+			if chunk.Error != nil && firstError == nil && !errors.Is(chunk.Error, io.EOF) {
+				firstError = chunk.Error
+				// 对于严重错误，立即返回已收集的文本
+				if !errors.Is(chunk.Error, io.EOF) {
+					flushBuffer()
+					result := fullTextBuilder.String()
+					mutex.Unlock()
+					return result, firstError
+				}
 			}
 
-			// 然后处理错误
-			if chunk.Error != nil {
-				if firstError == nil && !errors.Is(chunk.Error, io.EOF) { // Store the first non-EOF error
-					firstError = chunk.Error
-				}
-				if !errors.Is(chunk.Error, io.EOF) { // If a significant error occurs, stop processing
-					return fullTextBuilder.String(), firstError
-				}
-				// If io.EOF, continue to drain any remaining text and then exit.
-			}
+			// 处理流结束信号
+			finishReason := chunk.FinishReason
+			if finishReason.IsSome() || errors.Is(chunk.Error, io.EOF) {
+				// 对于自然结束，尝试处理可能的剩余数据
+				drainDone := false
 
-			// If we got an EOF error, or a finish reason, and the channel is not yet closed,
-			// we assume the stream is done.
-			if errors.Is(chunk.Error, io.EOF) || finalFinishReason.IsSome() {
-				// Drain any final messages if channel isn't closed yet by mistake.
-				// This is a bit defensive.
-				for c := range chunkChan {
-					if c.Error != nil && firstError == nil && !errors.Is(c.Error, io.EOF) {
-						firstError = c.Error
-					}
-					for _, p := range c.ContentParts {
-						if p.Type == PartTypeText {
-							fullTextBuilder.WriteString(p.Text)
+				// 释放锁以避免死锁，因为我们要从通道读取
+				mutex.Unlock()
+
+				// 尝试排空通道，但设置超时以避免无限阻塞
+				drainCtx, cancel := context.WithTimeout(context.Background(), defaultDrainTimeout)
+				defer cancel()
+
+				drainChan := make(chan struct{})
+				go func() {
+					defer close(drainChan)
+
+					for {
+						select {
+						case <-drainCtx.Done():
+							return
+						case c, ok := <-chunkChan:
+							if !ok {
+								return
+							}
+
+							mutex.Lock()
+							// 继续处理任何剩余文本
+							for _, p := range c.ContentParts {
+								if p.Type == PartTypeText && p.Text != "" {
+									appendToBuilder(p.Text)
+								}
+							}
+
+							// 记录第一个非EOF错误
+							if c.Error != nil && firstError == nil && !errors.Is(c.Error, io.EOF) {
+								firstError = c.Error
+							}
+							mutex.Unlock()
 						}
 					}
+				}()
+
+				// 等待排空完成或超时
+				select {
+				case <-drainChan:
+					drainDone = true
+				case <-drainCtx.Done():
+					// 排空超时，这是正常的
 				}
-				return fullTextBuilder.String(), firstError
+
+				mutex.Lock()
+				flushBuffer()
+				result := fullTextBuilder.String()
+				mutex.Unlock()
+
+				// 如果成功排空或者触发了超时，返回当前结果
+				if drainDone || drainCtx.Err() != nil {
+					return result, firstError
+				}
+
+				// 如果没有排空完成也没有超时，继续常规处理
+				mutex.Lock()
 			}
+			mutex.Unlock()
 		}
 	}
 }
+
+// 当尝试排空通道时使用的默认超时时间
+const defaultDrainTimeout = 100 * 1000000 // 100ms in nanoseconds
