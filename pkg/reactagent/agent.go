@@ -27,7 +27,7 @@ type AgentConfig struct {
 	ToolRegistry  *toolcore.Registry
 	Logger        *slog.Logger
 	MaxIterations int
-	SystemPrompt  string // 可选的系统提示
+	SystemPrompt  Option[string]
 }
 
 // NewAgent 创建一个新的 ReAct 智能体实例。
@@ -49,14 +49,15 @@ func NewAgent(config AgentConfig) (*Agent, error) {
 		maxIter = 10 // 默认最大迭代次数
 	}
 
+	// 系统提示
 	var sysPromptOpt Option[llminterface.InputMessage]
-	if config.SystemPrompt != "" {
+	if config.SystemPrompt.IsSome() {
 		sysPromptOpt = Some(llminterface.InputMessage{
 			Role: llminterface.RoleSystem,
 			Content: []llminterface.ContentPart{
 				{
 					Type: llminterface.PartTypeText,
-					Text: config.SystemPrompt,
+					Text: config.SystemPrompt.Unwrap(),
 				},
 			},
 		})

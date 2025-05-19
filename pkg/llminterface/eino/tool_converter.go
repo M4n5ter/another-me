@@ -12,8 +12,8 @@ import (
 
 const defaultLanguageForDesc = "en"
 
-// ToolCoreSchemaToEinoToolInfo converts a toolcore.ToolSchema to an eino.schema.ToolInfo.
-// lang 参数指定了用于描述的语言。
+// ToolCoreSchemaToEinoToolInfo 将 toolcore.ToolSchema 转换为 eino.schema.ToolInfo。
+// lang 参数指定了用于工具描述的语言。
 func ToolCoreSchemaToEinoToolInfo(tcSchema *toolcore.ToolSchema, lang string) (*schema.ToolInfo, error) {
 	if tcSchema == nil {
 		return nil, errors.New("ToolCoreSchemaToEinoToolInfo: tcSchema cannot be nil")
@@ -40,7 +40,6 @@ func ToolCoreSchemaToEinoToolInfo(tcSchema *toolcore.ToolSchema, lang string) (*
 	}
 
 	parameterProperties := make(map[string]*schema.ParameterInfo)
-	// requiredParamsList := make([]string, 0) // Linter indicates NewParamsOneOfByParams does not take this directly
 
 	if len(tcSchema.InputParameters) > 0 {
 		for i := range tcSchema.InputParameters {
@@ -51,32 +50,10 @@ func ToolCoreSchemaToEinoToolInfo(tcSchema *toolcore.ToolSchema, lang string) (*
 				continue
 			}
 			parameterProperties[paramDef.Name] = einoParamInfo
-			// paramDef.Required is set within each einoParamInfo.Required
-			// if paramDef.Required {
-			// 	requiredParamsList = append(requiredParamsList, paramDef.Name)
-			// }
 		}
 	}
 
-	// schema.NewParamsOneOfByParams expects map[string]*schema.ParameterInfo and returns *schema.ParamsOneOf (no error)
-	// The handling of the overall "required" list masih belum jelas jika hanya map properties yang dilewatkan.
-	// Kita asumsikan SDK Eino mungkin menyimpulkannya dari ParameterInfo.Required masing-masing.
 	paramsOneOf := schema.NewParamsOneOfByParams(parameterProperties)
-	// Tidak ada error yang dikembalikan oleh NewParamsOneOfByParams berdasarkan linter.
-
-	// // Old code that tried to build a more complex params object:
-	// paramsObjectForEino := map[string]interface{}{
-	// 	"type":       "object",
-	// 	"properties": parameterProperties,
-	// }
-	// if len(requiredParamsList) > 0 {
-	// 	paramsObjectForEino["required"] = requiredParamsList
-	// }
-	// paramsOneOf, err := schema.NewParamsOneOfByParams(paramsObjectForEino)
-	// if err != nil {
-	// 	slog.Error("schema.NewParamsOneOfByParams failed", "toolName", tcSchema.Name, "error", err, "constructedParamsObject", fmt.Sprintf("%+v", paramsObjectForEino))
-	// 	return nil, fmt.Errorf("failed to create ParamsOneOf for tool '%s' using NewParamsOneOfByParams: %w", tcSchema.Name, err)
-	// }
 
 	return &schema.ToolInfo{
 		Name:        tcSchema.Name,

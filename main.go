@@ -13,6 +13,7 @@ import (
 
 	"github.com/m4n5ter/another-me/pkg/i18n"
 	"github.com/m4n5ter/another-me/pkg/llminterface/eino"
+	. "github.com/m4n5ter/another-me/pkg/option"
 	"github.com/m4n5ter/another-me/pkg/reactagent"
 	"github.com/m4n5ter/another-me/pkg/toolcore"
 	"github.com/m4n5ter/another-me/pkg/tools/fetchtool"
@@ -98,7 +99,7 @@ func main() {
 		ToolRegistry:  registry,
 		Logger:        logger.WithGroup("react_agent_main"),
 		MaxIterations: 7,
-		SystemPrompt:  reactSystemPrompt,
+		SystemPrompt:  Some(reactSystemPrompt),
 	}
 
 	reactAgent, err := reactagent.NewAgent(agentConfig)
