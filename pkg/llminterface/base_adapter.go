@@ -48,13 +48,14 @@ func NewBaseChatAdapter(frameworkName string, chatFunc func(ctx context.Context,
 func ChatAndGetFullResponse(ctx context.Context, adapter ChatAdapter, input ChatInput) (LLMResponse, error) {
 	chunkChan, err := adapter.Chat(ctx, input)
 	if err != nil {
-		return LLMResponse{Error: err}, fmt.Errorf("chat方法返回错误: %w", err)
+		return LLMResponse{Error: err, Role: RoleAssistant}, fmt.Errorf("chat方法返回错误: %w", err)
 	}
 
 	// 合并所有聊天输出块
 	mergedChunk, err := MergeChatOutputChunks(ctx, chunkChan)
 	if err != nil {
 		return LLMResponse{
+			Role:         RoleAssistant,
 			Content:      mergedChunk.ContentParts,
 			Error:        err,
 			FinishReason: mergedChunk.FinishReason,
@@ -65,6 +66,7 @@ func ChatAndGetFullResponse(ctx context.Context, adapter ChatAdapter, input Chat
 	fullText, err := AggregateTextFromChunks(ctx, replayChatOutputChunks(ctx, mergedChunk))
 
 	return LLMResponse{
+		Role:         RoleAssistant,
 		Content:      mergedChunk.ContentParts,
 		FullText:     fullText,
 		Error:        mergedChunk.Error,

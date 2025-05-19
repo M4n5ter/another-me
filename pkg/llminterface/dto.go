@@ -95,6 +95,9 @@ type ChatOutputChunk struct {
 // LLMResponse 表示从LLM获取的完整响应
 // 它代表了所有ChatOutputChunk合并后的最终结果
 type LLMResponse struct {
+	// Role 响应的角色，默认为assistant
+	Role MessageRole `json:"role,omitempty"`
+
 	// Content 包含合并后的完整内容，按照接收顺序组织
 	Content []ContentPart `json:"content,omitempty"`
 
@@ -107,4 +110,63 @@ type LLMResponse struct {
 
 	// FinishReason 表示LLM生成停止的原因
 	FinishReason Option[string] `json:"finish_reason,omitempty"`
+}
+
+// HasToolCalls 返回此响应是否包含工具调用请求
+func (r *LLMResponse) HasToolCalls() bool {
+	for _, part := range r.Content {
+		if part.Type == PartTypeToolCallRequest && part.ToolCallValues.IsSome() {
+			return true
+		}
+	}
+	return false
+}
+
+// GetToolCalls 提取所有工具调用请求
+// 如果响应中不包含工具调用，则返回空切片
+func (r *LLMResponse) GetToolCalls() []ToolCall {
+	var allCalls []ToolCall
+	for _, part := range r.Content {
+		if part.Type == PartTypeToolCallRequest && part.ToolCallValues.IsSome() {
+			allCalls = append(allCalls, part.ToolCallValues.Unwrap().Calls...)
+		}
+	}
+	return allCalls
+}
+
+// ToInputMessage 将LLMResponse转换为可直接添加到对话历史中的InputMessage
+func (r *LLMResponse) ToInputMessage() InputMessage {
+	role := r.Role
+	if role == "" {
+		role = RoleAssistant
+	}
+
+	return InputMessage{
+		Role:    role,
+		Content: r.Content,
+	}
+}
+
+// ToUserMessage 创建一个包含该响应文本内容的用户消息
+// 用于在需要用户视角时快速创建用户消息
+func (r *LLMResponse) ToUserMessage() InputMessage {
+	content := make([]ContentPart, 0, 1)
+	if r.FullText != "" {
+		content = append(content, ContentPart{
+			Type: PartTypeText,
+			Text: r.FullText,
+		})
+	} else {
+		// 只复制文本部分
+		for _, part := range r.Content {
+			if part.Type == PartTypeText {
+				content = append(content, part)
+			}
+		}
+	}
+
+	return InputMessage{
+		Role:    RoleUser,
+		Content: content,
+	}
 }

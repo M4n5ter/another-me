@@ -214,3 +214,90 @@ func TestChatOutputChunkJSON(t *testing.T) {
 	require.NoError(t, err, "Unmarshal 带有错误的 ChatOutputChunk JSON 不应返回错误")
 	assert.Nil(t, decodedErrorChunk.Error, "解码后的 Error 应为 nil")
 }
+
+// TestLLMResponse 测试 LLMResponse 的基本功能
+func TestLLMResponse(t *testing.T) {
+	// 测试一个包含文本和工具调用的响应
+	response := LLMResponse{
+		Role: RoleAssistant,
+		Content: []ContentPart{
+			{
+				Type: PartTypeText,
+				Text: "我需要查询天气情况",
+			},
+			{
+				Type: PartTypeToolCallRequest,
+				ToolCallValues: Some(ToolCallContent{
+					Calls: []ToolCall{
+						{
+							ID:        "call_123",
+							Name:      "get_weather",
+							Arguments: `{"location": "北京", "unit": "celsius"}`,
+						},
+					},
+				}),
+			},
+		},
+		FullText:     "我需要查询天气情况",
+		FinishReason: Some("tool_calls"),
+	}
+
+	// 测试 HasToolCalls 方法
+	assert.True(t, response.HasToolCalls(), "包含工具调用的响应 HasToolCalls 应返回 true")
+
+	// 测试 GetToolCalls 方法
+	toolCalls := response.GetToolCalls()
+	assert.Len(t, toolCalls, 1, "应该提取出一个工具调用")
+	assert.Equal(t, "call_123", toolCalls[0].ID, "提取的工具调用 ID 应匹配")
+	assert.Equal(t, "get_weather", toolCalls[0].Name, "提取的工具调用名称应匹配")
+
+	// 测试 ToInputMessage 方法
+	inputMsg := response.ToInputMessage()
+	assert.Equal(t, RoleAssistant, inputMsg.Role, "转换后的消息角色应为 assistant")
+	assert.Len(t, inputMsg.Content, 2, "转换后的消息应包含所有内容部分")
+	assert.Equal(t, response.Content, inputMsg.Content, "转换后的消息内容应与原始响应匹配")
+
+	// 测试 ToUserMessage 方法
+	userMsg := response.ToUserMessage()
+	assert.Equal(t, RoleUser, userMsg.Role, "ToUserMessage 返回的消息角色应为 user")
+	assert.Len(t, userMsg.Content, 1, "ToUserMessage 返回的消息应只包含文本内容")
+	assert.Equal(t, PartTypeText, userMsg.Content[0].Type, "ToUserMessage 返回的内容类型应为文本")
+	assert.Equal(t, response.FullText, userMsg.Content[0].Text, "ToUserMessage 返回的文本应匹配 FullText")
+}
+
+// TestLLMResponseWithoutRole 测试没有显式设置 Role 时的行为
+func TestLLMResponseWithoutRole(t *testing.T) {
+	response := LLMResponse{
+		Content: []ContentPart{
+			{
+				Type: PartTypeText,
+				Text: "测试响应",
+			},
+		},
+		FullText: "测试响应",
+	}
+
+	// 测试未设置 Role 时 ToInputMessage 方法使用默认角色
+	inputMsg := response.ToInputMessage()
+	assert.Equal(t, RoleAssistant, inputMsg.Role, "未设置 Role 时，ToInputMessage 应使用 RoleAssistant 作为默认角色")
+}
+
+// TestLLMResponseWithoutToolCalls 测试没有工具调用的情况
+func TestLLMResponseWithoutToolCalls(t *testing.T) {
+	response := LLMResponse{
+		Content: []ContentPart{
+			{
+				Type: PartTypeText,
+				Text: "只有文本内容",
+			},
+		},
+		FullText: "只有文本内容",
+	}
+
+	// 测试没有工具调用时 HasToolCalls 方法
+	assert.False(t, response.HasToolCalls(), "没有工具调用的响应 HasToolCalls 应返回 false")
+
+	// 测试没有工具调用时 GetToolCalls 方法
+	toolCalls := response.GetToolCalls()
+	assert.Empty(t, toolCalls, "没有工具调用的响应 GetToolCalls 应返回空切片")
+}
