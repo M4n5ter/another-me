@@ -356,7 +356,7 @@ func TestAggregateTextFromChunks(t *testing.T) {
 		assert.True(t, errors.Is(err, context.DeadlineExceeded), "错误应包含原始上下文错误 DeadlineExceeded")
 		assert.Equal(t, "取消前的文本", text, "应返回取消前的所有文本")
 	})
-	
+
 	// 测试带初始容量参数
 	t.Run("with initial capacity", func(t *testing.T) {
 		chunks := []ChatOutputChunk{
