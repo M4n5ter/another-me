@@ -730,6 +730,12 @@ func (t *Tool) createTypeStringParams(ctx context.Context) []toolcore.ParameterD
 	}
 }
 
+func (t *Tool) createTypeStringParams(ctx context.Context) []toolcore.ParameterDefinition {
+	return []toolcore.ParameterDefinition{
+		t.createParamDef(ctx, "content", toolcore.ParamTypeString, true, nil, "tool.gui.type_string.arg.content"),
+	}
+}
+
 func (t *Tool) createKeySleepMilliParams(ctx context.Context) []toolcore.ParameterDefinition {
 	return []toolcore.ParameterDefinition{
 		t.createParamDef(ctx, "ms", toolcore.ParamTypeInteger, true, None[[]any](), "tool.gui.key_sleep_milli.arg.ms", None[toolcore.ParameterDefinition]()),
@@ -760,6 +766,32 @@ func (t *Tool) createParamDef(ctx context.Context, name string, paramType toolco
 		Required:    required,
 		EnumValues:  enumValues,
 		Items:       arrayItemType,
+	}
+}
+
+func (t *Tool) createSleepMilliParams(ctx context.Context) []toolcore.ParameterDefinition {
+	return []toolcore.ParameterDefinition{
+		t.createParamDef(ctx, "ms", toolcore.ParamTypeInteger, true, nil, "tool.gui.sleep_milli.arg.ms"),
+	}
+}
+
+func (t *Tool) createParamDef(ctx context.Context, name string, paramType toolcore.ParameterType,
+	required bool, enumValues []any, descKey string,
+) toolcore.ParameterDefinition {
+	langs := t.i18nMgr.GetSupportedLanguages()
+	descriptions := make(map[string]string, len(langs))
+
+	for _, lang := range langs {
+		langCtx := i18n.ContextWithLanguage(ctx, lang)
+		descriptions[lang] = t.i18nMgr.T(langCtx, descKey, nil)
+	}
+
+	return toolcore.ParameterDefinition{
+		Name:        name,
+		Type:        paramType,
+		Description: descriptions,
+		Required:    required,
+		EnumValues:  enumValues,
 	}
 }
 
