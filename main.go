@@ -27,7 +27,7 @@ const reactSystemPrompt = `You are a meticulous and precise AI assistant. Your g
 func main() {
 	// 设置日志
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelDebug,
+		Level: slog.LevelInfo,
 	}))
 	slog.SetDefault(logger)
 
@@ -85,24 +85,45 @@ func main() {
 
 	userInput := "获取 Hacker News (news.ycombinator.com) 首页的最新5条消息的标题和链接，并根据它们各自的链接中的内容，生成一个关于这些消息的总结。"
 	conversationID := "test-react-hackernews-001"
-	logger.Info("Running ReAct Agent with Hacker News query and new system prompt", "input", userInput)
 
-	logger.Debug("--- CHECKPOINT: About to call reactAgent.Run ---")
-
-	finalResponse, err := reactAgent.Run(context.Background(), userInput, conversationID)
+	// 获取流式输出通道
+	outputChan, err := reactAgent.Run(context.Background(), userInput, conversationID)
 	if err != nil {
-		logger.Error("ReAct agent Run failed", "error", err)
-		if finalResponse != "" {
-			fmt.Println("\n--- Agent's Partial Response on Error ---")
-			fmt.Println(finalResponse)
-			fmt.Println("--- End of Partial Response ---")
-		}
+		// 处理初始错误
+		logger.Error("Failed to run ReAct agent", "error", err)
 		os.Exit(1)
 	}
 
-	fmt.Println("\n--- Agent's Final Response ---")
-	fmt.Println(finalResponse)
-	fmt.Println("--- End of Agent's Final Response ---")
+	// 从通道中读取并处理流式数据
+	for chunk := range outputChan {
+		switch chunk.Type {
+		case reactagent.AgentChunkTypeText:
+			// 立即显示增量文本
+			fmt.Print(chunk.TextDelta)
+		case reactagent.AgentChunkTypeToolStart:
+			// 显示工具正在执行的指示
+			fmt.Printf("\n[执行工具: %s]\n", chunk.ToolName)
+		case reactagent.AgentChunkTypeToolEnd:
+			// 显示工具执行完成的指示
+			if chunk.Error != "" {
+				fmt.Printf("\n[工具执行失败: %s - %s]\n", chunk.ToolName, chunk.Error)
+			} else {
+				fmt.Printf("\n[工具执行完成: %s]\n", chunk.ToolName)
+			}
+		case reactagent.AgentChunkTypeError:
+			// 显示错误
+			fmt.Printf("\n错误: %s\n", chunk.Error)
+		case reactagent.AgentChunkTypeFinish, reactagent.AgentChunkTypeMaxIter:
+			// 显示结束信息
+			if chunk.Error != "" {
+				fmt.Printf("\n%s: %s\n", chunk.Type, chunk.Error)
+			}
+			// 检查是否是最后一个块
+			if chunk.IsLast {
+				fmt.Println("\n[对话结束]")
+			}
+		}
+	}
 }
 
 // registerTools 注册所有可用的工具

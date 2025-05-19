@@ -16,6 +16,7 @@ import (
 	"github.com/temoto/robotstxt"
 
 	"github.com/m4n5ter/another-me/pkg/i18n"
+	. "github.com/m4n5ter/another-me/pkg/option"
 	"github.com/m4n5ter/another-me/pkg/toolcore"
 )
 
@@ -83,14 +84,14 @@ func (t *FetchTool) Schema(ctx context.Context) (toolcore.ToolSchema, error) {
 
 	// 构建参数定义
 	inputParameters := []toolcore.ParameterDefinition{
-		t.createParamDef(ctx, "url", toolcore.ParamTypeString, true, nil, "tool.fetch.arg.url"),
-		t.createParamDef(ctx, "max_length", toolcore.ParamTypeInteger, false, nil, "tool.fetch.arg.max_length"),
-		t.createParamDef(ctx, "start_index", toolcore.ParamTypeInteger, false, nil, "tool.fetch.arg.start_index"),
-		t.createParamDef(ctx, "raw", toolcore.ParamTypeBoolean, false, nil, "tool.fetch.arg.raw"),
-		t.createParamDef(ctx, "ignore_robots_txt", toolcore.ParamTypeBoolean, false, nil, "tool.fetch.arg.ignore_robots_txt"),
-		t.createParamDef(ctx, "user_agent", toolcore.ParamTypeString, false, nil, "tool.fetch.arg.user_agent"),
-		t.createParamDef(ctx, "proxy_url", toolcore.ParamTypeString, false, nil, "tool.fetch.arg.proxy_url"),
-		t.createParamDef(ctx, "is_manual_request", toolcore.ParamTypeBoolean, false, nil, "tool.fetch.arg.is_manual_request"),
+		t.createParamDef(ctx, "url", toolcore.ParamTypeString, true, None[[]any](), "tool.fetch.arg.url"),
+		t.createParamDef(ctx, "max_length", toolcore.ParamTypeInteger, false, None[[]any](), "tool.fetch.arg.max_length"),
+		t.createParamDef(ctx, "start_index", toolcore.ParamTypeInteger, false, None[[]any](), "tool.fetch.arg.start_index"),
+		t.createParamDef(ctx, "raw", toolcore.ParamTypeBoolean, false, None[[]any](), "tool.fetch.arg.raw"),
+		t.createParamDef(ctx, "ignore_robots_txt", toolcore.ParamTypeBoolean, false, None[[]any](), "tool.fetch.arg.ignore_robots_txt"),
+		t.createParamDef(ctx, "user_agent", toolcore.ParamTypeString, false, None[[]any](), "tool.fetch.arg.user_agent"),
+		t.createParamDef(ctx, "proxy_url", toolcore.ParamTypeString, false, None[[]any](), "tool.fetch.arg.proxy_url"),
+		t.createParamDef(ctx, "is_manual_request", toolcore.ParamTypeBoolean, false, None[[]any](), "tool.fetch.arg.is_manual_request"),
 	}
 
 	// 返回工具的完整模式
@@ -410,7 +411,7 @@ func (t *FetchTool) checkRobotsTxt(ctx context.Context, client *http.Client, tar
 }
 
 // createParamDef 是一个辅助方法，用于创建参数定义
-func (t *FetchTool) createParamDef(ctx context.Context, name string, paramType toolcore.ParameterType, required bool, enumValues []any, descKey string) toolcore.ParameterDefinition {
+func (t *FetchTool) createParamDef(ctx context.Context, name string, paramType toolcore.ParameterType, required bool, enumValues Option[[]any], descKey string) toolcore.ParameterDefinition {
 	langs := t.i18nMgr.GetSupportedLanguages()
 	descriptions := make(map[string]string, len(langs))
 

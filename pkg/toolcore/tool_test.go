@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	. "github.com/m4n5ter/another-me/pkg/option"
 )
 
 // TestParameterTypes 测试参数类型常量定义是否正确
@@ -37,26 +39,26 @@ func TestParameterDefinition(t *testing.T) {
 
 	// 测试带枚举值的参数
 	enumParam := ParameterDefinition{
-		EnumValues: []any{"red", "green", "blue"},
+		EnumValues: Some([]any{"red", "green", "blue"}),
 	}
 
-	assert.Equal(t, 3, len(enumParam.EnumValues), "枚举值数量应为 3")
-	assert.Equal(t, "red", enumParam.EnumValues[0], "第一个枚举值应为 'red'")
+	assert.Equal(t, 3, len(enumParam.EnumValues.Unwrap()), "枚举值数量应为 3")
+	assert.Equal(t, "red", enumParam.EnumValues.Unwrap()[0], "第一个枚举值应为 'red'")
 
 	// 测试数组参数
 	arrayParam := ParameterDefinition{
-		Items: &ParameterDefinition{
+		Items: Some(ParameterDefinition{
 			Type:        ParamTypeString,
 			Description: map[string]string{"en": "Item name", "zh": "物品名称"},
-		},
+		}),
 	}
 
 	assert.NotNil(t, arrayParam.Items, "数组参数的 Items 不应为 nil")
-	assert.Equal(t, ParamTypeString, arrayParam.Items.Type, "数组元素类型应为 string")
+	assert.Equal(t, ParamTypeString, arrayParam.Items.Unwrap().Type, "数组元素类型应为 string")
 
 	// 测试对象参数
 	objectParam := ParameterDefinition{
-		Properties: []ParameterDefinition{
+		Properties: Some([]ParameterDefinition{
 			{
 				Name:        "name",
 				Type:        ParamTypeString,
@@ -69,12 +71,12 @@ func TestParameterDefinition(t *testing.T) {
 				Description: map[string]string{"en": "User age", "zh": "用户年龄"},
 				Required:    false,
 			},
-		},
+		}),
 	}
 
-	assert.Equal(t, 2, len(objectParam.Properties), "对象属性数量应为 2")
-	assert.Equal(t, "name", objectParam.Properties[0].Name, "第一个属性名应为 'name'")
-	assert.Equal(t, ParamTypeInteger, objectParam.Properties[1].Type, "第二个属性类型应为 integer")
+	assert.Equal(t, 2, len(objectParam.Properties.Unwrap()), "对象属性数量应为 2")
+	assert.Equal(t, "name", objectParam.Properties.Unwrap()[0].Name, "第一个属性名应为 'name'")
+	assert.Equal(t, ParamTypeInteger, objectParam.Properties.Unwrap()[1].Type, "第二个属性类型应为 integer")
 }
 
 // TestToolSchema 测试 ToolSchema 结构体

@@ -118,9 +118,10 @@ func convertToolCoreParamDefToEinoParamInfo(paramDef *toolcore.ParameterDefiniti
 	einoParamInfo.Desc = translatedParamDesc
 
 	// 处理枚举值 (eino 需要 []string)
-	if len(paramDef.EnumValues) > 0 {
-		einoParamInfo.Enum = make([]string, 0, len(paramDef.EnumValues))
-		for _, enumVal := range paramDef.EnumValues {
+	if paramDef.EnumValues.IsSome() {
+		enumValues := paramDef.EnumValues.Unwrap()
+		einoParamInfo.Enum = make([]string, 0, len(enumValues))
+		for _, enumVal := range enumValues {
 			if strVal, ok := enumVal.(string); ok {
 				einoParamInfo.Enum = append(einoParamInfo.Enum, strVal)
 			} else {
@@ -131,10 +132,11 @@ func convertToolCoreParamDefToEinoParamInfo(paramDef *toolcore.ParameterDefiniti
 
 	// 处理对象类型的属性
 	if paramDef.Type == toolcore.ParamTypeObject {
-		if len(paramDef.Properties) > 0 {
-			einoParamInfo.SubParams = make(map[string]*schema.ParameterInfo, len(paramDef.Properties))
-			for i := range paramDef.Properties { // 迭代属性
-				subParamDef := paramDef.Properties[i]                                           // 获取单个属性定义
+		if paramDef.Properties.IsSome() {
+			properties := paramDef.Properties.Unwrap()
+			einoParamInfo.SubParams = make(map[string]*schema.ParameterInfo, len(properties))
+			for i := range properties { // 迭代属性
+				subParamDef := properties[i]                                                    // 获取单个属性定义
 				einoSubParam, err := convertToolCoreParamDefToEinoParamInfo(&subParamDef, lang) // 传递 lang
 				if err != nil {
 					return nil, fmt.Errorf("error converting sub-parameter '%s' for object '%s': %w", subParamDef.Name, paramDef.Name, err)
@@ -146,8 +148,8 @@ func convertToolCoreParamDefToEinoParamInfo(paramDef *toolcore.ParameterDefiniti
 
 	// 处理数组类型的元素类型
 	if paramDef.Type == toolcore.ParamTypeArray {
-		if paramDef.Items != nil {
-			einoItemInfo, err := convertToolCoreParamDefToEinoParamInfo(paramDef.Items, lang) // 传递 lang
+		if paramDef.Items.IsSome() {
+			einoItemInfo, err := convertToolCoreParamDefToEinoParamInfo(paramDef.Items.UnwrapAsPtr(), lang) // 传递 lang
 			if err != nil {
 				return nil, fmt.Errorf("error converting items for array '%s': %w", paramDef.Name, err)
 			}
