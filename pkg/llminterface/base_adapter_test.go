@@ -76,8 +76,9 @@ func TestChatAndGetFullResponse(t *testing.T) {
 
 		response, err := ChatAndGetFullResponse(ctx, adapter, input)
 		assert.Error(t, err, "适配器返回错误时应传递该错误")
-		assert.Equal(t, testErr, err, "应返回原始错误")
-		assert.Equal(t, testErr, response.Error, "响应中也应包含错误")
+		assert.Contains(t, err.Error(), testErr.Error(), "包装的错误应包含原始错误信息")
+		assert.True(t, errors.Is(err, testErr), "包装的错误应通过errors.Is检测为原始错误")
+		assert.Equal(t, testErr, response.Error, "响应中应包含原始错误")
 	})
 
 	t.Run("successful response", func(t *testing.T) {
