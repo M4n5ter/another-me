@@ -13,7 +13,6 @@ import (
 
 	"github.com/m4n5ter/another-me/pkg/i18n"
 	"github.com/m4n5ter/another-me/pkg/llminterface/eino"
-	. "github.com/m4n5ter/another-me/pkg/option"
 	"github.com/m4n5ter/another-me/pkg/reactagent"
 	"github.com/m4n5ter/another-me/pkg/toolcore"
 	"github.com/m4n5ter/another-me/pkg/tools/fetchtool"
@@ -71,44 +70,20 @@ func main() {
 		os.Exit(1)
 	}
 
-	// outputChan, err := chatAdapter.Chat(context.Background(), llminterface.ChatInput{
-	// 	Messages: []llminterface.InputMessage{
-	// 		{
-	// 			Role: llminterface.RoleUser,
-	// 			Content: []llminterface.ContentPart{
-	// 				{
-	// 					Type: llminterface.PartTypeText,
-	// 					Text: "获取 Hacker News (news.ycombinator.com) 首页的最新5条消息的标题和链接。",
-	// 				},
-	// 			},
-	// 		},
-	// 	},
-	// })
-	// if err != nil {
-	// 	logger.Error("Failed to chat", "error", err)
-	// 	os.Exit(1)
-	// }
-
-	// for chunk := range outputChan {
-	// 	fmt.Printf("%+v\n", chunk.ContentParts)
-	// }
-
 	// --- ReAct Agent 测试 ---
-	agentConfig := reactagent.AgentConfig{
-		LLMAdapter:    chatAdapter,
-		ToolRegistry:  registry,
-		Logger:        logger.WithGroup("react_agent_main"),
-		MaxIterations: 7,
-		SystemPrompt:  Some(reactSystemPrompt),
-	}
-
-	reactAgent, err := reactagent.NewAgent(agentConfig)
+	reactAgent, err := reactagent.NewAgentBuilder().
+		WithLLMAdapter(chatAdapter).
+		WithToolRegistry(registry).
+		WithLogger(logger.WithGroup("react_agent_main")).
+		WithMaxIterations(7).
+		WithSystemPrompt(reactSystemPrompt).
+		Build()
 	if err != nil {
 		logger.Error("Failed to create ReAct agent", "error", err)
 		os.Exit(1)
 	}
 
-	userInput := "获取 Hacker News (news.ycombinator.com) 首页的最新5条消息的标题和链接。"
+	userInput := "获取 Hacker News (news.ycombinator.com) 首页的最新5条消息的标题和链接，并根据它们各自的链接中的内容，生成一个关于这些消息的总结。"
 	conversationID := "test-react-hackernews-001"
 	logger.Info("Running ReAct Agent with Hacker News query and new system prompt", "input", userInput)
 

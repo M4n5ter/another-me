@@ -21,53 +21,87 @@ type Agent struct {
 	systemPrompt  Option[llminterface.InputMessage]
 }
 
-// AgentConfig 用于配置 ReAct 智能体。
-type AgentConfig struct {
-	LLMAdapter    llminterface.ChatAdapter
-	ToolRegistry  *toolcore.Registry
-	Logger        *slog.Logger
-	MaxIterations int
-	SystemPrompt  Option[string]
+// AgentBuilder 是用于构建 Agent 的构建器。
+type AgentBuilder struct {
+	llmAdapter    llminterface.ChatAdapter
+	toolRegistry  *toolcore.Registry
+	logger        *slog.Logger
+	maxIterations int
+	systemPrompt  Option[string]
 }
 
-// NewAgent 创建一个新的 ReAct 智能体实例。
-func NewAgent(config AgentConfig) (*Agent, error) {
-	if config.LLMAdapter == nil {
+// NewAgentBuilder 创建一个新的 AgentBuilder 实例。
+func NewAgentBuilder() *AgentBuilder {
+	return &AgentBuilder{
+		maxIterations: 10, // 默认最大迭代次数
+	}
+}
+
+// WithLLMAdapter 设置 LLM 适配器。
+func (b *AgentBuilder) WithLLMAdapter(adapter llminterface.ChatAdapter) *AgentBuilder {
+	b.llmAdapter = adapter
+	return b
+}
+
+// WithToolRegistry 设置工具注册表。
+func (b *AgentBuilder) WithToolRegistry(registry *toolcore.Registry) *AgentBuilder {
+	b.toolRegistry = registry
+	return b
+}
+
+// WithLogger 设置日志记录器。
+func (b *AgentBuilder) WithLogger(logger *slog.Logger) *AgentBuilder {
+	b.logger = logger
+	return b
+}
+
+// WithMaxIterations 设置最大迭代次数。
+func (b *AgentBuilder) WithMaxIterations(maxIter int) *AgentBuilder {
+	if maxIter > 0 {
+		b.maxIterations = maxIter
+	}
+	return b
+}
+
+// WithSystemPrompt 设置系统提示。
+func (b *AgentBuilder) WithSystemPrompt(prompt string) *AgentBuilder {
+	b.systemPrompt = Some(prompt)
+	return b
+}
+
+// Build 构建并返回一个 Agent 实例。
+func (b *AgentBuilder) Build() (*Agent, error) {
+	if b.llmAdapter == nil {
 		return nil, fmt.Errorf("LLMAdapter 不能为空")
 	}
-	if config.ToolRegistry == nil {
+	if b.toolRegistry == nil {
 		return nil, fmt.Errorf("ToolRegistry 不能为空")
 	}
 
-	logger := config.Logger
+	logger := b.logger
 	if logger == nil {
 		logger = slog.Default().WithGroup("react_agent")
 	}
 
-	maxIter := config.MaxIterations
-	if maxIter <= 0 {
-		maxIter = 10 // 默认最大迭代次数
-	}
-
 	// 系统提示
 	var sysPromptOpt Option[llminterface.InputMessage]
-	if config.SystemPrompt.IsSome() {
+	if b.systemPrompt.IsSome() {
 		sysPromptOpt = Some(llminterface.InputMessage{
 			Role: llminterface.RoleSystem,
 			Content: []llminterface.ContentPart{
 				{
 					Type: llminterface.PartTypeText,
-					Text: config.SystemPrompt.Unwrap(),
+					Text: b.systemPrompt.Unwrap(),
 				},
 			},
 		})
 	}
 
 	return &Agent{
-		llmAdapter:    config.LLMAdapter,
-		toolRegistry:  config.ToolRegistry,
+		llmAdapter:    b.llmAdapter,
+		toolRegistry:  b.toolRegistry,
 		logger:        logger,
-		maxIterations: maxIter,
+		maxIterations: b.maxIterations,
 		systemPrompt:  sysPromptOpt,
 	}, nil
 }
