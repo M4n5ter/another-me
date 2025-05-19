@@ -1,5 +1,5 @@
 {
-    "app.name": "Another Me Agent",
+    "app.name": "Another Me",
     "greeting.user": "Hello, {userName}!",
     "error.missing_translation": "Translation missing for key: {key}",
     "system.prompt": "You are a friendly assistant. Please answer the user's question.",

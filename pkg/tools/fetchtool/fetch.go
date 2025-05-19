@@ -16,6 +16,7 @@ import (
 	"github.com/temoto/robotstxt"
 
 	"github.com/m4n5ter/another-me/pkg/i18n"
+	. "github.com/m4n5ter/another-me/pkg/option"
 	"github.com/m4n5ter/another-me/pkg/toolcore"
 )
 
@@ -65,6 +66,8 @@ func NewFetchTool(i18nMgr *i18n.Manager) *FetchTool {
 	}
 }
 
+var _ toolcore.Tool = (*FetchTool)(nil)
+
 // Schema 实现 toolcore.Tool 接口的 Schema 方法
 func (t *FetchTool) Schema(ctx context.Context) (toolcore.ToolSchema, error) {
 	// 获取不同语言的描述文本
@@ -81,14 +84,14 @@ func (t *FetchTool) Schema(ctx context.Context) (toolcore.ToolSchema, error) {
 
 	// 构建参数定义
 	inputParameters := []toolcore.ParameterDefinition{
-		t.createParamDef(ctx, "url", toolcore.ParamTypeString, true, nil, "tool.fetch.arg.url"),
-		t.createParamDef(ctx, "max_length", toolcore.ParamTypeInteger, false, nil, "tool.fetch.arg.max_length"),
-		t.createParamDef(ctx, "start_index", toolcore.ParamTypeInteger, false, nil, "tool.fetch.arg.start_index"),
-		t.createParamDef(ctx, "raw", toolcore.ParamTypeBoolean, false, nil, "tool.fetch.arg.raw"),
-		t.createParamDef(ctx, "ignore_robots_txt", toolcore.ParamTypeBoolean, false, nil, "tool.fetch.arg.ignore_robots_txt"),
-		t.createParamDef(ctx, "user_agent", toolcore.ParamTypeString, false, nil, "tool.fetch.arg.user_agent"),
-		t.createParamDef(ctx, "proxy_url", toolcore.ParamTypeString, false, nil, "tool.fetch.arg.proxy_url"),
-		t.createParamDef(ctx, "is_manual_request", toolcore.ParamTypeBoolean, false, nil, "tool.fetch.arg.is_manual_request"),
+		t.createParamDef(ctx, "url", toolcore.ParamTypeString, true, None[[]any](), "tool.fetch.arg.url"),
+		t.createParamDef(ctx, "max_length", toolcore.ParamTypeInteger, false, None[[]any](), "tool.fetch.arg.max_length"),
+		t.createParamDef(ctx, "start_index", toolcore.ParamTypeInteger, false, None[[]any](), "tool.fetch.arg.start_index"),
+		t.createParamDef(ctx, "raw", toolcore.ParamTypeBoolean, false, None[[]any](), "tool.fetch.arg.raw"),
+		t.createParamDef(ctx, "ignore_robots_txt", toolcore.ParamTypeBoolean, false, None[[]any](), "tool.fetch.arg.ignore_robots_txt"),
+		t.createParamDef(ctx, "user_agent", toolcore.ParamTypeString, false, None[[]any](), "tool.fetch.arg.user_agent"),
+		t.createParamDef(ctx, "proxy_url", toolcore.ParamTypeString, false, None[[]any](), "tool.fetch.arg.proxy_url"),
+		t.createParamDef(ctx, "is_manual_request", toolcore.ParamTypeBoolean, false, None[[]any](), "tool.fetch.arg.is_manual_request"),
 	}
 
 	// 返回工具的完整模式
@@ -99,68 +102,6 @@ func (t *FetchTool) Schema(ctx context.Context) (toolcore.ToolSchema, error) {
 		InputParameters:  inputParameters,
 		OutputParameters: t.createOutputParameters(ctx),
 	}, nil
-}
-
-// createParamDef 是一个辅助方法，用于创建参数定义
-func (t *FetchTool) createParamDef(ctx context.Context, name string, paramType toolcore.ParameterType, required bool, enumValues []any, descKey string) toolcore.ParameterDefinition {
-	langs := t.i18nMgr.GetSupportedLanguages()
-	descriptions := make(map[string]string, len(langs))
-
-	for _, lang := range langs {
-		langCtx := i18n.ContextWithLanguage(ctx, lang)
-		descriptions[lang] = t.i18nMgr.T(langCtx, descKey, nil)
-	}
-
-	return toolcore.ParameterDefinition{
-		Name:        name,
-		Type:        paramType,
-		Description: descriptions,
-		Required:    required,
-		EnumValues:  enumValues,
-	}
-}
-
-// createOutputParameters 创建输出参数定义
-func (t *FetchTool) createOutputParameters(_ context.Context) []toolcore.ParameterDefinition {
-	// 可以从i18n系统获取这些描述，但为简化起见，这里使用硬编码的描述
-	contentDesc := map[string]string{
-		"en": "The fetched content, possibly simplified or truncated",
-		"zh": "获取的内容，可能已简化或截断",
-	}
-
-	urlDesc := map[string]string{
-		"en": "The URL that was fetched",
-		"zh": "已获取的 URL",
-	}
-
-	originalLengthDesc := map[string]string{
-		"en": "Total length of the original content before truncation",
-		"zh": "截断前原始内容的总长度",
-	}
-
-	// 其他输出参数的描述...
-
-	return []toolcore.ParameterDefinition{
-		{
-			Name:        "url",
-			Type:        toolcore.ParamTypeString,
-			Description: urlDesc,
-			Required:    true,
-		},
-		{
-			Name:        "content",
-			Type:        toolcore.ParamTypeString,
-			Description: contentDesc,
-			Required:    true,
-		},
-		{
-			Name:        "original_length",
-			Type:        toolcore.ParamTypeInteger,
-			Description: originalLengthDesc,
-			Required:    true,
-		},
-		// 其他输出参数...
-	}
 }
 
 // Call 实现 toolcore.Tool 接口的 Call 方法
@@ -469,5 +410,64 @@ func (t *FetchTool) checkRobotsTxt(ctx context.Context, client *http.Client, tar
 	return allowed, nil
 }
 
-// 确保 FetchTool 实现了 toolcore.Tool 接口
-var _ toolcore.Tool = (*FetchTool)(nil)
+// createParamDef 是一个辅助方法，用于创建参数定义
+func (t *FetchTool) createParamDef(ctx context.Context, name string, paramType toolcore.ParameterType, required bool, enumValues Option[[]any], descKey string) toolcore.ParameterDefinition {
+	langs := t.i18nMgr.GetSupportedLanguages()
+	descriptions := make(map[string]string, len(langs))
+
+	for _, lang := range langs {
+		langCtx := i18n.ContextWithLanguage(ctx, lang)
+		descriptions[lang] = t.i18nMgr.T(langCtx, descKey, nil)
+	}
+
+	return toolcore.ParameterDefinition{
+		Name:        name,
+		Type:        paramType,
+		Description: descriptions,
+		Required:    required,
+		EnumValues:  enumValues,
+	}
+}
+
+// createOutputParameters 创建输出参数定义
+func (t *FetchTool) createOutputParameters(_ context.Context) []toolcore.ParameterDefinition {
+	// 可以从i18n系统获取这些描述，但为简化起见，这里使用硬编码的描述
+	contentDesc := map[string]string{
+		"en": "The fetched content, possibly simplified or truncated",
+		"zh": "获取的内容，可能已简化或截断",
+	}
+
+	urlDesc := map[string]string{
+		"en": "The URL that was fetched",
+		"zh": "已获取的 URL",
+	}
+
+	originalLengthDesc := map[string]string{
+		"en": "Total length of the original content before truncation",
+		"zh": "截断前原始内容的总长度",
+	}
+
+	// 其他输出参数的描述...
+
+	return []toolcore.ParameterDefinition{
+		{
+			Name:        "url",
+			Type:        toolcore.ParamTypeString,
+			Description: urlDesc,
+			Required:    true,
+		},
+		{
+			Name:        "content",
+			Type:        toolcore.ParamTypeString,
+			Description: contentDesc,
+			Required:    true,
+		},
+		{
+			Name:        "original_length",
+			Type:        toolcore.ParamTypeInteger,
+			Description: originalLengthDesc,
+			Required:    true,
+		},
+		// 其他输出参数...
+	}
+}

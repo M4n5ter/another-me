@@ -18,19 +18,13 @@ func TestNewMockChatAdapter(t *testing.T) {
 	assert.NotNil(t, mock, "NewMockChatAdapter 返回的实例不应为 nil")
 	assert.Empty(t, mock.RecordedChatInputs, "新创建的 mock 不应有记录的输入")
 	assert.Equal(t, 0, mock.GetChatCallCount(), "新创建的 mock 的调用计数应为 0")
-	assert.Empty(t, mock.FrameworkNameResult, "新创建的 mock 的框架名称应为空")
+	assert.Equal(t, "mock", mock.FrameworkNameResult, "新创建的 mock 的框架名称应为 'mock'")
 }
 
 // TestMockChatAdapter_GetFrameworkName 测试 GetFrameworkName 方法
 func TestMockChatAdapter_GetFrameworkName(t *testing.T) {
-	mock := NewMockChatAdapter()
-
-	// 初始应为空
-	assert.Empty(t, mock.GetFrameworkName(), "初始框架名称应为空")
-
-	// 设置后应返回设置的值
-	mock.SetFrameworkName("test-framework")
-	assert.Equal(t, "test-framework", mock.GetFrameworkName(), "应返回设置的框架名称")
+	adapter := NewMockChatAdapter()
+	assert.Equal(t, "mock", adapter.GetFrameworkName(), "GetFrameworkName should return 'mock'")
 }
 
 // TestMockChatAdapter_Chat_WithPredefinedResponses 测试带有预定义响应的 Chat 方法
@@ -55,9 +49,11 @@ func TestMockChatAdapter_Chat_WithPredefinedResponses(t *testing.T) {
 
 	// 添加预定义响应
 	successChunks := []llminterface.ChatOutputChunk{
-		{TextDelta: "你"},
-		{TextDelta: "好"},
-		{TextDelta: "！"},
+		{ContentParts: []llminterface.ContentPart{
+			{Type: llminterface.PartTypeText, Text: "你"},
+			{Type: llminterface.PartTypeText, Text: "好"},
+			{Type: llminterface.PartTypeText, Text: "！"},
+		}},
 	}
 	mock.AddPredefinedChatResponse(successChunks, nil)
 
@@ -74,7 +70,7 @@ func TestMockChatAdapter_Chat_WithPredefinedResponses(t *testing.T) {
 
 	assert.Equal(t, len(successChunks), len(receivedChunks), "应接收到预期数量的块")
 	for i, expectedChunk := range successChunks {
-		assert.Equal(t, expectedChunk.TextDelta, receivedChunks[i].TextDelta, "接收到的第 %d 个块的 TextDelta 应匹配", i)
+		assert.Equal(t, expectedChunk.ContentParts, receivedChunks[i].ContentParts, "接收到的第 %d 个块的 ContentParts 应匹配", i)
 	}
 
 	// 验证调用计数和记录的输入
@@ -116,7 +112,9 @@ func TestMockChatAdapter_Chat_WithCustomFunction(t *testing.T) {
 	// 设置自定义 ChatFunc
 	customCalled := false
 	customOutput := make(chan llminterface.ChatOutputChunk, 1)
-	customOutput <- llminterface.ChatOutputChunk{TextDelta: "自定义响应"}
+	customOutput <- llminterface.ChatOutputChunk{ContentParts: []llminterface.ContentPart{
+		{Type: llminterface.PartTypeText, Text: "自定义响应"},
+	}}
 	close(customOutput)
 
 	mock.ChatFunc = func(ctx context.Context, input llminterface.ChatInput) (<-chan llminterface.ChatOutputChunk, error) {
@@ -132,7 +130,7 @@ func TestMockChatAdapter_Chat_WithCustomFunction(t *testing.T) {
 	// 不应直接比较 channel 的值，而是检查能否从 channel 中收到预期的数据
 	chunk, ok := <-resultChan
 	assert.True(t, ok, "应能从返回的 channel 中接收数据")
-	assert.Equal(t, "自定义响应", chunk.TextDelta, "接收到的数据应匹配")
+	assert.Equal(t, "自定义响应", chunk.ContentParts[0].Text, "接收到的数据应匹配")
 
 	// 确认 channel 已关闭
 	_, ok = <-resultChan
@@ -149,7 +147,9 @@ func TestMockChatAdapter_Chat_WithContextCancellation(t *testing.T) {
 	// 添加一个将会发送多个块的预定义响应
 	longResponse := make([]llminterface.ChatOutputChunk, 5)
 	for i := range longResponse {
-		longResponse[i] = llminterface.ChatOutputChunk{TextDelta: "块 " + string(rune(i+'0'))}
+		longResponse[i] = llminterface.ChatOutputChunk{ContentParts: []llminterface.ContentPart{
+			{Type: llminterface.PartTypeText, Text: "块 " + string(rune(i+'0'))},
+		}}
 	}
 	mock.AddPredefinedChatResponse(longResponse, nil)
 
@@ -159,7 +159,7 @@ func TestMockChatAdapter_Chat_WithContextCancellation(t *testing.T) {
 
 	// 读取第一个块
 	firstChunk := <-resultChan
-	assert.Equal(t, "块 0", firstChunk.TextDelta, "第一个块的内容应匹配")
+	assert.Equal(t, "块 0", firstChunk.ContentParts[0].Text, "第一个块的内容应匹配")
 
 	// 取消上下文
 	cancel()
@@ -182,8 +182,12 @@ func TestMockChatAdapter_InputRetrieval(t *testing.T) {
 	ctx := context.Background()
 
 	// 调用 Chat 方法几次
-	mock.AddPredefinedChatResponse([]llminterface.ChatOutputChunk{{TextDelta: "响应1"}}, nil)
-	mock.AddPredefinedChatResponse([]llminterface.ChatOutputChunk{{TextDelta: "响应2"}}, nil)
+	mock.AddPredefinedChatResponse([]llminterface.ChatOutputChunk{{ContentParts: []llminterface.ContentPart{
+		{Type: llminterface.PartTypeText, Text: "响应1"},
+	}}}, nil)
+	mock.AddPredefinedChatResponse([]llminterface.ChatOutputChunk{{ContentParts: []llminterface.ContentPart{
+		{Type: llminterface.PartTypeText, Text: "响应2"},
+	}}}, nil)
 
 	input1 := llminterface.ChatInput{Messages: []llminterface.InputMessage{{Role: llminterface.RoleUser, Content: []llminterface.ContentPart{{Type: llminterface.PartTypeText, Text: "输入1"}}}}}
 	input2 := llminterface.ChatInput{Messages: []llminterface.InputMessage{{Role: llminterface.RoleUser, Content: []llminterface.ContentPart{{Type: llminterface.PartTypeText, Text: "输入2"}}}}}

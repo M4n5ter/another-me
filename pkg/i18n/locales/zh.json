@@ -1,5 +1,5 @@
 {
-    "app.name": "另一个我智能体",
+    "app.name": "Another Me",
     "greeting.user": "你好，{userName}！",
     "error.missing_translation": "缺少键的翻译：{key}",
     "system.prompt": "你是一个友好的助手，请根据用户的问题给出回答。",

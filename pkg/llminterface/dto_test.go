@@ -4,9 +4,10 @@ import (
 	"testing"
 
 	json "github.com/json-iterator/go"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	. "github.com/m4n5ter/another-me/pkg/option"
 )
 
 // TestContentPartTypes 测试 ContentPartType 常量定义
@@ -51,10 +52,10 @@ func TestContentPartJSON(t *testing.T) {
 	// 测试图像 URL 类型的 ContentPart
 	imagePart := ContentPart{
 		Type: PartTypeImageURL,
-		ImageURL: &ImageURLContent{
+		ImageURL: Some(ImageURLContent{
 			URL:    "https://example.com/image.jpg",
-			Detail: ImageDetailHigh,
-		},
+			Detail: Some(ImageDetailHigh),
+		}),
 	}
 
 	imageJSON, err := json.Marshal(imagePart)
@@ -67,8 +68,8 @@ func TestContentPartJSON(t *testing.T) {
 	err = json.Unmarshal(imageJSON, &decodedImagePart)
 	require.NoError(t, err, "Unmarshal 图像 URL 类型的 JSON 不应返回错误")
 	assert.Equal(t, imagePart.Type, decodedImagePart.Type, "解码后的 Type 应匹配")
-	assert.Equal(t, imagePart.ImageURL.URL, decodedImagePart.ImageURL.URL, "解码后的 URL 应匹配")
-	assert.Equal(t, imagePart.ImageURL.Detail, decodedImagePart.ImageURL.Detail, "解码后的 Detail 应匹配")
+	assert.Equal(t, imagePart.ImageURL.Unwrap().URL, decodedImagePart.ImageURL.Unwrap().URL, "解码后的 URL 应匹配")
+	assert.Equal(t, imagePart.ImageURL.Unwrap().Detail, decodedImagePart.ImageURL.Unwrap().Detail, "解码后的 Detail 应匹配")
 }
 
 // TestInputMessageJSON 测试 InputMessage 的 JSON 编码和解码
@@ -83,10 +84,10 @@ func TestInputMessageJSON(t *testing.T) {
 			},
 			{
 				Type: PartTypeImageURL,
-				ImageURL: &ImageURLContent{
+				ImageURL: Some(ImageURLContent{
 					URL:    "https://example.com/image.jpg",
-					Detail: ImageDetailHigh,
-				},
+					Detail: Some(ImageDetailHigh),
+				}),
 			},
 		},
 	}
@@ -103,7 +104,7 @@ func TestInputMessageJSON(t *testing.T) {
 	assert.Equal(t, message.Content[0].Type, decodedMessage.Content[0].Type, "第一个 Content 的 Type 应匹配")
 	assert.Equal(t, message.Content[0].Text, decodedMessage.Content[0].Text, "第一个 Content 的 Text 应匹配")
 	assert.Equal(t, message.Content[1].Type, decodedMessage.Content[1].Type, "第二个 Content 的 Type 应匹配")
-	assert.Equal(t, message.Content[1].ImageURL.URL, decodedMessage.Content[1].ImageURL.URL, "第二个 Content 的 URL 应匹配")
+	assert.Equal(t, message.Content[1].ImageURL.Unwrap().URL, decodedMessage.Content[1].ImageURL.Unwrap().URL, "第二个 Content 的 URL 应匹配")
 }
 
 // TestChatInputJSON 测试 ChatInput 的 JSON 编码和解码
@@ -129,10 +130,10 @@ func TestChatInputJSON(t *testing.T) {
 					},
 					{
 						Type: PartTypeImageURL,
-						ImageURL: &ImageURLContent{
+						ImageURL: Some(ImageURLContent{
 							URL:    "https://example.com/image.jpg",
-							Detail: ImageDetailHigh,
-						},
+							Detail: Some(ImageDetailHigh),
+						}),
 					},
 				},
 			},
@@ -159,32 +160,47 @@ func TestChatInputJSON(t *testing.T) {
 func TestChatOutputChunkJSON(t *testing.T) {
 	// 测试正常的回复块
 	normalChunk := ChatOutputChunk{
-		TextDelta: "Hello, ",
+		ContentParts: []ContentPart{
+			{
+				Type: PartTypeText,
+				Text: "Hello, ",
+			},
+		},
 	}
 
 	normalJSON, err := json.Marshal(normalChunk)
 	require.NoError(t, err, "Marshal 正常的 ChatOutputChunk 不应返回错误")
 
-	expectedNormalJSON := `{"text_delta":"Hello, "}`
+	expectedNormalJSON := `{"content_parts":[{"type":"text","text":"Hello, "}]}`
 	assert.JSONEq(t, expectedNormalJSON, string(normalJSON), "正常的 ChatOutputChunk 应正确编码为 JSON")
 
 	// 测试带有结束原因的最终块
 	finishReason := "stop"
 	finalChunk := ChatOutputChunk{
-		TextDelta:    "world!",
-		FinishReason: &finishReason,
+		ContentParts: []ContentPart{
+			{
+				Type: PartTypeText,
+				Text: "world!",
+			},
+		},
+		FinishReason: Some(finishReason),
 	}
 
 	finalJSON, err := json.Marshal(finalChunk)
 	require.NoError(t, err, "Marshal 带有结束原因的 ChatOutputChunk 不应返回错误")
 
-	expectedFinalJSON := `{"text_delta":"world!","finish_reason":"stop"}`
+	expectedFinalJSON := `{"content_parts":[{"type":"text","text":"world!"}],"finish_reason":"stop"}`
 	assert.JSONEq(t, expectedFinalJSON, string(finalJSON), "带有结束原因的 ChatOutputChunk 应正确编码为 JSON")
 
 	// 测试带有错误的块
 	errorChunk := ChatOutputChunk{
-		TextDelta: "",
-		Error:     assert.AnError,
+		ContentParts: []ContentPart{
+			{
+				Type: PartTypeText,
+				Text: "",
+			},
+		},
+		Error: assert.AnError,
 	}
 
 	errorJSON, err := json.Marshal(errorChunk)

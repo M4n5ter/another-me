@@ -43,6 +43,7 @@ type ChatAdapter struct {
 // NewMockChatAdapter 创建并返回一个新的 MockChatAdapter 实例。
 func NewMockChatAdapter() *ChatAdapter {
 	return &ChatAdapter{
+		FrameworkNameResult:     "mock", // 设置默认框架名称为 "mock"
 		RecordedChatInputs:      make([]llminterface.ChatInput, 0),
 		predefinedChatResponses: make([]*PredefinedChatResponse, 0),
 	}
