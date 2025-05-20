@@ -31,7 +31,7 @@ func ParseActionOutput(outputText string) (string, error) {
 	// 提取Action部分
 	actionRegex := regexp.MustCompile(`(?s)Action:(.*?)(?:\n|$)`)
 	actionMatches := actionRegex.FindStringSubmatch(outputText)
-	if len(actionMatches) > 1 {
+	if len(actionMatches) > 1 { //nolint:nestif // ParseActionOutput 的逻辑是必要的
 		actionText := strings.TrimSpace(actionMatches[1])
 		if actionText == "" {
 			// 没有action信息，直接返回结果
@@ -140,7 +140,7 @@ func parseKeysArray(value string) ([]string, error) {
 	if len(keys) == 0 {
 		return nil, fmt.Errorf("无效的keys数组")
 	}
-	
+
 	return keys, nil
 }
 
