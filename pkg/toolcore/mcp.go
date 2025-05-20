@@ -238,6 +238,7 @@ func convertRawSchemaToParams(rawSchema map[string]any) []ParameterDefinition {
 			Name: name,
 			Description: map[string]string{
 				"en": getStringProp(prop, "description", ""),
+				"zh": getStringProp(prop, "description", ""),
 			},
 			Required: isRequired(name, required),
 		}
