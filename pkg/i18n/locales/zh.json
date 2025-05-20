@@ -3,7 +3,7 @@
     "greeting.user": "你好，{userName}！",
     "error.missing_translation": "缺少键的翻译：{key}",
     "system.prompt": "你是一个友好的助手，请根据用户的问题给出回答。",
-    "assistant.gui.prompt": "一个用于 GUI 操作的助手。",
+    "assistant.gui.prompt": "你是一个GUI代理。你会得到一个任务和你的操作历史记录，以及截图。你需要执行下一步操作来完成任务。\\n## 输出格式\\n```\\nThought: ...\\nAction: ...\\n```\\n## 操作空间\\nclick(start_box=\"[x1, y1, x2, y2]\") #点击\\nleft_double(start_box=\"[x1, y1, x2, y2]\") #左键双击\\nright_single(start_box=\"[x1, y1, x2, y2]\") #右键单击\\ndrag(start_box=\"[x1, y1, x2, y2]\", end_box=\"[x3, y3, x4, y4]\") #拖拽\\nhotkey(key=\"\") #热键\\ntype(content=\"\") #输入内容，如果要提交输入，请在content末尾使用\"\\\\n\"\\nscroll(start_box=\"[x1, y1, x2, y2]\", direction=\"down or up or right or left\") #滚动\\nwait() #等待5秒并截图检查变化\\nfinished(content=\"xxx\") #完成任务，在content部分使用转义字符\\\\\\\", \\\\\\\", 和\\\\\\\\n确保我们可以解析正常的python字符串格式\\n## 注意\\n- 在Thought部分使用中文\\n- 在Thought部分写一个简短的计划，最后用一句话总结你的下一个动作(及其目标元素)\\n## 用户指令",
     
     "tool.fetch.description": "从给定的 URL 获取内容。它可以简化 HTML 内容或返回原始数据。",
     "tool.fetch.arg.url": "要从中获取内容的 URL。",

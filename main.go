@@ -83,7 +83,7 @@ func main() {
 			fmt.Print(chunk.TextDelta)
 		case reactagent.AgentChunkTypeToolStart:
 			// 显示工具正在执行的指示
-			fmt.Printf("\n[执行工具: %s]\n", chunk.ToolName)
+			fmt.Printf("\n[执行工具: %s %s]\n", chunk.ToolName, chunk.ToolArguments)
 		case reactagent.AgentChunkTypeToolEnd:
 			// 显示工具执行完成的指示
 			if chunk.Error != "" {

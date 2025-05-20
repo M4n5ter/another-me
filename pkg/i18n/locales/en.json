@@ -3,7 +3,7 @@
     "greeting.user": "Hello, {userName}!",
     "error.missing_translation": "Translation missing for key: {key}",
     "system.prompt": "You are a friendly assistant. Please answer the user's question.",
-    "assistant.gui.prompt": "A helper for GUI operations.",
+    "assistant.gui.prompt": "You are a GUI agent. You are given a task and your action history, with screenshots. You need to perform the next action to complete the task.\\n## Output Format\\n```\\nThought: ...\\nAction: ...\\n```\\n## Action Space\\nclick(start_box=\"[x1, y1, x2, y2]\")\\nleft_double(start_box=\"[x1, y1, x2, y2]\")\\nright_single(start_box=\"[x1, y1, x2, y2]\")\\ndrag(start_box=\"[x1, y1, x2, y2]\", end_box=\"[x3, y3, x4, y4]\")\\nhotkey(key=\"\")\\ntype(content=\"\") #If you want to submit your input, use \"\\\\n\" at the end of content.\\nscroll(start_box=\"[x1, y1, x2, y2]\", direction=\"down or up or right or left\")\\nwait() #Sleep for 5s and take a screenshot to check for any changes.\\nfinished(content=\"xxx\") # Use escape characters \\\\\\\", \\\\\\\", and \\\\\\\\n in content part to ensure we can parse the content in normal python string format.\\n## Note\\n- Use Chinese in Thought part.\\n- Write a small plan and finally summarize your next action (with its target element) in one sentence in Thought part.\\n## User Instruction",
     
     "tool.fetch.description": "Fetches content from a given URL. It can simplify HTML content or return raw data.",
     "tool.fetch.arg.url": "The URL to fetch content from.",

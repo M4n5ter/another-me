@@ -117,7 +117,7 @@ func (a *Agent) Run(ctx context.Context, userInput, conversationID string) (<-ch
 	a.logger.Info("ReAct Agent Run started", "conversationID", conversationID, "userInput", userInput)
 
 	// 创建输出通道，用于流式传输 AgentOutputChunk
-	outputChan := make(chan AgentOutputChunk)
+	outputChan := make(chan AgentOutputChunk, 100)
 
 	// 启动一个 goroutine 执行 ReAct 循环，并通过 outputChan 流式传输结果
 	go func() {
@@ -309,8 +309,10 @@ func (a *Agent) Run(ctx context.Context, userInput, conversationID string) (<-ch
 
 					// 发送工具开始执行的信号
 					outputChan <- AgentOutputChunk{
-						Type:     AgentChunkTypeToolStart,
-						ToolName: toolCall.Name,
+						Type:          AgentChunkTypeToolStart,
+						ToolCallID:    toolCall.ID,
+						ToolName:      toolCall.Name,
+						ToolArguments: toolCall.Arguments,
 					}
 
 					a.logger.Info("Executing tool", "toolName", toolCall.Name, "toolID", toolCall.ID, "argsLength", len(toolCall.Arguments), "conversationID", conversationID)
@@ -333,9 +335,11 @@ func (a *Agent) Run(ctx context.Context, userInput, conversationID string) (<-ch
 
 						// 发送工具结束执行的信号（带错误）
 						outputChan <- AgentOutputChunk{
-							Type:     AgentChunkTypeToolEnd,
-							ToolName: toolCall.Name,
-							Error:    fmt.Sprintf("错误：工具 '%s' 未找到。", toolCall.Name),
+							Type:          AgentChunkTypeToolEnd,
+							ToolCallID:    toolCall.ID,
+							ToolName:      toolCall.Name,
+							ToolArguments: toolCall.Arguments,
+							Error:         fmt.Sprintf("错误：工具 '%s' 未找到。", toolCall.Name),
 						}
 
 						continue // 继续处理下一个工具调用（如果有）
@@ -360,9 +364,11 @@ func (a *Agent) Run(ctx context.Context, userInput, conversationID string) (<-ch
 
 						// 发送工具结束执行的信号（带错误）
 						outputChan <- AgentOutputChunk{
-							Type:     AgentChunkTypeToolEnd,
-							ToolName: toolCall.Name,
-							Error:    fmt.Sprintf("错误：工具 '%s' 执行失败: %s", toolCall.Name, toolErr.Error()),
+							Type:          AgentChunkTypeToolEnd,
+							ToolCallID:    toolCall.ID,
+							ToolName:      toolCall.Name,
+							ToolArguments: toolCall.Arguments,
+							Error:         fmt.Sprintf("错误：工具 '%s' 执行失败: %s", toolCall.Name, toolErr.Error()),
 						}
 
 						continue
@@ -385,8 +391,11 @@ func (a *Agent) Run(ctx context.Context, userInput, conversationID string) (<-ch
 
 					// 发送工具结束执行的信号（成功）
 					outputChan <- AgentOutputChunk{
-						Type:     AgentChunkTypeToolEnd,
-						ToolName: toolCall.Name,
+						Type:          AgentChunkTypeToolEnd,
+						ToolCallID:    toolCall.ID,
+						ToolName:      toolCall.Name,
+						ToolArguments: toolCall.Arguments,
+						ToolResult:    toolOutputJSON,
 					}
 				}
 			}
@@ -423,8 +432,17 @@ type AgentOutputChunk struct {
 	// 对于其他类型，此字段通常为空。
 	TextDelta string `json:"text_delta,omitempty"`
 
+	// 当 Type 为 AgentChunkTypeToolStart 或 AgentChunkTypeToolEnd 时，包含工具调用ID。
+	ToolCallID string `json:"tool_call_id,omitempty"`
+
 	// 当 Type 为 AgentChunkTypeToolStart 或 AgentChunkTypeToolEnd 时，包含工具名称。
 	ToolName string `json:"tool_name,omitempty"`
+
+	// 当 Type 为 AgentChunkTypeToolStart 或 AgentChunkTypeToolEnd 时，包含工具调用参数。
+	ToolArguments string `json:"tool_arguments,omitempty"`
+
+	// 当 Type 为 AgentChunkTypeToolStart 或 AgentChunkTypeToolEnd 时，包含工具调用结果。
+	ToolResult string `json:"tool_result,omitempty"`
 
 	// 当 Type 为 AgentChunkTypeThought 时，此字段包含当前迭代LLM的完整思考文本。
 	ThoughtContent string `json:"thought_content,omitempty"`

@@ -5,10 +5,9 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/google/uuid"
-
 	"github.com/m4n5ter/another-me/pkg/i18n"
 	"github.com/m4n5ter/another-me/pkg/llminterface"
+	. "github.com/m4n5ter/another-me/pkg/option"
 	"github.com/m4n5ter/another-me/pkg/reactagent"
 	"github.com/m4n5ter/another-me/pkg/toolcore"
 	"github.com/m4n5ter/another-me/pkg/tools/gui"
@@ -16,6 +15,7 @@ import (
 
 // GUIAgent 是一个用于 GUI 操作的 Agent
 type GUIAgent struct {
+	llm    llminterface.ChatAdapter
 	react  *reactagent.Agent
 	logger *slog.Logger
 }
@@ -30,6 +30,7 @@ func NewGUIAgent(ctx context.Context, llm llminterface.ChatAdapter) (*GUIAgent, 
 	}
 
 	return &GUIAgent{
+		llm:    llm,
 		react:  guiReactAgent,
 		logger: logger,
 	}, nil
@@ -37,46 +38,31 @@ func NewGUIAgent(ctx context.Context, llm llminterface.ChatAdapter) (*GUIAgent, 
 
 // Execute 执行 GUI 操作
 //
-// 输入应该是一条 GUI 指令，比如 "移动鼠标到(100, 100)"
-func (a *GUIAgent) Execute(ctx context.Context, instruction string) (llminterface.LLMResponse, error) {
-	response := llminterface.LLMResponse{}
-
-	outputChan, err := a.react.Run(ctx, instruction, uuid.New().String())
+// 输入应该是一条 GUI 指令，比如 "移动鼠标到(100, 100)"，一般是较小的指令
+func (a *GUIAgent) Execute(ctx context.Context, instruction, imageURL string) (string, error) {
+	llmResponse, err := llminterface.ChatAndGetFullResponse(ctx, a.llm, llminterface.ChatInput{
+		Messages: []llminterface.InputMessage{
+			{
+				Role: llminterface.RoleUser,
+				Content: []llminterface.ContentPart{
+					{Type: llminterface.PartTypeText, Text: instruction},
+					{Type: llminterface.PartTypeImageURL, ImageURL: Some(llminterface.ImageURLContent{
+						URL: imageURL,
+					})},
+				},
+			},
+		},
+	})
 	if err != nil {
-		return response, fmt.Errorf("GUIAgent: failed to execute: %w", err)
+		return "", fmt.Errorf("GUIAgent: failed to execute: %w", err)
 	}
 
-	// TODO
-	for chunk := range outputChan {
-		switch chunk.Type {
-		case reactagent.AgentChunkTypeText:
-			// 立即显示增量文本
-			fmt.Print(chunk.TextDelta)
-		case reactagent.AgentChunkTypeToolStart:
-			// 显示工具正在执行的指示
-			fmt.Printf("\n[执行工具: %s]\n", chunk.ToolName)
-		case reactagent.AgentChunkTypeToolEnd:
-			// 显示工具执行完成的指示
-			if chunk.Error != "" {
-				fmt.Printf("\n[工具执行失败: %s - %s]\n", chunk.ToolName, chunk.Error)
-			} else {
-				fmt.Printf("\n[工具执行完成: %s]\n", chunk.ToolName)
-			}
-		case reactagent.AgentChunkTypeError:
-			// 显示错误
-			fmt.Printf("\n错误: %s\n", chunk.Error)
-		case reactagent.AgentChunkTypeFinish, reactagent.AgentChunkTypeMaxIter:
-			// 显示结束信息
-			if chunk.Error != "" {
-				fmt.Printf("\n%s: %s\n", chunk.Type, chunk.Error)
-			}
-			// 检查是否是最后一个块
-			if chunk.IsLast {
-				fmt.Println("\n[对话结束]")
-			}
-		}
+	parsedJSONResult, err := ParseActionOutput(llmResponse.FullText)
+	if err != nil {
+		return "", fmt.Errorf("GUIAgent: failed to execute: %w", err)
 	}
-	return response, nil
+
+	return parsedJSONResult, nil
 }
 
 func guiReactAgent(ctx context.Context, llm llminterface.ChatAdapter, logger *slog.Logger) (*reactagent.Agent, error) {
@@ -90,7 +76,7 @@ func guiReactAgent(ctx context.Context, llm llminterface.ChatAdapter, logger *sl
 
 	react, err := reactagent.NewAgentBuilder().
 		WithLLMAdapter(llm).
-		WithToolRegistry(registry).
+		// WithToolRegistry(registry).
 		WithLogger(logger).
 		WithMaxIterations(15). // TODO: 需要一个合适的最大迭代次数
 		WithSystemPrompt(i18n.GlobalManager.T(ctx, "assistant.gui.prompt", nil)).
