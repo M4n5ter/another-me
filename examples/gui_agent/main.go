@@ -2,11 +2,11 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
 	"os"
 
 	arc "github.com/cloudwego/eino-ext/components/model/ark"
+	json "github.com/json-iterator/go"
 
 	guiagent "github.com/m4n5ter/another-me/internal/gui_agent"
 	"github.com/m4n5ter/another-me/pkg/i18n"
@@ -27,51 +27,124 @@ func main() {
 	temperature := Some(float32(0.0))
 	topP := Some(float32(0.7))
 
+	// 检查环境变量
+	apiKey := os.Getenv("ARK_API_KEY")
+	if apiKey == "" {
+		logger.Error("环境变量ARK_API_KEY未设置，请设置后再运行")
+		os.Exit(1)
+	}
+
 	chatModel, err := arc.NewChatModel(context.Background(), &arc.ChatModelConfig{
-		APIKey:      os.Getenv("ARK_API_KEY"),
+		APIKey:      apiKey,
 		Model:       "doubao-1.5-ui-tars-250328",
 		MaxTokens:   maxTokens.UnwrapAsPtr(),
 		Temperature: temperature.UnwrapAsPtr(),
 		TopP:        topP.UnwrapAsPtr(),
 	})
 	if err != nil {
-		logger.Error("Failed to create eino model", "error", err)
+		logger.Error("创建eino模型失败", "error", err)
 		os.Exit(1)
 	}
 
 	// 创建 eino 适配器
 	chatAdapter, err := eino.NewChatAdapter(context.Background(), chatModel, nil, "zh")
 	if err != nil {
-		logger.Error("Failed to create eino adapter", "error", err)
+		logger.Error("创建eino适配器失败", "error", err)
 		os.Exit(1)
 	}
 
+	// 创建GUI Agent
 	guiAgent, err := guiagent.NewGUIAgent(context.Background(), chatAdapter)
 	if err != nil {
-		logger.Error("Failed to create gui agent", "error", err)
+		logger.Error("创建GUI Agent失败", "error", err)
 		os.Exit(1)
 	}
 
+	// 获取屏幕截图
 	guiTool := gui.NewGUITool(i18n.GlobalManager)
 	screenshot, err := guiTool.Screenshot()
 	if err != nil {
-		logger.Error("Failed to screenshot", "error", err)
+		logger.Error("截图失败", "error", err)
 		os.Exit(1)
 	}
 
 	var screenshotResultMap map[string]any
 	err = json.Unmarshal([]byte(screenshot), &screenshotResultMap)
 	if err != nil {
-		logger.Error("Failed to unmarshal screenshot", "error", err)
+		logger.Error("解析截图失败", "error", err)
 		os.Exit(1)
 	}
 
 	base64PNGURL := screenshotResultMap["result"].(string)
+	imgWidth := screenshotResultMap["width"].(float64)
+	imgHeight := screenshotResultMap["height"].(float64)
 
-	result, err := guiAgent.Execute(context.Background(), "点击左上角的图标", base64PNGURL)
+	logger.Info("已获取屏幕截图", "width", imgWidth, "height", imgHeight)
+
+	// 用户指令示例
+	instruction := "点击左上角的图标"
+	logger.Info("执行指令", "instruction", instruction)
+
+	// 执行GUI操作
+	result, err := guiAgent.Execute(context.Background(), instruction, base64PNGURL)
 	if err != nil {
-		logger.Error("Failed to execute gui agent", "error", err)
+		logger.Error("执行GUI Agent失败", "error", err)
 		os.Exit(1)
 	}
-	logger.Info("Result", "result", result)
+
+	// 解析执行结果
+	var resultMap map[string]any
+	if err := json.Unmarshal([]byte(result), &resultMap); err != nil {
+		logger.Error("解析执行结果失败", "error", err)
+		os.Exit(1)
+	}
+
+	// 打印分析过程
+	if thought, ok := resultMap["thought"].(string); ok && thought != "" {
+		logger.Info("思考过程", "thought", thought)
+	}
+
+	// 打印执行的动作
+	if action, ok := resultMap["action"].(string); ok && action != "" {
+		logger.Info("执行动作", "action", action)
+	}
+
+	// 打印执行结果
+	if exeResult, ok := resultMap["execution_result"].(string); ok && exeResult != "" {
+		logger.Info("执行结果", "execution_result", exeResult)
+	}
+
+	logger.Info("任务执行完成")
+
+	// 可以添加更多示例，比如拖拽、输入文本等
+	// executeAdditionalExamples(guiAgent, base64PNGURL, logger)
 }
+
+// 额外的示例函数，可以根据需要取消注释并实现
+/*
+func executeAdditionalExamples(guiAgent *guiagent.GUIAgent, base64PNGURL string, logger *slog.Logger) {
+	// 拖拽示例
+	dragInstruction := "将屏幕上的文件图标拖到文件夹中"
+	logger.Info("执行拖拽指令", "instruction", dragInstruction)
+
+	dragResult, err := guiAgent.Execute(context.Background(), dragInstruction, base64PNGURL)
+	if err != nil {
+		logger.Error("执行拖拽失败", "error", err)
+		return
+	}
+
+	logger.Info("拖拽结果", "result", dragResult)
+
+	// 输入文本示例
+	typeInstruction := "在搜索框中输入'hello world'"
+	logger.Info("执行输入指令", "instruction", typeInstruction)
+
+	typeResult, err := guiAgent.Execute(context.Background(), typeInstruction, base64PNGURL)
+	if err != nil {
+		logger.Error("执行输入失败", "error", err)
+		return
+	}
+
+	logger.Info("输入结果", "result", typeResult)
+}
+*/

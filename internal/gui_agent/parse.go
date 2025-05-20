@@ -65,9 +65,10 @@ func ParseActionOutput(outputText string) (string, error) {
 					case strings.Contains(key, "box"):
 						coords := extractCoordinates(value)
 						if len(coords) == 4 {
-							if key == "start_box" {
+							switch key {
+							case "start_box":
 								result.StartBox = coords
-							} else if key == "end_box" {
+							case "end_box":
 								result.EndBox = coords
 							}
 						}
