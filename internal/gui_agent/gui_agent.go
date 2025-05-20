@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/m4n5ter/another-me/pkg/i18n"
 	"github.com/m4n5ter/another-me/pkg/llminterface"
 	. "github.com/m4n5ter/another-me/pkg/option"
 )
@@ -31,6 +32,12 @@ func NewGUIAgent(ctx context.Context, llm llminterface.ChatAdapter) (*GUIAgent, 
 func (a *GUIAgent) Execute(ctx context.Context, instruction, imageURL string) (string, error) {
 	llmResponse, err := llminterface.ChatAndGetFullResponse(ctx, a.llm, llminterface.ChatInput{
 		Messages: []llminterface.InputMessage{
+			{
+				Role: llminterface.RoleSystem,
+				Content: []llminterface.ContentPart{
+					{Type: llminterface.PartTypeText, Text: i18n.GlobalManager.T(ctx, "assistant.gui.prompt", nil)},
+				},
+			},
 			{
 				Role: llminterface.RoleUser,
 				Content: []llminterface.ContentPart{
