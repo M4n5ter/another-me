@@ -82,7 +82,8 @@ func main() {
 	logger.Info("已获取屏幕截图", "width", imgWidth, "height", imgHeight)
 
 	// 用户指令示例
-	instruction := "点击左上角的图标"
+	// instruction := "点击左上角的图标"
+	instruction := "输入内容：echo 'hello world'"
 	logger.Info("执行指令", "instruction", instruction)
 
 	// 执行GUI操作
