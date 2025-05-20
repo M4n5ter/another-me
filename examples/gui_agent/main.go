@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"os"
 
@@ -57,9 +58,17 @@ func main() {
 		logger.Error("Failed to screenshot", "error", err)
 		os.Exit(1)
 	}
-	logger.Info("Screenshot", "screenshot", screenshot)
 
-	result, err := guiAgent.Execute(context.Background(), "点击左上角的图标", screenshot)
+	var screenshotResultMap map[string]any
+	err = json.Unmarshal([]byte(screenshot), &screenshotResultMap)
+	if err != nil {
+		logger.Error("Failed to unmarshal screenshot", "error", err)
+		os.Exit(1)
+	}
+
+	base64PNGURL := screenshotResultMap["result"].(string)
+
+	result, err := guiAgent.Execute(context.Background(), "点击左上角的图标", base64PNGURL)
 	if err != nil {
 		logger.Error("Failed to execute gui agent", "error", err)
 		os.Exit(1)
