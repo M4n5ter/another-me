@@ -82,7 +82,8 @@ func main() {
 	logger.Info("已获取屏幕截图", "width", imgWidth, "height", imgHeight)
 
 	// 用户指令示例
-	instruction := "点击左上角的图标"
+	// instruction := "点击左上角的图标"
+	instruction := "输入内容：echo 'hello world'"
 	logger.Info("执行指令", "instruction", instruction)
 
 	// 执行GUI操作
@@ -92,26 +93,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	// 解析执行结果
-	var resultMap map[string]any
-	if err := json.Unmarshal([]byte(result), &resultMap); err != nil {
-		logger.Error("解析执行结果失败", "error", err)
-		os.Exit(1)
+	if result.Thought != "" {
+		logger.Info("思考过程", "thought", result.Thought)
 	}
 
-	// 打印分析过程
-	if thought, ok := resultMap["thought"].(string); ok && thought != "" {
-		logger.Info("思考过程", "thought", thought)
+	if result.Action != "" {
+		logger.Info("执行动作", "action", result.Action)
 	}
 
-	// 打印执行的动作
-	if action, ok := resultMap["action"].(string); ok && action != "" {
-		logger.Info("执行动作", "action", action)
-	}
-
-	// 打印执行结果
-	if exeResult, ok := resultMap["execution_result"].(string); ok && exeResult != "" {
-		logger.Info("执行结果", "execution_result", exeResult)
+	if result.ExecutionOutput != "" {
+		logger.Info("执行结果", "execution_result", result.ExecutionOutput)
 	}
 
 	logger.Info("任务执行完成")

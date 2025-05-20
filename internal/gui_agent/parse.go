@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	json "github.com/json-iterator/go"
+
+	. "github.com/m4n5ter/another-me/pkg/option"
 )
 
 // https://www.volcengine.com/docs/82379/1536429?lang=zh
@@ -73,13 +75,37 @@ func ParseActionOutput(outputText string) (string, error) {
 							}
 						}
 					case key == "key":
-						result.Key = &value
+						result.Key = Some(value)
 					case key == "content":
 						// 处理转义字符
 						value = processEscapeChars(value)
-						result.Content = &value
+						result.Content = Some(value)
 					case key == "direction":
-						result.Direction = &value
+						result.Direction = Some(value)
+					case key == "button":
+						result.Button = Some(value)
+					case key == "up":
+						upVal := strings.ToLower(value) == "true"
+						result.Up = Some(upVal)
+					case key == "keys":
+						// 处理keys数组
+						keys, err := parseKeysArray(value)
+						if err == nil && len(keys) > 0 {
+							result.Keys = Some(keys)
+						}
+					case key == "x":
+						if num, err := strconv.Atoi(value); err == nil {
+							result.X = Some(num)
+						}
+					case key == "y":
+						if num, err := strconv.Atoi(value); err == nil {
+							result.Y = Some(num)
+						}
+					case key == "ms":
+					case key == "ms_delay":
+						if num, err := strconv.Atoi(value); err == nil {
+							result.MS = Some(num)
+						}
 					}
 				}
 			}
@@ -94,15 +120,45 @@ func ParseActionOutput(outputText string) (string, error) {
 	return string(jsonResult), nil
 }
 
+// 解析keys数组字符串，例如：["ctrl", "alt", "a"]
+func parseKeysArray(value string) ([]string, error) {
+	// 移除可能存在的方括号
+	value = strings.TrimSpace(value)
+	value = strings.TrimPrefix(value, "[")
+	value = strings.TrimSuffix(value, "]")
+
+	// 分割字符串
+	var keys []string
+	for _, key := range strings.Split(value, ",") {
+		key = strings.TrimSpace(key)
+		key = strings.Trim(key, "\"'")
+		if key != "" {
+			keys = append(keys, key)
+		}
+	}
+
+	if len(keys) == 0 {
+		return nil, fmt.Errorf("无效的keys数组")
+	}
+	
+	return keys, nil
+}
+
 // ActionResult 表示解析后的操作结果
 type ActionResult struct {
-	Thought   string  `json:"thought"`
-	Action    string  `json:"action"`
-	Key       *string `json:"key"`
-	Content   *string `json:"content"`
-	StartBox  []int   `json:"start_box"`
-	EndBox    []int   `json:"end_box"`
-	Direction *string `json:"direction"`
+	Thought   string           `json:"thought"`
+	Action    string           `json:"action"`
+	Key       Option[string]   `json:"key,omitempty"`
+	Content   Option[string]   `json:"content,omitempty"`
+	StartBox  []int            `json:"start_box,omitempty"`
+	EndBox    []int            `json:"end_box,omitempty"`
+	Direction Option[string]   `json:"direction,omitempty"`
+	Button    Option[string]   `json:"button,omitempty"`
+	Up        Option[bool]     `json:"up,omitempty"`
+	Keys      Option[[]string] `json:"keys,omitempty"`
+	X         Option[int]      `json:"x,omitempty"`
+	Y         Option[int]      `json:"y,omitempty"`
+	MS        Option[int]      `json:"ms,omitempty"`
 }
 
 // CoordinatesConvert 将相对坐标[0,1000]转换为图片上的绝对像素坐标

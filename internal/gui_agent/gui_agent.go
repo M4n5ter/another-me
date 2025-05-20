@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"strings"
 
 	json "github.com/json-iterator/go"
 
@@ -35,7 +34,7 @@ func NewGUIAgent(ctx context.Context, llm llminterface.ChatAdapter) (*GUIAgent, 
 // Execute 执行 GUI 操作
 //
 // 输入应该是一条 GUI 指令，比如 "移动鼠标到(100, 100)"，一般是较小的指令
-func (a *GUIAgent) Execute(ctx context.Context, instruction, imageURL string) (string, error) {
+func (a *GUIAgent) Execute(ctx context.Context, instruction, imageURL string) (*ExecutionResult, error) {
 	llmResponse, err := llminterface.ChatAndGetFullResponse(ctx, a.llm, llminterface.ChatInput{
 		Messages: []llminterface.InputMessage{
 			{
@@ -56,40 +55,43 @@ func (a *GUIAgent) Execute(ctx context.Context, instruction, imageURL string) (s
 		},
 	})
 	if err != nil {
-		return "", fmt.Errorf("GUIAgent: failed to execute: %w", err)
+		return nil, fmt.Errorf("GUIAgent: failed to execute: %w", err)
 	}
 
 	parsedJSONResult, err := ParseActionOutput(llmResponse.FullText)
 	if err != nil {
-		return "", fmt.Errorf("GUIAgent: failed to execute: %w", err)
+		return nil, fmt.Errorf("GUIAgent: failed to parse action output: %w", err)
 	}
 
 	// 将解析结果从JSON字符串转换为ActionResult结构体
 	var actionResult ActionResult
 	if err := json.Unmarshal([]byte(parsedJSONResult), &actionResult); err != nil {
-		return "", fmt.Errorf("GUIAgent: failed to unmarshal action result: %w", err)
+		return nil, fmt.Errorf("GUIAgent: failed to unmarshal action result: %w", err)
+	}
+
+	// 准备返回结果
+	result := &ExecutionResult{
+		ActionResult: actionResult,
 	}
 
 	// 根据动作类型执行相应的GUI操作
 	executeResult, err := a.executeAction(ctx, actionResult)
 	if err != nil {
-		return "", fmt.Errorf("GUIAgent: failed to execute action: %w", err)
+		// 即使执行失败，也返回解析的结构，但附带错误信息
+		result.ExecutionOutput = fmt.Sprintf("执行失败: %s", err.Error())
+		return result, fmt.Errorf("GUIAgent: failed to execute action: %w", err)
 	}
 
-	// 如果执行成功，将执行结果追加到原始解析结果中
-	resultWithExecution := map[string]any{}
-	if err := json.Unmarshal([]byte(parsedJSONResult), &resultWithExecution); err != nil {
-		return "", fmt.Errorf("GUIAgent: failed to unmarshal parsed result: %w", err)
-	}
+	// 设置执行结果
+	result.ExecutionOutput = executeResult
 
-	resultWithExecution["execution_result"] = executeResult
+	return result, nil
+}
 
-	finalResult, err := json.MarshalIndent(resultWithExecution, "", "  ")
-	if err != nil {
-		return "", fmt.Errorf("GUIAgent: failed to marshal final result: %w", err)
-	}
-
-	return string(finalResult), nil
+// ExecutionResult 表示GUI操作的最终执行结果
+type ExecutionResult struct {
+	ActionResult
+	ExecutionOutput string `json:"execution_result,omitempty"`
 }
 
 // executeAction 根据动作类型执行相应的GUI操作
@@ -257,31 +259,27 @@ func (a *GUIAgent) executeAction(_ context.Context, action ActionResult) (string
 
 		return fmt.Sprintf("拖拽: %s", dragResult), nil
 
-	case "hotkey":
-		if action.Key == nil || *action.Key == "" {
-			return "", fmt.Errorf("热键操作需要有效的key参数")
+	case "key_tap":
+		if action.Action == "key_tap" && action.Keys.IsNone() {
+			return "", fmt.Errorf("按键操作需要有效的key或keys参数")
 		}
 
-		// 处理单个键或组合键
-		keys := []string{}
-		for key := range strings.SplitSeq(*action.Key, "+") {
-			keys = append(keys, strings.TrimSpace(key))
-		}
+		keys := action.Keys.Unwrap()
 
-		keyTapInput := fmt.Sprintf(`{"keys": %s}`, MustMarshalJSON(keys))
+		keyTapInput := fmt.Sprintf(`{"keys": %s}`, MustMarshalJSONWithoutPanic(keys))
 		keyTapResult, err := a.tool.KeyTap(keyTapInput)
 		if err != nil {
 			return "", fmt.Errorf("按键失败: %w", err)
 		}
 
-		return fmt.Sprintf("热键: %s", keyTapResult), nil
+		return fmt.Sprintf("按键: %s", keyTapResult), nil
 
 	case "type":
-		if action.Content == nil || *action.Content == "" {
+		if action.Content == nil || action.Content.IsNone() {
 			return "", fmt.Errorf("输入操作需要有效的content参数")
 		}
 
-		typeInput := fmt.Sprintf(`{"content": %s}`, MustMarshalJSON(*action.Content))
+		typeInput := fmt.Sprintf(`{"content": %s}`, MustMarshalJSONWithoutPanic(action.Content.Unwrap()))
 		typeResult, err := a.tool.TypeString(typeInput)
 		if err != nil {
 			return "", fmt.Errorf("输入文本失败: %w", err)
@@ -290,7 +288,7 @@ func (a *GUIAgent) executeAction(_ context.Context, action ActionResult) (string
 		return fmt.Sprintf("输入: %s", typeResult), nil
 
 	case "scroll":
-		if action.StartBox == nil || action.Direction == nil || len(action.StartBox) != 4 || *action.Direction == "" {
+		if action.StartBox == nil || action.Direction.IsNone() || len(action.StartBox) != 4 || action.Direction.IsNone() {
 			return "", fmt.Errorf("滚动操作需要有效的start_box和direction参数")
 		}
 
@@ -310,7 +308,7 @@ func (a *GUIAgent) executeAction(_ context.Context, action ActionResult) (string
 		}
 
 		// 执行滚动
-		scrollInput := fmt.Sprintf(`{"x": 10, "direction": %s}`, MustMarshalJSON(*action.Direction))
+		scrollInput := fmt.Sprintf(`{"x": 10, "direction": %s}`, MustMarshalJSONWithoutPanic(action.Direction.Unwrap()))
 		scrollResult, err := a.tool.ScrollDirection(scrollInput)
 		if err != nil {
 			return "", fmt.Errorf("滚动失败: %w", err)
@@ -318,9 +316,88 @@ func (a *GUIAgent) executeAction(_ context.Context, action ActionResult) (string
 
 		return fmt.Sprintf("滚动: %s", scrollResult), nil
 
+	case "toggle_key":
+		if action.Keys.IsNone() || action.Up.IsNone() {
+			return "", fmt.Errorf("切换键操作需要有效的keys和up参数")
+		}
+
+		keys := action.Keys.Unwrap()
+		up := action.Up.Unwrap()
+
+		toggleKeyInput := fmt.Sprintf(`{"keys": %s, "up": %t}`, MustMarshalJSONWithoutPanic(keys), up)
+		toggleKeyResult, err := a.tool.ToggleKey(toggleKeyInput)
+		if err != nil {
+			return "", fmt.Errorf("切换键操作失败: %w", err)
+		}
+
+		return fmt.Sprintf("切换键: %s", toggleKeyResult), nil
+
+	case "toggle_mouse":
+		if action.Button.IsNone() || action.Up.IsNone() {
+			return "", fmt.Errorf("切换鼠标按钮操作需要有效的button和up参数")
+		}
+
+		button := action.Button.Unwrap()
+		up := action.Up.Unwrap()
+
+		toggleMouseInput := fmt.Sprintf(`{"button": %s, "up": %t}`, MustMarshalJSONWithoutPanic(button), up)
+		toggleMouseResult, err := a.tool.ToggleMouseButton(toggleMouseInput)
+		if err != nil {
+			return "", fmt.Errorf("切换鼠标按钮操作失败: %w", err)
+		}
+
+		return fmt.Sprintf("切换鼠标按钮: %s", toggleMouseResult), nil
+
+	case "mouse_location":
+		locationResult, err := a.tool.MouseLocation()
+		if err != nil {
+			return "", fmt.Errorf("获取鼠标位置失败: %w", err)
+		}
+
+		return fmt.Sprintf("鼠标位置: %s", locationResult), nil
+
+	case "scroll_relative":
+		if action.X.IsNone() || action.Y.IsNone() {
+			return "", fmt.Errorf("相对滚动操作需要有效的x和y参数")
+		}
+
+		x := action.X.Unwrap()
+		y := action.Y.Unwrap()
+		msDelay := 10 // 默认值
+		if action.MS.IsSome() {
+			msDelay = action.MS.Unwrap()
+		}
+
+		scrollRelativeInput := fmt.Sprintf(`{"x": %d, "y": %d, "ms_delay": %d}`, x, y, msDelay)
+		scrollRelativeResult, err := a.tool.ScrollRelative(scrollRelativeInput)
+		if err != nil {
+			return "", fmt.Errorf("相对滚动操作失败: %w", err)
+		}
+
+		return fmt.Sprintf("相对滚动: %s", scrollRelativeResult), nil
+
+	case "key_sleep":
+		if action.MS.IsNone() {
+			return "", fmt.Errorf("按键睡眠操作需要有效的ms参数")
+		}
+
+		ms := action.MS.Unwrap()
+		keySleepInput := fmt.Sprintf(`{"ms": %d}`, ms)
+		keySleepResult, err := a.tool.KeySleepMilli(keySleepInput)
+		if err != nil {
+			return "", fmt.Errorf("设置按键睡眠时间失败: %w", err)
+		}
+
+		return fmt.Sprintf("设置按键睡眠时间: %s", keySleepResult), nil
+
 	case "wait":
-		// 等待5秒
-		sleepInput := `{"ms": 5000}`
+		// 默认等待5秒，但如果指定了时间则使用指定的时间
+		waitTime := 5000 // 默认值，毫秒
+		if action.MS.IsSome() {
+			waitTime = action.MS.Unwrap()
+		}
+
+		sleepInput := fmt.Sprintf(`{"ms": %d}`, waitTime)
 		sleepResult, err := a.tool.SleepMilli(sleepInput)
 		if err != nil {
 			return "", fmt.Errorf("等待失败: %w", err)
@@ -345,8 +422,8 @@ func (a *GUIAgent) executeAction(_ context.Context, action ActionResult) (string
 
 	case "finished":
 		content := "任务完成"
-		if action.Content != nil && *action.Content != "" {
-			content = *action.Content
+		if action.Content.IsSome() {
+			content = action.Content.Unwrap()
 		}
 		return fmt.Sprintf("任务完成: %s", content), nil
 
@@ -355,11 +432,11 @@ func (a *GUIAgent) executeAction(_ context.Context, action ActionResult) (string
 	}
 }
 
-// MustMarshalJSON 将任何值转换为JSON字符串，如果出错则panic
-func MustMarshalJSON(v any) string {
+// MustMarshalJSONWithoutPanic 将任何值转换为JSON字符串，如果出错则panic
+func MustMarshalJSONWithoutPanic(v any) string {
 	jsonBytes, err := json.Marshal(v)
 	if err != nil {
-		panic(fmt.Sprintf("MustMarshalJSON: %v", err))
+		slog.Error("failed to marshal json", "error", err)
 	}
 	return string(jsonBytes)
 }
