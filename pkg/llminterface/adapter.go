@@ -38,3 +38,5 @@ type ChatAdapter interface {
 	// 这有助于调试和了解当前使用的是哪个具体的 LLM 交互实现。
 	GetFrameworkName() string
 }
+
+type ChatFunction func(ctx context.Context, input ChatInput) (<-chan ChatOutputChunk, error)

@@ -486,7 +486,7 @@ func (a *Agent) processToolCallForStreaming(call llminterface.ToolCall,
 					// 合并参数，安全处理JSON结构
 					mergedArgs, err := mergeJSONArgs(existingCall.Arguments, call.Arguments)
 					if err != nil {
-						a.logger.Warn("Failed to merge tool call arguments properly", "id", call.ID,
+						a.logger.Debug("Failed to merge tool call arguments properly", "id", call.ID,
 							"error", err, "conversationID", conversationID)
 						// 回退到简单拼接，但记录警告
 						existingCall.Arguments += call.Arguments
@@ -527,7 +527,7 @@ func (a *Agent) processToolCallArgumentsForStreaming(call llminterface.ToolCall,
 				// 合并参数，安全处理JSON结构
 				mergedArgs, err := mergeJSONArgs(existingCall.Arguments, call.Arguments)
 				if err != nil {
-					a.logger.Warn("Failed to merge tool call arguments properly", "id", currentToolCallID,
+					a.logger.Debug("Failed to merge tool call arguments properly", "id", currentToolCallID,
 						"error", err, "conversationID", conversationID)
 					// 回退到简单拼接，但记录警告
 					existingCall.Arguments += call.Arguments
@@ -564,7 +564,7 @@ func (a *Agent) processToolCallArgumentsForStreaming(call llminterface.ToolCall,
 			// 合并参数，安全处理JSON结构
 			mergedArgs, err := mergeJSONArgs(existingCall.Arguments, call.Arguments)
 			if err != nil {
-				a.logger.Warn("Failed to merge tool call arguments properly", "id", lastID,
+				a.logger.Debug("Failed to merge tool call arguments properly", "id", lastID,
 					"error", err, "conversationID", conversationID)
 				// 回退到简单拼接，但记录警告
 				existingCall.Arguments += call.Arguments
