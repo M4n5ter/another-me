@@ -6,10 +6,11 @@ toolchain go1.24.3
 
 require (
 	github.com/JohannesKaufmann/html-to-markdown v1.6.0
-	github.com/cloudwego/eino v0.3.33
+	github.com/cloudwego/eino v0.3.34
 	github.com/cloudwego/eino-ext/components/model/deepseek v0.0.0-20250514085234-473e80da5261
 	github.com/go-shiori/go-readability v0.0.0-20250217085726-9f5bf5ca7612
 	github.com/go-vgo/robotgo v0.110.8
+	github.com/google/uuid v1.6.0
 	github.com/json-iterator/go v1.1.12
 	github.com/stretchr/testify v1.10.0
 	github.com/temoto/robotstxt v1.1.2

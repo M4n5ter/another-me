@@ -3,6 +3,7 @@
     "greeting.user": "你好，{userName}！",
     "error.missing_translation": "缺少键的翻译：{key}",
     "system.prompt": "你是一个友好的助手，请根据用户的问题给出回答。",
+    "assistant.gui.prompt": "一个用于 GUI 操作的助手。",
     
     "tool.fetch.description": "从给定的 URL 获取内容。它可以简化 HTML 内容或返回原始数据。",
     "tool.fetch.arg.url": "要从中获取内容的 URL。",

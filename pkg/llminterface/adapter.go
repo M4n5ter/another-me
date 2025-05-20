@@ -1,6 +1,10 @@
 package llminterface
 
-import "context"
+import (
+	"context"
+
+	"github.com/m4n5ter/another-me/pkg/toolcore"
+)
 
 // ChatAdapter 是与 LLM (通过特定框架适配)进行交互的统一接口。
 // 它旨在提供一个简洁的抽象层，允许应用代码以一致的方式发送请求并接收响应，
@@ -33,10 +37,12 @@ type ChatAdapter interface {
 	//                     通常，当 chunk.Error 非 nil 时，表示流中出现问题，channel 随后会被关闭。
 	Chat(ctx context.Context, input ChatInput) (<-chan ChatOutputChunk, error)
 
+	// RegisterTools 方法用于向适配器注册一组工具。
+	// 这允许适配器在底层框架中使用工具。
+	RegisterTools(ctx context.Context, registry *toolcore.Registry) error
+
 	// GetFrameworkName 返回此适配器实例所适配的底层框架的名称。
 	// 例如 "langchaingo", "eino", "custom-ollama-api" 等。
 	// 这有助于调试和了解当前使用的是哪个具体的 LLM 交互实现。
 	GetFrameworkName() string
 }
-
-type ChatFunction func(ctx context.Context, input ChatInput) (<-chan ChatOutputChunk, error)

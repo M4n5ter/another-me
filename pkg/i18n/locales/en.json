@@ -3,6 +3,7 @@
     "greeting.user": "Hello, {userName}!",
     "error.missing_translation": "Translation missing for key: {key}",
     "system.prompt": "You are a friendly assistant. Please answer the user's question.",
+    "assistant.gui.prompt": "A helper for GUI operations.",
     
     "tool.fetch.description": "Fetches content from a given URL. It can simplify HTML content or return raw data.",
     "tool.fetch.arg.url": "The URL to fetch content from.",
