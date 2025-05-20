@@ -115,36 +115,4 @@ func main() {
 	}
 
 	logger.Info("任务执行完成")
-
-	// 可以添加更多示例，比如拖拽、输入文本等
-	// executeAdditionalExamples(guiAgent, base64PNGURL, logger)
 }
-
-// 额外的示例函数，可以根据需要取消注释并实现
-/*
-func executeAdditionalExamples(guiAgent *guiagent.GUIAgent, base64PNGURL string, logger *slog.Logger) {
-	// 拖拽示例
-	dragInstruction := "将屏幕上的文件图标拖到文件夹中"
-	logger.Info("执行拖拽指令", "instruction", dragInstruction)
-
-	dragResult, err := guiAgent.Execute(context.Background(), dragInstruction, base64PNGURL)
-	if err != nil {
-		logger.Error("执行拖拽失败", "error", err)
-		return
-	}
-
-	logger.Info("拖拽结果", "result", dragResult)
-
-	// 输入文本示例
-	typeInstruction := "在搜索框中输入'hello world'"
-	logger.Info("执行输入指令", "instruction", typeInstruction)
-
-	typeResult, err := guiAgent.Execute(context.Background(), typeInstruction, base64PNGURL)
-	if err != nil {
-		logger.Error("执行输入失败", "error", err)
-		return
-	}
-
-	logger.Info("输入结果", "result", typeResult)
-}
-*/
