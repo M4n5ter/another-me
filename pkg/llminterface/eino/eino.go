@@ -10,6 +10,7 @@ import (
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
 
+	"github.com/m4n5ter/another-me/pkg/i18n"
 	"github.com/m4n5ter/another-me/pkg/llminterface"
 	. "github.com/m4n5ter/another-me/pkg/option"
 	"github.com/m4n5ter/another-me/pkg/toolcore"
@@ -28,44 +29,9 @@ func NewChatAdapter(ctx context.Context, initialModel model.ToolCallingChatModel
 		einoModel: initialModel,
 	}
 
-	if toolRegistry != nil {
-		tcTools := toolRegistry.GetAll()
-		if len(tcTools) > 0 {
-			einoToolInfos := make([]*schema.ToolInfo, 0, len(tcTools))
-			for _, tcTool := range tcTools {
-				tcSchema, err := tcTool.Schema(ctx)
-				if err != nil {
-					slog.Error("Failed to get schema for toolcore tool during eino adapter init", "toolName", "unknown_yet", "error", err)
-					// 根据策略，可以选择跳过此工具或返回错误
-					// 这里选择跳过并记录日志
-					continue
-				}
-
-				einoToolInfo, err := ToolCoreSchemaToEinoToolInfo(&tcSchema, defaultLang)
-				if err != nil {
-					slog.Error("Failed to convert toolcore schema to eino tool info", "toolName", tcSchema.Name, "error", err)
-					continue // 跳过转换失败的工具
-				}
-
-				einoToolInfos = append(einoToolInfos, einoToolInfo)
-			}
-
-			if len(einoToolInfos) > 0 {
-				modelWithTools, err := initialModel.WithTools(einoToolInfos)
-				if err != nil {
-					return nil, fmt.Errorf("eino adapter: failed to bind tools to model: %w", err)
-				}
-				adapter.einoModel = modelWithTools // 使用绑定了工具的模型
-
-				slog.Info("eino adapter: tools bound to model successfully", "num_tools", len(einoToolInfos))
-			} else {
-				slog.Info("eino adapter: no valid tools found or converted to bind.")
-			}
-		} else {
-			slog.Info("eino adapter: tool registry is empty, no tools to bind.")
-		}
-	} else {
-		slog.Info("eino adapter: tool registry is nil, no tools to bind.")
+	err := adapter.RegisterTools(ctx, toolRegistry)
+	if err != nil {
+		return nil, err
 	}
 
 	return adapter, nil
@@ -181,4 +147,48 @@ func (a *ChatAdapter) Chat(ctx context.Context, input llminterface.ChatInput) (<
 	}()
 
 	return outputChan, nil
+}
+
+// RegisterTools 方法用于向适配器注册工具。
+func (a *ChatAdapter) RegisterTools(ctx context.Context, registry *toolcore.Registry) error {
+	if registry != nil {
+		tcTools := registry.GetAll()
+		if len(tcTools) > 0 {
+			einoToolInfos := make([]*schema.ToolInfo, 0, len(tcTools))
+			for _, tcTool := range tcTools {
+				tcSchema, err := tcTool.Schema(ctx)
+				if err != nil {
+					slog.Error("Failed to get schema for toolcore tool during eino adapter init", "toolName", "unknown_yet", "error", err)
+					// 根据策略，可以选择跳过此工具或返回错误
+					// 这里选择跳过并记录日志
+					continue
+				}
+
+				einoToolInfo, err := ToolCoreSchemaToEinoToolInfo(&tcSchema, i18n.GlobalManager.GetDefaultLanguage())
+				if err != nil {
+					slog.Error("Failed to convert toolcore schema to eino tool info", "toolName", tcSchema.Name, "error", err)
+					continue // 跳过转换失败的工具
+				}
+
+				einoToolInfos = append(einoToolInfos, einoToolInfo)
+			}
+
+			if len(einoToolInfos) > 0 {
+				modelWithTools, err := a.einoModel.WithTools(einoToolInfos)
+				if err != nil {
+					return fmt.Errorf("eino adapter: failed to bind tools to model: %w", err)
+				}
+				a.einoModel = modelWithTools // 使用绑定了工具的模型
+
+				slog.Info("eino adapter: tools bound to model successfully", "num_tools", len(einoToolInfos))
+			} else {
+				slog.Info("eino adapter: no valid tools found or converted to bind.")
+			}
+		} else {
+			slog.Info("eino adapter: tool registry is empty, no tools to bind.")
+		}
+	} else {
+		slog.Info("eino adapter: tool registry is nil, no tools to bind.")
+	}
+	return nil
 }

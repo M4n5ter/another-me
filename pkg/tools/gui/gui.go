@@ -24,6 +24,14 @@ type Tool struct {
 	name    string // 工具的名称，如 "screenshot", "move_mouse" 等
 }
 
+// NewGUITool 创建一个新的 GUITool 实例
+func NewGUITool(i18nMgr *i18n.Manager) *Tool {
+	return &Tool{
+		logger:  slog.Default().WithGroup("gui_tool"),
+		i18nMgr: i18nMgr,
+	}
+}
+
 // NewGUITools 创建一个新的 GUITool 实例
 func NewGUITools(i18nMgr *i18n.Manager) []toolcore.Tool {
 	// 创建各种 GUI 工具的实例

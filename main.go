@@ -2,9 +2,7 @@ package main
 
 import (
 	"context"
-	"embed"
 	"fmt"
-	"io/fs"
 	"log"
 	"log/slog"
 	"os"
@@ -19,9 +17,6 @@ import (
 	"github.com/m4n5ter/another-me/pkg/tools/gui"
 )
 
-//go:embed pkg/i18n/locales
-var embeddedLocalesFS embed.FS
-
 const reactSystemPrompt = `You are a meticulous and precise AI assistant. Your goal is to answer the user's request by thinking step-by-step. `
 
 func main() {
@@ -31,25 +26,11 @@ func main() {
 	}))
 	slog.SetDefault(logger)
 
-	// 获取正确的 locales 目录 FS
-	localesDirFS, err := fs.Sub(embeddedLocalesFS, "pkg/i18n/locales")
-	if err != nil {
-		logger.Error("Failed to create sub FS for locales", "error", err)
-		os.Exit(1)
-	}
-
-	// 初始化国际化管理器
-	i18nMgr, err := i18n.NewManager(localesDirFS, "en")
-	if err != nil {
-		logger.Error("Failed to initialize i18n manager", "error", err)
-		os.Exit(1)
-	}
-
 	// 创建工具注册表
 	registry := toolcore.NewRegistry()
 
 	// 注册工具
-	registerTools(registry, i18nMgr)
+	registerTools(registry, i18n.GlobalManager)
 
 	// 设置 eino 模型
 	chatModel, err := deepseek.NewChatModel(context.Background(), &deepseek.ChatModelConfig{
@@ -102,7 +83,7 @@ func main() {
 			fmt.Print(chunk.TextDelta)
 		case reactagent.AgentChunkTypeToolStart:
 			// 显示工具正在执行的指示
-			fmt.Printf("\n[执行工具: %s]\n", chunk.ToolName)
+			fmt.Printf("\n[执行工具: %s %s]\n", chunk.ToolName, chunk.ToolArguments)
 		case reactagent.AgentChunkTypeToolEnd:
 			// 显示工具执行完成的指示
 			if chunk.Error != "" {

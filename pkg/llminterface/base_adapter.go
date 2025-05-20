@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	. "github.com/m4n5ter/another-me/pkg/option"
+	"github.com/m4n5ter/another-me/pkg/toolcore"
 )
 
 // BaseChatAdapter 提供了ChatAdapter接口的基础实现
@@ -16,6 +17,14 @@ type BaseChatAdapter struct {
 
 	// FrameworkName 是此适配器实例所适配的底层框架的名称
 	FrameworkName string
+}
+
+// NewBaseChatAdapter 创建一个新的BaseChatAdapter实例
+func NewBaseChatAdapter(frameworkName string, chatFunc func(ctx context.Context, input ChatInput) (<-chan ChatOutputChunk, error)) *BaseChatAdapter {
+	return &BaseChatAdapter{
+		FrameworkName: frameworkName,
+		ChatFunc:      chatFunc,
+	}
 }
 
 // GetFrameworkName 返回此适配器实例所适配的底层框架的名称
@@ -35,12 +44,10 @@ func (b *BaseChatAdapter) Chat(ctx context.Context, input ChatInput) (<-chan Cha
 	return nil, fmt.Errorf("没有提供ChatFunc实现")
 }
 
-// NewBaseChatAdapter 创建一个新的BaseChatAdapter实例
-func NewBaseChatAdapter(frameworkName string, chatFunc func(ctx context.Context, input ChatInput) (<-chan ChatOutputChunk, error)) *BaseChatAdapter {
-	return &BaseChatAdapter{
-		FrameworkName: frameworkName,
-		ChatFunc:      chatFunc,
-	}
+// RegisterTools 实现ChatAdapter接口的RegisterTools方法，
+// 它不执行任何操作，因为BaseChatAdapter没有工具需要注册
+func (b *BaseChatAdapter) RegisterTools(ctx context.Context, registry *toolcore.Registry) error {
+	return nil
 }
 
 // ChatAndGetFullResponse 是一个辅助函数，用于执行Chat操作并返回完整的LLMResponse
