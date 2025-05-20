@@ -35,7 +35,7 @@ func NewGUIAgent(ctx context.Context, llm llminterface.ChatAdapter) (*GUIAgent, 
 // Execute 执行 GUI 操作
 //
 // 输入应该是一条 GUI 指令，比如 "移动鼠标到(100, 100)"，一般是较小的指令
-func (a *GUIAgent) Execute(ctx context.Context, instruction, imageURL string) (string, error) {
+func (a *GUIAgent) Execute(ctx context.Context, instruction, imageURL string) (*ExecutionResult, error) {
 	llmResponse, err := llminterface.ChatAndGetFullResponse(ctx, a.llm, llminterface.ChatInput{
 		Messages: []llminterface.InputMessage{
 			{
@@ -56,40 +56,43 @@ func (a *GUIAgent) Execute(ctx context.Context, instruction, imageURL string) (s
 		},
 	})
 	if err != nil {
-		return "", fmt.Errorf("GUIAgent: failed to execute: %w", err)
+		return nil, fmt.Errorf("GUIAgent: failed to execute: %w", err)
 	}
 
 	parsedJSONResult, err := ParseActionOutput(llmResponse.FullText)
 	if err != nil {
-		return "", fmt.Errorf("GUIAgent: failed to execute: %w", err)
+		return nil, fmt.Errorf("GUIAgent: failed to parse action output: %w", err)
 	}
 
 	// 将解析结果从JSON字符串转换为ActionResult结构体
 	var actionResult ActionResult
 	if err := json.Unmarshal([]byte(parsedJSONResult), &actionResult); err != nil {
-		return "", fmt.Errorf("GUIAgent: failed to unmarshal action result: %w", err)
+		return nil, fmt.Errorf("GUIAgent: failed to unmarshal action result: %w", err)
+	}
+
+	// 准备返回结果
+	result := &ExecutionResult{
+		ActionResult: actionResult,
 	}
 
 	// 根据动作类型执行相应的GUI操作
 	executeResult, err := a.executeAction(ctx, actionResult)
 	if err != nil {
-		return "", fmt.Errorf("GUIAgent: failed to execute action: %w", err)
+		// 即使执行失败，也返回解析的结构，但附带错误信息
+		result.ExecutionOutput = fmt.Sprintf("执行失败: %s", err.Error())
+		return result, fmt.Errorf("GUIAgent: failed to execute action: %w", err)
 	}
 
-	// 如果执行成功，将执行结果追加到原始解析结果中
-	resultWithExecution := map[string]any{}
-	if err := json.Unmarshal([]byte(parsedJSONResult), &resultWithExecution); err != nil {
-		return "", fmt.Errorf("GUIAgent: failed to unmarshal parsed result: %w", err)
-	}
+	// 设置执行结果
+	result.ExecutionOutput = executeResult
 
-	resultWithExecution["execution_result"] = executeResult
+	return result, nil
+}
 
-	finalResult, err := json.MarshalIndent(resultWithExecution, "", "  ")
-	if err != nil {
-		return "", fmt.Errorf("GUIAgent: failed to marshal final result: %w", err)
-	}
-
-	return string(finalResult), nil
+// ExecutionResult 表示GUI操作的最终执行结果
+type ExecutionResult struct {
+	ActionResult
+	ExecutionOutput string `json:"execution_result,omitempty"`
 }
 
 // executeAction 根据动作类型执行相应的GUI操作
