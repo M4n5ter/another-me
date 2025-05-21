@@ -74,49 +74,11 @@ func (a *ChatAdapter) Chat(ctx context.Context, input llminterface.ChatInput) (<
 			}
 
 			chunk := llminterface.ChatOutputChunk{}
-			var parts []llminterface.ContentPart
 
-			// 1. 处理普通内容 (Content 和 MultiContent)
-			if msg.Content != "" {
-				parts = append(parts, llminterface.ContentPart{
-					Type: llminterface.PartTypeText,
-					Text: msg.Content,
-				})
-			} else if msg.MultiContent != nil {
-				for _, mcPart := range msg.MultiContent {
-					switch mcPart.Type {
-					case schema.ChatMessagePartTypeText:
-						parts = append(parts, llminterface.ContentPart{
-							Type: llminterface.PartTypeText,
-							Text: mcPart.Text,
-						})
-					case schema.ChatMessagePartTypeImageURL:
-						if mcPart.ImageURL != nil {
-							imageDetail := llminterface.ImageDetailAuto // Default
-							if mcPart.ImageURL.Detail != "" {
-								switch mcPart.ImageURL.Detail {
-								case schema.ImageURLDetailLow:
-									imageDetail = llminterface.ImageDetailLow
-								case schema.ImageURLDetailHigh:
-									imageDetail = llminterface.ImageDetailHigh
-								case schema.ImageURLDetailAuto:
-									imageDetail = llminterface.ImageDetailAuto
-								default:
-									slog.Warn("Unknown eino ImageURLDetail, defaulting to auto", "detail", mcPart.ImageURL.Detail)
-								}
-							}
-							parts = append(parts, llminterface.ContentPart{
-								Type: llminterface.PartTypeImageURL,
-								ImageURL: Some(llminterface.ImageURLContent{
-									URL:    mcPart.ImageURL.URL,
-									Detail: Some(imageDetail),
-								}),
-							})
-						}
-					default:
-						slog.Warn("Unsupported eino.ChatMessagePartType in MultiContent.", "type", mcPart.Type)
-					}
-				}
+			// 1. 处理基本内容部分
+			parts, reasoningContent := ProcessEinoMessageToContentParts(msg)
+			if reasoningContent != "" {
+				chunk.Reasoning = Some(reasoningContent)
 			}
 
 			// 2. 处理工具调用请求 (ToolCalls)
@@ -138,7 +100,7 @@ func (a *ChatAdapter) Chat(ctx context.Context, input llminterface.ChatInput) (<
 			}
 
 			// 只有当有实际内容或工具调用时才发送 chunk
-			if len(parts) > 0 {
+			if len(parts) > 0 || chunk.Reasoning.IsSome() {
 				chunk.ContentParts = parts
 				chunk.FinishReason = finishReason
 				outputChan <- chunk

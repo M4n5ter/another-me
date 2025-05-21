@@ -88,6 +88,7 @@ type ChatOutputChunk struct {
 	// 对于多模态输出或需要发送结构化数据（如工具调用信息，如果以内容形式表示）时，
 	// 这里可以包含多个或不同类型的 ContentPart。
 	ContentParts []ContentPart  `json:"content_parts,omitempty"`
+	Reasoning    Option[string] `json:"reasoning,omitempty"`     // 推理内容
 	Error        error          `json:"-"`                       // 在处理此数据块或终止流时发生的错误。如果非nil，则流在此处被视为失败。
 	FinishReason Option[string] `json:"finish_reason,omitempty"` // 流结束的原因 (例如 "stop", "length")。通常在指示流终止的最后一个块中出现。
 }
