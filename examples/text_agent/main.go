@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/cloudwego/eino-ext/components/model/deepseek"
@@ -123,29 +122,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	// 处理Agent输出
-	var outputBuffer strings.Builder
-	var thoughtContent string
-	allText := ""
-
 	for chunk := range outputChan {
 		switch chunk.Type {
 		case reactagent.AgentChunkTypeText:
 			// 流式打印文本
 			fmt.Print(chunk.TextDelta)
-			outputBuffer.WriteString(chunk.TextDelta)
-			// 累积所有文本
-			allText += chunk.TextDelta
 
 		case reactagent.AgentChunkTypeReasoning:
 			// 打印推理内容
-			fmt.Print(chunk.ThoughtContent)
-
-		case reactagent.AgentChunkTypeThought:
-			thoughtContent = chunk.ThoughtContent
-			logger.Debug("LLM思考内容", "content", chunk.ThoughtContent)
-			// 打印完整的思考内容以便调试
-			fmt.Printf("\n\n=== 模型原始输出 ===\n%s\n====================\n\n", chunk.ThoughtContent)
+			fmt.Print(chunk.ReasoningContent)
 
 		case reactagent.AgentChunkTypeToolStart:
 			logger.Info("执行工具开始", "toolName", chunk.ToolName, "arguments", chunk.ToolArguments)
@@ -168,26 +153,18 @@ func main() {
 
 		case reactagent.AgentChunkTypeFinish:
 			logger.Info("Agent完成", "finalResponse", chunk.FinalResponse)
-			// 如果没有解析到工具调用且完成，打印原始输出以便调试
-			if thoughtContent != "" && !strings.Contains(thoughtContent, "```fetch") {
-				logger.Warn("未检测到工具调用格式", "content", thoughtContent)
-			}
 
 		case reactagent.AgentChunkTypeError:
 			logger.Error("Agent执行错误", "error", chunk.Error)
-			fmt.Printf("\n错误: %s\n", chunk.Error)
 
 		case reactagent.AgentChunkTypeMaxIter:
 			logger.Warn("达到最大迭代次数", "error", chunk.Error)
 		}
 
 		if chunk.IsLast {
+			fmt.Println(chunk.AccumulatedThoughts)
 			logger.Info("Agent执行结束")
 			break
 		}
 	}
-
-	// 打印最终结果
-	fmt.Println("\n\n============ 最终输出 ============")
-	fmt.Println(outputBuffer.String())
 }
