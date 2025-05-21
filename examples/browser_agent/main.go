@@ -63,7 +63,7 @@ func runBasicExample() {
 	}
 
 	// 创建Browser Agent
-	browserAgent, err := reactagent.NewAgentBuilder().
+	browserAgent, err := reactagent.NewToolCallingAgentBuilder().
 		WithLLMAdapter(chatAdapter).
 		WithToolRegistry(registry).
 		WithLogger(logger.WithGroup("browser_agent_main")).
@@ -114,7 +114,7 @@ func handleAgentOutput(outputChan <-chan reactagent.AgentOutputChunk) bool {
 
 		case reactagent.AgentChunkTypeReasoning:
 			// 打印推理内容
-			fmt.Print(chunk.ThoughtContent)
+			fmt.Print(chunk.CurrentIterThoughtContent)
 
 		case reactagent.AgentChunkTypeToolStart:
 			// 显示工具正在执行的指示
@@ -137,11 +137,12 @@ func handleAgentOutput(outputChan <-chan reactagent.AgentOutputChunk) bool {
 			if chunk.Error != "" {
 				fmt.Printf("\n%s: %s\n", chunk.Type, chunk.Error)
 			}
-			// 检查是否是最后一个块
-			if chunk.IsLast {
-				fmt.Println("\n[对话结束]")
-				taskCompleted = true
-			}
+		}
+		// 检查是否是最后一个块
+		if chunk.IsLast {
+			fmt.Println(chunk.AccumulatedThoughts)
+			fmt.Println("\n[对话结束]")
+			taskCompleted = true
 		}
 	}
 

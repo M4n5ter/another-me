@@ -52,7 +52,7 @@ func main() {
 	}
 
 	// --- ReAct Agent 测试 ---
-	reactAgent, err := reactagent.NewAgentBuilder().
+	reactAgent, err := reactagent.NewToolCallingAgentBuilder().
 		WithLLMAdapter(chatAdapter).
 		WithToolRegistry(registry).
 		WithLogger(logger.WithGroup("react_agent_main")).
@@ -84,7 +84,7 @@ func main() {
 
 		case reactagent.AgentChunkTypeReasoning:
 			// 打印推理内容
-			fmt.Print(chunk.ThoughtContent)
+			fmt.Print(chunk.ReasoningContent)
 
 		case reactagent.AgentChunkTypeToolStart:
 			// 显示工具正在执行的指示
@@ -107,10 +107,11 @@ func main() {
 			if chunk.Error != "" {
 				fmt.Printf("\n%s: %s\n", chunk.Type, chunk.Error)
 			}
-			// 检查是否是最后一个块
-			if chunk.IsLast {
-				fmt.Println("\n[对话结束]")
-			}
+		}
+		// 检查是否是最后一个块
+		if chunk.IsLast {
+			fmt.Println(chunk.AccumulatedThoughts)
+			fmt.Println("\n[对话结束]")
 		}
 	}
 }

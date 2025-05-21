@@ -25,6 +25,7 @@ type TextBasedAgent struct {
 	maxIterations    int
 	systemPrompt     Option[llminterface.InputMessage]
 	textFormatParser TextFormatParser
+	checkpoint       Option[*llminterface.ChatInput] // 可选的检查点，用于继续执行
 }
 
 // TextBasedAgentBuilder 是用于构建 TextBasedAgent 的构建器
@@ -35,6 +36,7 @@ type TextBasedAgentBuilder struct {
 	maxIterations    int
 	systemPrompt     Option[string]
 	textFormatParser TextFormatParser
+	checkpoint       Option[*llminterface.ChatInput]
 }
 
 // NewTextBasedAgentBuilder 创建一个新的 TextBasedAgentBuilder 实例
@@ -82,6 +84,12 @@ func (b *TextBasedAgentBuilder) WithTextFormatParser(parser TextFormatParser) *T
 	return b
 }
 
+// WithCheckpoint 设置检查点
+func (b *TextBasedAgentBuilder) WithCheckpoint(checkpoint *llminterface.ChatInput) *TextBasedAgentBuilder {
+	b.checkpoint = Some(checkpoint)
+	return b
+}
+
 // Build 构建并返回一个 TextBasedAgent 实例
 func (b *TextBasedAgentBuilder) Build() (*TextBasedAgent, error) {
 	if b.llmAdapter == nil {
@@ -120,6 +128,7 @@ func (b *TextBasedAgentBuilder) Build() (*TextBasedAgent, error) {
 		maxIterations:    b.maxIterations,
 		systemPrompt:     sysPromptOpt,
 		textFormatParser: b.textFormatParser,
+		checkpoint:       b.checkpoint,
 	}, nil
 }
 
@@ -128,6 +137,14 @@ func (b *TextBasedAgentBuilder) Build() (*TextBasedAgent, error) {
 func (a *TextBasedAgent) Run(ctx context.Context, userInput, conversationID string) (<-chan AgentOutputChunk, error) {
 	a.logger.Info("Text-based ReAct Agent Run started", "conversationID", conversationID, "userInput", userInput)
 
+	// 如果存在检查点，优先使用检查点继续执行
+	if a.checkpoint.IsSome() {
+		checkpoint := a.checkpoint.Unwrap()
+		// 使用传入的会话ID覆盖检查点中的会话ID
+		checkpoint.ConversationID = conversationID
+		return a.ContinueFromCheckpoint(ctx, userInput, checkpoint)
+	}
+
 	// 创建输出通道，用于流式传输 AgentOutputChunk
 	outputChan := make(chan AgentOutputChunk, 100)
 
@@ -135,232 +152,175 @@ func (a *TextBasedAgent) Run(ctx context.Context, userInput, conversationID stri
 	go func() {
 		defer close(outputChan) // 确保在函数退出时关闭通道
 
-		messages := make([]llminterface.InputMessage, 0)
+		messages := PrepareInitialMessages(a.systemPrompt, userInput, a.logger)
 
-		// 添加系统提示（如果存在）
-		if a.systemPrompt.IsSome() {
-			messages = append(messages, a.systemPrompt.Unwrap())
-			a.logger.Debug("System prompt added to messages")
-		}
-
-		// 添加用户初始输入
-		userMessage := llminterface.InputMessage{
-			Role: llminterface.RoleUser,
-			Content: []llminterface.ContentPart{
-				{
-					Type: llminterface.PartTypeText,
-					Text: userInput,
-				},
-			},
-		}
-		messages = append(messages, userMessage)
-		a.logger.Debug("User input added to messages", "userInput", userInput)
-
-		var lastResponseText string
-
-		// ReAct 循环
-		for i := range a.maxIterations {
-			a.logger.Info("Iteration start", "iteration", i+1, "conversationID", conversationID)
-
-			chatInput := llminterface.ChatInput{
-				Messages:       messages,
-				ConversationID: conversationID,
-			}
-
-			// 调用 LLM
-			llmOutputChan, err := a.llmAdapter.Chat(ctx, chatInput)
-			if err != nil {
-				a.logger.Error("LLM Chat returned an initial error", "error", err, "conversationID", conversationID)
-				outputChan <- AgentOutputChunk{
-					Type:   AgentChunkTypeError,
-					Error:  fmt.Sprintf("LLM Chat 初始错误: %v", err),
-					IsLast: true,
-				}
-				return
-			}
-
-			// 用于聚合 LLM 响应的变量
-			llmThinks := ""
-
-			// 处理 LLM 输出流
-			for chunk := range llmOutputChan {
-				// 错误处理
-				if chunk.Error != nil {
-					a.logger.Error("Error in LLM stream chunk", "error", chunk.Error, "conversationID", conversationID)
-					outputChan <- AgentOutputChunk{
-						Type:   AgentChunkTypeError,
-						Error:  fmt.Sprintf("LLM 流处理错误: %v", chunk.Error),
-						IsLast: true,
-					}
-					return
-				}
-
-				if chunk.Reasoning.IsSome() {
-					outputChan <- AgentOutputChunk{
-						Type:           AgentChunkTypeReasoning,
-						ThoughtContent: chunk.Reasoning.Unwrap(),
-					}
-				}
-
-				// 处理内容部分
-				for _, part := range chunk.ContentParts {
-					// 处理文本部分 - 流式传输到 outputChan 并累积内部状态
-					if part.Type == llminterface.PartTypeText {
-						// 流式输出文本
-						outputChan <- AgentOutputChunk{
-							Type:      AgentChunkTypeText,
-							TextDelta: part.Text,
-						}
-
-						// 累积文本，用于内部使用
-						llmThinks += part.Text
-					}
-				}
-			}
-
-			// 发送完整的思考内容
-			if llmThinks != "" {
-				outputChan <- AgentOutputChunk{
-					Type:           AgentChunkTypeThought,
-					ThoughtContent: llmThinks,
-				}
-			}
-
-			lastResponseText = llmThinks // 保存最后一次LLM的文本输出，以备没有工具调用时作为最终结果
-
-			// 解析LLM响应中的工具调用
-			toolCalls, remainingText := a.textFormatParser.ParseToolCalls(llmThinks)
-
-			// 如果没有工具调用，结束循环并返回最终响应
-			if len(toolCalls) == 0 {
-				a.logger.Info("No tool calls parsed, returning final response", "conversationID", conversationID)
-				outputChan <- AgentOutputChunk{
-					Type:          AgentChunkTypeFinish,
-					FinalResponse: remainingText,
-					IsLast:        true,
-				}
-				return
-			}
-
-			// 将LLM的完整回复添加到消息历史
-			assistantMessage := llminterface.InputMessage{
-				Role: llminterface.RoleAssistant,
-				Content: []llminterface.ContentPart{
-					{
-						Type: llminterface.PartTypeText,
-						Text: llmThinks,
-					},
-				},
-			}
-			messages = append(messages, assistantMessage)
-			a.logger.Debug("Assistant's full response added to messages", "conversationID", conversationID)
-
-			// 执行工具调用
-			for _, toolCall := range toolCalls {
-				// 发送工具开始执行的信号
-				outputChan <- AgentOutputChunk{
-					Type:          AgentChunkTypeToolStart,
-					ToolCallID:    toolCall.ID,
-					ToolName:      toolCall.Name,
-					ToolArguments: toolCall.Arguments,
-				}
-
-				a.logger.Info("Executing tool", "toolName", toolCall.Name, "toolID", toolCall.ID, "argsLength", len(toolCall.Arguments), "conversationID", conversationID)
-
-				tool, exists := a.toolRegistry.Get(toolCall.Name)
-				if !exists {
-					a.logger.Error("Tool not found in registry", "toolName", toolCall.Name, "conversationID", conversationID)
-					toolResultMessage := llminterface.InputMessage{
-						Role: llminterface.RoleUser,
-						Content: []llminterface.ContentPart{
-							{
-								Type: llminterface.PartTypeText,
-								Text: fmt.Sprintf("错误：工具 '%s' 未找到。", toolCall.Name),
-							},
-						},
-					}
-					messages = append(messages, toolResultMessage)
-
-					// 发送工具结束执行的信号（带错误）
-					outputChan <- AgentOutputChunk{
-						Type:          AgentChunkTypeToolEnd,
-						ToolCallID:    toolCall.ID,
-						ToolName:      toolCall.Name,
-						ToolArguments: toolCall.Arguments,
-						Error:         fmt.Sprintf("错误：工具 '%s' 未找到。", toolCall.Name),
-					}
-
-					continue
-				}
-
-				// 执行工具调用
-				toolOutputJSON, toolErr := tool.Call(ctx, toolCall.Arguments)
-				if toolErr != nil {
-					a.logger.Error("Tool execution failed", "toolName", toolCall.Name, "toolID", toolCall.ID, "error", toolErr, "conversationID", conversationID)
-					toolResultMessage := llminterface.InputMessage{
-						Role: llminterface.RoleUser,
-						Content: []llminterface.ContentPart{
-							{
-								Type: llminterface.PartTypeText,
-								Text: fmt.Sprintf("错误：工具 '%s' 执行失败: %s", toolCall.Name, toolErr.Error()),
-							},
-						},
-					}
-					messages = append(messages, toolResultMessage)
-
-					// 发送工具结束执行的信号（带错误）
-					outputChan <- AgentOutputChunk{
-						Type:          AgentChunkTypeToolEnd,
-						ToolCallID:    toolCall.ID,
-						ToolName:      toolCall.Name,
-						ToolArguments: toolCall.Arguments,
-						Error:         fmt.Sprintf("错误：工具 '%s' 执行失败: %s", toolCall.Name, toolErr.Error()),
-					}
-
-					continue
-				}
-
-				// 添加工具调用结果
-				toolResultMessage := llminterface.InputMessage{
-					Role: llminterface.RoleUser,
-					Content: []llminterface.ContentPart{
-						{
-							Type: llminterface.PartTypeText,
-							Text: fmt.Sprintf("工具 '%s' 执行结果:\n%s", toolCall.Name, toolOutputJSON),
-						},
-					},
-				}
-				messages = append(messages, toolResultMessage)
-				a.logger.Debug("Tool result added to messages", "toolName", toolCall.Name, "toolID", toolCall.ID, "conversationID", conversationID)
-
-				// 发送工具结束执行的信号（成功）
-				outputChan <- AgentOutputChunk{
-					Type:          AgentChunkTypeToolEnd,
-					ToolCallID:    toolCall.ID,
-					ToolName:      toolCall.Name,
-					ToolArguments: toolCall.Arguments,
-					ToolResult:    toolOutputJSON,
-				}
-			}
-		}
-
-		// 如果达到最大迭代次数
-		a.logger.Warn("Max iterations reached", "maxIterations", a.maxIterations, "conversationID", conversationID)
-		if lastResponseText != "" {
-			outputChan <- AgentOutputChunk{
-				Type:          AgentChunkTypeMaxIter,
-				FinalResponse: lastResponseText,
-				Error:         fmt.Sprintf("达到最大迭代次数 (%d)，返回最后观察到的LLM输出", a.maxIterations),
-				IsLast:        true,
-			}
-		} else {
-			outputChan <- AgentOutputChunk{
-				Type:   AgentChunkTypeMaxIter,
-				Error:  fmt.Sprintf("达到最大迭代次数 (%d) 且没有LLM的最终响应", a.maxIterations),
-				IsLast: true,
-			}
-		}
+		// 执行ReAct循环核心逻辑
+		a.handleReactLoop(ctx, messages, conversationID, outputChan)
 	}()
 
 	return outputChan, nil
+}
+
+// ContinueFromCheckpoint 方法从某个检查点继续执行
+// 它接收新的用户输入和先前保存的对话历史记录，并返回一个用于流式输出的只读通道。
+func (a *TextBasedAgent) ContinueFromCheckpoint(ctx context.Context, userInput string, checkpoint *llminterface.ChatInput) (<-chan AgentOutputChunk, error) {
+	if checkpoint == nil {
+		return nil, fmt.Errorf("检查点不能为空")
+	}
+
+	// 使用传递的会话ID
+	conversationID := checkpoint.ConversationID
+	a.logger.Info("Text-based ReAct Agent ContinueFromCheckpoint started", "conversationID", conversationID, "userInput", userInput)
+
+	// 创建输出通道，用于流式传输 AgentOutputChunk
+	outputChan := make(chan AgentOutputChunk, 100)
+
+	// 启动一个 goroutine 执行 ReAct 循环，并通过 outputChan 流式传输结果
+	go func() {
+		defer close(outputChan) // 确保在函数退出时关闭通道
+
+		messages := PrepareCheckpointMessages(checkpoint, userInput, a.logger)
+
+		// 执行ReAct循环核心逻辑
+		a.handleReactLoop(ctx, messages, conversationID, outputChan)
+	}()
+
+	return outputChan, nil
+}
+
+// handleReactLoop 处理共享的React循环逻辑
+func (a *TextBasedAgent) handleReactLoop(
+	ctx context.Context,
+	messages []llminterface.InputMessage,
+	conversationID string,
+	outputChan chan<- AgentOutputChunk,
+) {
+	var lastResponseText string
+	// 用于累积所有迭代的LLM响应
+	// 格式:
+	// Iteration 1:
+	// ....
+	// Iteration 2:
+	// ....
+	// Iteration 3:
+	// ....
+	// Iteration N:
+	// ....
+	llmThinks := ""
+
+	// ReAct 循环
+	for i := range a.maxIterations {
+		a.logger.Info("Iteration start", "iteration", i+1, "conversationID", conversationID)
+
+		chatInput := llminterface.ChatInput{
+			Messages:       messages,
+			ConversationID: conversationID,
+		}
+
+		// 调用 LLM
+		llmOutputChan, err := a.llmAdapter.Chat(ctx, chatInput)
+		if err != nil {
+			outputChan <- HandleLLMChatInitError(a.logger, err, conversationID, messages)
+			return
+		}
+
+		// 用于聚合当前迭代LLM响应的变量
+		currentIterationThinks := ""
+
+		// 处理 LLM 输出流
+		for chunk := range llmOutputChan {
+			// 错误处理
+			if chunk.Error != nil {
+				outputChan <- HandleLLMStreamError(a.logger, chunk.Error, conversationID, messages)
+				return
+			}
+
+			if chunk.Reasoning.IsSome() {
+				outputChan <- CreateReasoningChunk(chunk.Reasoning.Unwrap())
+			}
+
+			// 处理内容部分
+			for _, part := range chunk.ContentParts {
+				// 处理文本部分 - 流式传输到 outputChan 并累积内部状态
+				if part.Type == llminterface.PartTypeText {
+					// 流式输出文本
+					outputChan <- CreateTextChunk(part.Text)
+
+					// 累积文本，用于内部使用
+					currentIterationThinks += part.Text
+				}
+			}
+		}
+
+		// 发送当前迭代的LLM思考内容
+		if currentIterationThinks != "" {
+			outputChan <- CreateThoughtChunk(currentIterationThinks)
+		}
+
+		lastResponseText = currentIterationThinks // 保存最后一次LLM的文本输出，以备没有工具调用时作为最终结果
+
+		// 更新累积的思考内容
+		llmThinks = UpdateAccumulatedThoughts(llmThinks, currentIterationThinks, i)
+
+		// 解析LLM响应中的工具调用
+		toolCalls, remainingText := a.textFormatParser.ParseToolCalls(currentIterationThinks)
+
+		// 如果没有工具调用，结束循环并返回最终响应
+		if len(toolCalls) == 0 {
+			a.logger.Info("No tool calls parsed, returning final response", "conversationID", conversationID)
+			outputChan <- CreateFinishChunk(remainingText, llmThinks, messages, conversationID)
+			return
+		}
+
+		// 将LLM的完整回复添加到消息历史
+		assistantMessage := CreateAssistantMessage(currentIterationThinks)
+		messages = append(messages, assistantMessage)
+		a.logger.Debug("Assistant's full response added to messages", "conversationID", conversationID)
+
+		// 执行工具调用
+		for _, toolCall := range toolCalls {
+			// 发送工具开始执行的信号
+			outputChan <- CreateToolStartChunk(toolCall.ID, toolCall.Name, toolCall.Arguments)
+
+			a.logger.Info("Executing tool", "toolName", toolCall.Name, "toolID", toolCall.ID, "argsLength", len(toolCall.Arguments), "conversationID", conversationID)
+
+			tool, exists := a.toolRegistry.Get(toolCall.Name)
+			if !exists {
+				a.logger.Error("Tool not found in registry", "toolName", toolCall.Name, "conversationID", conversationID)
+				errorMsg := fmt.Sprintf("未找到工具: %s", toolCall.Name)
+				toolResultMessage := CreateTextBasedToolErrorMessage(toolCall.Name, errorMsg)
+				messages = append(messages, toolResultMessage)
+
+				// 发送工具结束执行的信号（带错误）
+				outputChan <- CreateToolEndChunk(toolCall.ID, toolCall.Name, toolCall.Arguments, "", fmt.Sprintf("错误：工具 '%s' 未找到。", toolCall.Name))
+
+				continue
+			}
+
+			// 执行工具调用
+			toolOutputJSON, toolErr := tool.Call(ctx, toolCall.Arguments)
+			if toolErr != nil {
+				a.logger.Error("Tool execution failed", "toolName", toolCall.Name, "toolID", toolCall.ID, "error", toolErr, "conversationID", conversationID)
+				errorMsg := fmt.Sprintf("执行失败: %s", toolErr.Error())
+				toolResultMessage := CreateTextBasedToolErrorMessage(toolCall.Name, errorMsg)
+				messages = append(messages, toolResultMessage)
+
+				// 发送工具结束执行的信号（带错误）
+				outputChan <- CreateToolEndChunk(toolCall.ID, toolCall.Name, toolCall.Arguments, "", fmt.Sprintf("错误：工具 '%s' 执行失败: %s", toolCall.Name, toolErr.Error()))
+
+				continue
+			}
+
+			// 添加工具调用结果
+			toolResultMessage := CreateTextBasedToolResultMessage(toolCall.Name, toolOutputJSON)
+			messages = append(messages, toolResultMessage)
+			a.logger.Debug("Tool result added to messages", "toolName", toolCall.Name, "toolID", toolCall.ID, "conversationID", conversationID)
+
+			// 发送工具结束执行的信号（成功）
+			outputChan <- CreateToolEndChunk(toolCall.ID, toolCall.Name, toolCall.Arguments, toolOutputJSON, "")
+		}
+	}
+
+	// 如果达到最大迭代次数
+	outputChan <- HandleMaxIterations(a.logger, a.maxIterations, conversationID, lastResponseText, llmThinks, messages)
 }
