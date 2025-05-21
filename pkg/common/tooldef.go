@@ -9,6 +9,19 @@ import (
 )
 
 // CreateParamDef 创建参数定义
+//
+// 参数:
+//   - ctx: 上下文
+//   - i18nMgr: 国际化管理器
+//   - name: 参数名称
+//   - paramType: 参数类型
+//   - required: 是否必填
+//   - enumValues: 枚举值
+//   - descKey: 描述键
+//   - arrayItemType: 数组项类型
+//
+// 返回:
+//   - 参数定义
 func CreateParamDef(ctx context.Context, i18nMgr *i18n.Manager, name string, paramType toolcore.ParameterType, required bool, enumValues Option[[]any], descKey string, arrayItemType Option[toolcore.ParameterDefinition]) toolcore.ParameterDefinition {
 	langs := i18nMgr.GetSupportedLanguages()
 	descriptions := make(map[string]string, len(langs))

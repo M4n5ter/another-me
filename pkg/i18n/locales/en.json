@@ -51,5 +51,40 @@
     "tool.gui.key_sleep_milli.description": "Key sleep(milliseconds).",
     "tool.gui.key_sleep_milli.arg.ms": "sleep time(milliseconds)",
     "tool.gui.sleep_milli.description": "Sleep(milliseconds).",
-    "tool.gui.sleep_milli.arg.ms": "sleep time(milliseconds)"
+    "tool.gui.sleep_milli.arg.ms": "sleep time(milliseconds)",
+
+    "tool.admin.syslog.description": "View system logs with filtering and time range options.",
+    "tool.admin.syslog.arg.lines": "Number of lines to display (default: 50).",
+    "tool.admin.syslog.arg.filter": "Filter logs by keyword or pattern.",
+    "tool.admin.syslog.arg.since": "Show logs since this time (e.g., '1 hour ago').",
+    "tool.admin.syslog.arg.until": "Show logs until this time (e.g., 'now').",
+    "tool.admin.syslog.arg.log_type": "Type of log to view: kernel, system, or all.",
+
+    "tool.admin.sysstat.description": "Monitor system resource status including CPU, memory, and disk usage.",
+    "tool.admin.sysstat.arg.resource": "Resource type to monitor: cpu, memory, disk, or all.",
+    "tool.admin.sysstat.arg.format": "Output format: text or json.",
+
+    "tool.admin.procinfo.description": "View process information with various detail levels.",
+    "tool.admin.procinfo.arg.pid": "Process ID to get information for.",
+    "tool.admin.procinfo.arg.name": "Process name to search for.",
+    "tool.admin.procinfo.arg.info_type": "Type of information to display: basic, detailed, environment, files, or all.",
+    "tool.admin.procinfo.arg.count": "Maximum number of processes to return when searching by name.",
+
+    "tool.admin.file.description": "Perform file and directory operations including read, write, create, delete, and list.",
+    "tool.admin.file.arg.path": "Path to the file or directory.",
+    "tool.admin.file.arg.operation": "Operation to perform: read, write, create, delete, list, or exists.",
+    "tool.admin.file.arg.content": "Content to write to the file.",
+    "tool.admin.file.arg.is_dir": "Whether the path refers to a directory.",
+    "tool.admin.file.arg.recursive": "Whether to perform operations recursively.",
+    "tool.admin.file.arg.lines": "Number of lines to read (positive for first N lines, negative for last N lines).",
+    "tool.admin.file.arg.find_text": "Text to find when replacing content.",
+    "tool.admin.file.arg.replace_text": "Text to replace found text with.",
+
+    "tool.admin.archive.description": "Compress and extract files in various formats including zip, tar, tar.gz, and more.",
+    "tool.admin.archive.arg.operation": "Operation to perform: compress or extract.",
+    "tool.admin.archive.arg.source_path": "Path to the source file or directory.",
+    "tool.admin.archive.arg.target_path": "Path to the target file or directory.",
+    "tool.admin.archive.arg.format": "Archive format to use: zip, tar, targz, tarbz2, or tarxz.",
+    "tool.admin.archive.arg.source_paths": "Multiple source paths to compress (when compressing multiple files/directories).",
+    "tool.admin.archive.arg.verbose": "Whether to display detailed information during operation."
 } 

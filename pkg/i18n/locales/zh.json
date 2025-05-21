@@ -51,5 +51,40 @@
     "tool.gui.key_sleep_milli.description": "按键休眠(毫秒)。",
     "tool.gui.key_sleep_milli.arg.ms": "休眠时间(毫秒)",
     "tool.gui.sleep_milli.description": "睡眠(毫秒)。",
-    "tool.gui.sleep_milli.arg.ms": "睡眠时间(毫秒)"
+    "tool.gui.sleep_milli.arg.ms": "睡眠时间(毫秒)",
+
+    "tool.admin.syslog.description": "查看系统日志，支持过滤和时间范围选项。",
+    "tool.admin.syslog.arg.lines": "显示的行数（默认：50）。",
+    "tool.admin.syslog.arg.filter": "按关键词或模式过滤日志。",
+    "tool.admin.syslog.arg.since": "显示从此时间开始的日志（例如，'1 hour ago'）。",
+    "tool.admin.syslog.arg.until": "显示到此时间为止的日志（例如，'now'）。",
+    "tool.admin.syslog.arg.log_type": "要查看的日志类型：kernel（内核）、system（系统）或all（全部）。",
+
+    "tool.admin.sysstat.description": "监控系统资源状态，包括CPU、内存和磁盘使用情况。",
+    "tool.admin.sysstat.arg.resource": "要监控的资源类型：cpu、memory（内存）、disk（磁盘）或all（全部）。",
+    "tool.admin.sysstat.arg.format": "输出格式：text（文本）或json。",
+
+    "tool.admin.procinfo.description": "查看进程信息，支持不同详细程度。",
+    "tool.admin.procinfo.arg.pid": "要获取信息的进程ID。",
+    "tool.admin.procinfo.arg.name": "要搜索的进程名称。",
+    "tool.admin.procinfo.arg.info_type": "要显示的信息类型：basic（基本）、detailed（详细）、environment（环境变量）、files（文件）或all（全部）。",
+    "tool.admin.procinfo.arg.count": "按名称搜索时返回的最大进程数。",
+
+    "tool.admin.file.description": "执行文件和目录操作，包括读取、写入、创建、删除和列表。",
+    "tool.admin.file.arg.path": "文件或目录的路径。",
+    "tool.admin.file.arg.operation": "要执行的操作：read（读取）、write（写入）、create（创建）、delete（删除）、list（列表）或exists（检查存在）。",
+    "tool.admin.file.arg.content": "要写入文件的内容。",
+    "tool.admin.file.arg.is_dir": "路径是否指向目录。",
+    "tool.admin.file.arg.recursive": "是否递归执行操作。",
+    "tool.admin.file.arg.lines": "要读取的行数（正值表示前N行，负值表示后N行）。",
+    "tool.admin.file.arg.find_text": "替换内容时要查找的文本。",
+    "tool.admin.file.arg.replace_text": "用于替换找到文本的新文本。",
+
+    "tool.admin.archive.description": "压缩和解压缩各种格式的文件，包括zip、tar、tar.gz等。",
+    "tool.admin.archive.arg.operation": "要执行的操作：compress（压缩）或extract（解压缩）。",
+    "tool.admin.archive.arg.source_path": "源文件或目录的路径。",
+    "tool.admin.archive.arg.target_path": "目标文件或目录的路径。",
+    "tool.admin.archive.arg.format": "使用的归档格式：zip、tar、targz、tarbz2或tarxz。",
+    "tool.admin.archive.arg.source_paths": "要压缩的多个源路径（压缩多个文件/目录时）。",
+    "tool.admin.archive.arg.verbose": "是否在操作过程中显示详细信息。"
 } 
