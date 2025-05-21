@@ -14,6 +14,7 @@ import (
 	"github.com/m4n5ter/another-me/pkg/reactagent"
 	"github.com/m4n5ter/another-me/pkg/toolcore"
 	"github.com/m4n5ter/another-me/pkg/tools/browsertool"
+	"github.com/m4n5ter/another-me/pkg/tools/fetchtool"
 )
 
 func main() {
@@ -28,6 +29,8 @@ func main() {
 
 // runBasicExample 运行基础浏览器示例
 func runBasicExample() {
+	ctx := context.Background()
+
 	// 设置日志
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
@@ -41,7 +44,7 @@ func runBasicExample() {
 	registerTools(registry, i18n.GlobalManager)
 
 	// 设置 eino 模型
-	chatModel, err := deepseek.NewChatModel(context.Background(), &deepseek.ChatModelConfig{
+	chatModel, err := deepseek.NewChatModel(ctx, &deepseek.ChatModelConfig{
 		APIKey:      os.Getenv("DEEPSEEK_API_KEY"),
 		Model:       "deepseek-chat",
 		MaxTokens:   4096,
@@ -53,7 +56,7 @@ func runBasicExample() {
 	}
 
 	// 创建 eino 适配器
-	chatAdapter, err := eino.NewChatAdapter(context.Background(), chatModel, registry, "zh")
+	chatAdapter, err := eino.NewChatAdapter(ctx, chatModel, registry, "zh")
 	if err != nil {
 		logger.Error("创建eino适配器失败", "error", err)
 		os.Exit(1)
@@ -65,28 +68,25 @@ func runBasicExample() {
 		WithToolRegistry(registry).
 		WithLogger(logger.WithGroup("browser_agent_main")).
 		WithMaxIterations(100).
-		WithSystemPrompt(i18n.GlobalManager.T(context.Background(), "browser.prompt.default", nil)).
+		WithSystemPrompt(i18n.GlobalManager.T(ctx, "browser.prompt.default", nil)).
 		Build()
 	if err != nil {
 		logger.Error("创建Browser agent失败", "error", err)
 		os.Exit(1)
 	}
 
-	// 示例用户输入，执行浏览器任务
-	userInput := "访问 Hacker News 首页，查看一下前5个帖子，需要进一步查看每个帖子的详情后，总结一份报告"
+	userInput := "访问 Hacker News 首页，逐个浏览首页的帖子，然后立即开始进入每个帖子查看，每次都需要进行工具调用，除非任务完成，每完成一个帖子，总结一份报告。中途不要询问我，直到任务完成。"
 	conversationID := "browser-agent-demo-001"
 
 	fmt.Println("执行浏览器任务...")
 	fmt.Printf("任务: %s\n\n", userInput)
 
-	// 获取流式输出通道
-	outputChan, err := browserAgent.Run(context.Background(), userInput, conversationID)
+	outputChan, err := browserAgent.Run(ctx, userInput, conversationID)
 	if err != nil {
 		logger.Error("运行Browser agent失败", "error", err)
 		os.Exit(1)
 	}
 
-	// 从通道中读取并处理流式数据
 	taskCompleted := handleAgentOutput(outputChan)
 
 	// 任务完成后等待用户按Enter键关闭浏览器
@@ -170,7 +170,7 @@ func registerTools(registry *toolcore.Registry, i18nMgr *i18n.Manager) {
 
 	// 注册浏览器工具
 	browserConfig := browsertool.NewBrowserConfig()
-	browserConfig.Headless = false
+	browserConfig.Headless = false // 有头，方便看
 	browserConfig.WindowWidth = 1280
 	browserConfig.WindowHeight = 800
 	browserConfig.Timeout = 120
@@ -181,5 +181,11 @@ func registerTools(registry *toolcore.Registry, i18nMgr *i18n.Manager) {
 	err := registry.Register(ctx, browserTool)
 	if err != nil {
 		log.Fatalf("注册浏览器工具失败: %v", err)
+	}
+
+	fetchTool := fetchtool.NewFetchTool(i18nMgr)
+	err = registry.Register(ctx, fetchTool)
+	if err != nil {
+		log.Fatalf("注册 Fetch 工具失败: %v", err)
 	}
 }
