@@ -6,6 +6,8 @@ toolchain go1.24.3
 
 require (
 	github.com/JohannesKaufmann/html-to-markdown v1.6.0
+	github.com/chromedp/cdproto v0.0.0-20250518235601-40b4c35ec9fe
+	github.com/chromedp/chromedp v0.13.6
 	github.com/cloudwego/eino v0.3.35
 	github.com/cloudwego/eino-ext/components/model/ark v0.1.8
 	github.com/cloudwego/eino-ext/components/model/deepseek v0.0.0-20250520101807-b2008771903a
@@ -23,6 +25,7 @@ require (
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de // indirect
 	github.com/bytedance/sonic v1.13.2 // indirect
 	github.com/bytedance/sonic/loader v0.2.4 // indirect
+	github.com/chromedp/sysutil v1.1.0 // indirect
 	github.com/cloudwego/base64x v0.1.5 // indirect
 	github.com/cohesion-org/deepseek-go v1.2.8 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
@@ -31,10 +34,14 @@ require (
 	github.com/ebitengine/purego v0.8.3 // indirect
 	github.com/gen2brain/shm v0.1.1 // indirect
 	github.com/getkin/kin-openapi v0.118.0 // indirect
+	github.com/go-json-experiment/json v0.0.0-20250211171154-1ae217ad3535 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/go-openapi/jsonpointer v0.19.5 // indirect
 	github.com/go-openapi/swag v0.19.5 // indirect
 	github.com/go-shiori/dom v0.0.0-20230515143342-73569d674e1c // indirect
+	github.com/gobwas/httphead v0.1.0 // indirect
+	github.com/gobwas/pool v0.2.1 // indirect
+	github.com/gobwas/ws v1.4.0 // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/gogs/chardet v0.0.0-20211120154057-b7413eaefb8f // indirect
 	github.com/google/uuid v1.6.0 // indirect
