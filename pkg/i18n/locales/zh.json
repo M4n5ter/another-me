@@ -5,6 +5,17 @@
     "system.prompt": "你是一个友好的助手，请根据用户的问题给出回答。",
     "assistant.gui.prompt": "你是一个GUI代理。你会得到一个任务和你的操作历史记录，以及截图。你需要执行下一步操作来完成任务。\\n## 输出格式\\n```\\nThought: ...\\nAction: ...\\n```\\n## 操作空间\\nclick(start_box=\"[x1, y1, x2, y2]\") #点击特定区域，坐标是相对值[0-1000]\\nleft_double(start_box=\"[x1, y1, x2, y2]\") #左键双击\\nright_single(start_box=\"[x1, y1, x2, y2]\") #右键单击\\ndrag(start_box=\"[x1, y1, x2, y2]\", end_box=\"[x3, y3, x4, y4]\") #从一个区域拖拽到另一个区域\\nkey_tap(keys=[\"key1\", \"key2\"]) #按下并释放指定按键，支持单个或组合按键，例如[\"a\"]或[\"ctrl\", \"c\"]\\ntype(content=\"text\") #输入文本，如果要提交输入，请在content末尾使用\"\\\\n\"\\nscroll(start_box=\"[x1, y1, x2, y2]\", direction=\"down or up or right or left\") #向特定方向滚动\\ntoggle_key(keys=[\"key1\", \"key2\"], up=true/false) #按下或释放指定按键，up=true表示释放，up=false表示按下\\ntoggle_mouse(button=\"left/right/wheelUp\", up=true/false) #按下或释放鼠标按钮，up=true表示释放，up=false表示按下\\nmouse_location() #获取当前鼠标位置\\nscroll_relative(x=10, y=10, ms_delay=10) #相对当前位置滚动鼠标\\nkey_sleep(ms=100) #设置按键间隔时间(毫秒)\\nwait(ms=5000) #等待指定时间(毫秒)并截图检查变化，默认为5000毫秒\\nfinished(content=\"xxx\") #任务完成，如果需要，在content部分使用转义字符\\\\\\\", \\\\\\\", 和\\\\\\\\n\\n## 坐标系统\\n- 所有框坐标(start_box, end_box)必须指定为[x1, y1, x2, y2]，其中：\\n  - (x1, y1)是左上角\\n  - (x2, y2)是右下角\\n  - 所有值都是从0到1000的相对坐标(屏幕被归一化)\\n- 通过仔细查看截图，确保坐标的具体性和准确性\\n## 注意\\n- 在Thought部分使用中文\\n- 在Thought部分写一个简短的计划，最后用一句话总结你的下一个动作及其目标元素\\n- 你必须为每个操作包含所有必需的参数(例如，点击操作的start_box)\\n- 对于文本输入，确保正确转义特殊字符\\n## 用户指令",
     
+    "browser.prompt.default": "您是一个功能强大的浏览器自动化助手，能够执行各种网页交互和调试任务。您的能力包括：\\n\\n1. **导航**：导航到任何指定的URL以加载网页。\\n\\n2. **截图**：捕获整个页面或使用CSS选择器捕获特定元素的屏幕截图，默认尺寸为1700x1100像素。\\n\\n3. **元素交互**：\\n   - 点击通过CSS选择器识别的元素\\n   - 在指定元素上悬停\\n   - 在输入字段中填写指定值\\n   - 在下拉菜单中选择选项\\n\\n4. **JavaScript执行**：\\n   - 在浏览器上下文中运行任意JavaScript代码\\n   - 评估脚本并返回结果\\n\\n5. **调试工具**：\\n   - 启用/禁用JavaScript调试模式\\n   - 在特定脚本位置设置断点（URL+行号+可选列/条件）\\n   - 通过ID删除现有断点\\n   - 暂停和恢复脚本执行\\n   - 暂停时获取当前调用堆栈\\n\\n对于所有需要元素选择的操作，您必须使用精确的CSS选择器。在捕获屏幕截图时，您可以指定整个页面或特定元素。对于调试操作，您可以精确控制执行流和检查运行时行为。\\n\\n请提供清晰的指令，包括：\\n- 您想执行的特定操作\\n- 必需的参数（URL、选择器、值等）\\n- 任何可选参数（尺寸、条件等）\\n- 相关的预期结果\\n\\n在处理敏感操作或破坏性命令时，您应该在执行前确认操作。报告时要提供清晰的状态更新、成功/失败指示以及任何相关的输出或捕获的数据。",
+    
+    "tool.browser.description": "一个强大的浏览器自动化工具，允许您通过编程接口控制Web浏览器。",
+    "tool.browser.arg.operation": "要执行的操作",
+    "tool.browser.arg.url": "要导航到的URL",
+    "tool.browser.arg.selector": "用于目标元素的CSS选择器",
+    "tool.browser.arg.value": "要设置的值或输入文本",
+    "tool.browser.arg.script": "要执行的JavaScript代码",
+    "tool.browser.arg.debug": "调试操作参数",
+    "tool.browser.arg.options": "操作的其他选项",
+    
     "tool.fetch.description": "从给定的 URL 获取内容。它可以简化 HTML 内容或返回原始数据。",
     "tool.fetch.arg.url": "要从中获取内容的 URL。",
     "tool.fetch.arg.max_length": "从内容中返回的最大字符数(默认值: 10000)。",
@@ -51,5 +62,40 @@
     "tool.gui.key_sleep_milli.description": "按键休眠(毫秒)。",
     "tool.gui.key_sleep_milli.arg.ms": "休眠时间(毫秒)",
     "tool.gui.sleep_milli.description": "睡眠(毫秒)。",
-    "tool.gui.sleep_milli.arg.ms": "睡眠时间(毫秒)"
+    "tool.gui.sleep_milli.arg.ms": "睡眠时间(毫秒)",
+
+    "tool.admin.syslog.description": "查看系统日志，支持过滤和时间范围选项。",
+    "tool.admin.syslog.arg.lines": "显示的行数（默认：50）。",
+    "tool.admin.syslog.arg.filter": "按关键词或模式过滤日志。",
+    "tool.admin.syslog.arg.since": "显示从此时间开始的日志（例如，'1 hour ago'）。",
+    "tool.admin.syslog.arg.until": "显示到此时间为止的日志（例如，'now'）。",
+    "tool.admin.syslog.arg.log_type": "要查看的日志类型：kernel（内核）、system（系统）或all（全部）。",
+
+    "tool.admin.sysstat.description": "监控系统资源状态，包括CPU、内存和磁盘使用情况。",
+    "tool.admin.sysstat.arg.resource": "要监控的资源类型：cpu、memory（内存）、disk（磁盘）或all（全部）。",
+    "tool.admin.sysstat.arg.format": "输出格式：text（文本）或json。",
+
+    "tool.admin.procinfo.description": "查看进程信息，支持不同详细程度。",
+    "tool.admin.procinfo.arg.pid": "要获取信息的进程ID。",
+    "tool.admin.procinfo.arg.name": "要搜索的进程名称。",
+    "tool.admin.procinfo.arg.info_type": "要显示的信息类型：basic（基本）、detailed（详细）、environment（环境变量）、files（文件）或all（全部）。",
+    "tool.admin.procinfo.arg.count": "按名称搜索时返回的最大进程数。",
+
+    "tool.admin.file.description": "执行文件和目录操作，包括读取、写入、创建、删除和列表。",
+    "tool.admin.file.arg.path": "文件或目录的路径。",
+    "tool.admin.file.arg.operation": "要执行的操作：read（读取）、write（写入）、create（创建）、delete（删除）、list（列表）或exists（检查存在）。",
+    "tool.admin.file.arg.content": "要写入文件的内容。",
+    "tool.admin.file.arg.is_dir": "路径是否指向目录。",
+    "tool.admin.file.arg.recursive": "是否递归执行操作。",
+    "tool.admin.file.arg.lines": "要读取的行数（正值表示前N行，负值表示后N行）。",
+    "tool.admin.file.arg.find_text": "替换内容时要查找的文本。",
+    "tool.admin.file.arg.replace_text": "用于替换找到文本的新文本。",
+
+    "tool.admin.archive.description": "压缩和解压缩各种格式的文件，包括zip、tar、tar.gz等。",
+    "tool.admin.archive.arg.operation": "要执行的操作：compress（压缩）或extract（解压缩）。",
+    "tool.admin.archive.arg.source_path": "源文件或目录的路径。",
+    "tool.admin.archive.arg.target_path": "目标文件或目录的路径。",
+    "tool.admin.archive.arg.format": "使用的归档格式：zip、tar、targz、tarbz2或tarxz。",
+    "tool.admin.archive.arg.source_paths": "要压缩的多个源路径（压缩多个文件/目录时）。",
+    "tool.admin.archive.arg.verbose": "是否在操作过程中显示详细信息。"
 } 
