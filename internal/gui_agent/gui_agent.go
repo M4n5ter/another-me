@@ -231,14 +231,7 @@ func (a *GUIAgent) executeAction(_ context.Context, action ActionResult) (string
 			return "", fmt.Errorf("移动鼠标到起始位置失败: %w", err)
 		}
 
-		// 按下鼠标左键
-		toggleDownInput := `{"button": "left", "up": false}`
-		_, err = a.tool.ToggleMouseButton(toggleDownInput)
-		if err != nil {
-			return "", fmt.Errorf("按下鼠标按钮失败: %w", err)
-		}
-
-		// 拖动到目标位置
+		// 拖动到目标位置（包含先按下鼠标左键，等待一会，然后移动到目标位置，再释放鼠标左键）
 		dragInput := fmt.Sprintf(`{"x": %d, "y": %d}`, endX, endY)
 		dragResult, err := a.tool.Drag(dragInput)
 		if err != nil {
@@ -248,13 +241,6 @@ func (a *GUIAgent) executeAction(_ context.Context, action ActionResult) (string
 				return "", fmt.Errorf("拖动失败: %w", err)
 			}
 			return "", fmt.Errorf("拖动失败: %w", err)
-		}
-
-		// 释放鼠标左键
-		toggleUpInput := `{"button": "left", "up": true}`
-		_, err = a.tool.ToggleMouseButton(toggleUpInput)
-		if err != nil {
-			return "", fmt.Errorf("释放鼠标按钮失败: %w", err)
 		}
 
 		return fmt.Sprintf("拖拽: %s", dragResult), nil
