@@ -12,6 +12,7 @@ import (
 	"github.com/go-vgo/robotgo"
 	json "github.com/json-iterator/go"
 
+	"github.com/m4n5ter/another-me/pkg/common"
 	"github.com/m4n5ter/another-me/pkg/i18n"
 	. "github.com/m4n5ter/another-me/pkg/option"
 	"github.com/m4n5ter/another-me/pkg/toolcore"
@@ -639,39 +640,39 @@ func (t *Tool) SleepMilli(inputJSON string) (string, error) {
 
 func (t *Tool) createMoveMouseParams(ctx context.Context) []toolcore.ParameterDefinition {
 	return []toolcore.ParameterDefinition{
-		t.createParamDef(ctx, "x", toolcore.ParamTypeInteger, true, None[[]any](), "tool.gui.move_mouse.arg.x", None[toolcore.ParameterDefinition]()),
-		t.createParamDef(ctx, "y", toolcore.ParamTypeInteger, true, None[[]any](), "tool.gui.move_mouse.arg.y", None[toolcore.ParameterDefinition]()),
+		common.CreateParamDef(ctx, t.i18nMgr, "x", toolcore.ParamTypeInteger, true, nil, "tool.gui.move_mouse.arg.x", nil),
+		common.CreateParamDef(ctx, t.i18nMgr, "y", toolcore.ParamTypeInteger, true, nil, "tool.gui.move_mouse.arg.y", nil),
 	}
 }
 
 func (t *Tool) createDragParams(ctx context.Context) []toolcore.ParameterDefinition {
 	return []toolcore.ParameterDefinition{
-		t.createParamDef(ctx, "x", toolcore.ParamTypeInteger, true, None[[]any](), "tool.gui.drag.arg.x", None[toolcore.ParameterDefinition]()),
-		t.createParamDef(ctx, "y", toolcore.ParamTypeInteger, true, None[[]any](), "tool.gui.drag.arg.y", None[toolcore.ParameterDefinition]()),
+		common.CreateParamDef(ctx, t.i18nMgr, "x", toolcore.ParamTypeInteger, true, nil, "tool.gui.drag.arg.x", nil),
+		common.CreateParamDef(ctx, t.i18nMgr, "y", toolcore.ParamTypeInteger, true, nil, "tool.gui.drag.arg.y", nil),
 	}
 }
 
 func (t *Tool) createScrollParams(ctx context.Context) []toolcore.ParameterDefinition {
 	return []toolcore.ParameterDefinition{
-		t.createParamDef(ctx, "toy", toolcore.ParamTypeInteger, true, None[[]any](), "tool.gui.scroll.arg.toy", None[toolcore.ParameterDefinition]()),
-		t.createParamDef(ctx, "num", toolcore.ParamTypeInteger, true, None[[]any](), "tool.gui.scroll.arg.num", None[toolcore.ParameterDefinition]()),
-		t.createParamDef(ctx, "ms_sleep", toolcore.ParamTypeInteger, true, None[[]any](), "tool.gui.scroll.arg.ms_sleep", None[toolcore.ParameterDefinition]()),
-		t.createParamDef(ctx, "tox", toolcore.ParamTypeInteger, true, None[[]any](), "tool.gui.scroll.arg.tox", None[toolcore.ParameterDefinition]()),
+		common.CreateParamDef(ctx, t.i18nMgr, "toy", toolcore.ParamTypeInteger, true, nil, "tool.gui.scroll.arg.toy", nil),
+		common.CreateParamDef(ctx, t.i18nMgr, "num", toolcore.ParamTypeInteger, true, nil, "tool.gui.scroll.arg.num", nil),
+		common.CreateParamDef(ctx, t.i18nMgr, "ms_sleep", toolcore.ParamTypeInteger, true, nil, "tool.gui.scroll.arg.ms_sleep", nil),
+		common.CreateParamDef(ctx, t.i18nMgr, "tox", toolcore.ParamTypeInteger, true, nil, "tool.gui.scroll.arg.tox", nil),
 	}
 }
 
 func (t *Tool) createScrollRelativeParams(ctx context.Context) []toolcore.ParameterDefinition {
 	return []toolcore.ParameterDefinition{
-		t.createParamDef(ctx, "x", toolcore.ParamTypeInteger, true, None[[]any](), "tool.gui.scroll_relative.arg.x", None[toolcore.ParameterDefinition]()),
-		t.createParamDef(ctx, "y", toolcore.ParamTypeInteger, true, None[[]any](), "tool.gui.scroll_relative.arg.y", None[toolcore.ParameterDefinition]()),
-		t.createParamDef(ctx, "ms_delay", toolcore.ParamTypeInteger, true, None[[]any](), "tool.gui.scroll_relative.arg.ms_delay", None[toolcore.ParameterDefinition]()),
+		common.CreateParamDef(ctx, t.i18nMgr, "x", toolcore.ParamTypeInteger, true, nil, "tool.gui.scroll_relative.arg.x", nil),
+		common.CreateParamDef(ctx, t.i18nMgr, "y", toolcore.ParamTypeInteger, true, nil, "tool.gui.scroll_relative.arg.y", nil),
+		common.CreateParamDef(ctx, t.i18nMgr, "ms_delay", toolcore.ParamTypeInteger, true, nil, "tool.gui.scroll_relative.arg.ms_delay", nil),
 	}
 }
 
 func (t *Tool) createScrollDirectionParams(ctx context.Context) []toolcore.ParameterDefinition {
 	return []toolcore.ParameterDefinition{
-		t.createParamDef(ctx, "x", toolcore.ParamTypeInteger, true, None[[]any](), "tool.gui.scroll_direction.arg.x", None[toolcore.ParameterDefinition]()),
-		t.createParamDef(ctx, "direction", toolcore.ParamTypeString, true, Some(directionEnum()), "tool.gui.scroll_direction.arg.direction", Some(toolcore.ParameterDefinition{
+		common.CreateParamDef(ctx, t.i18nMgr, "x", toolcore.ParamTypeInteger, true, nil, "tool.gui.scroll_direction.arg.x", nil),
+		common.CreateParamDef(ctx, t.i18nMgr, "direction", toolcore.ParamTypeString, true, Some(directionEnum()), "tool.gui.scroll_direction.arg.direction", Some(toolcore.ParameterDefinition{
 			Type: toolcore.ParamTypeString,
 			Description: map[string]string{
 				"en": "The direction to scroll",
@@ -683,34 +684,34 @@ func (t *Tool) createScrollDirectionParams(ctx context.Context) []toolcore.Param
 
 func (t *Tool) createClickParams(ctx context.Context) []toolcore.ParameterDefinition {
 	return []toolcore.ParameterDefinition{
-		t.createParamDef(ctx, "button", toolcore.ParamTypeString, true, Some(mouseButtonEnum()), "tool.gui.click.arg.button", Some(toolcore.ParameterDefinition{
+		common.CreateParamDef(ctx, t.i18nMgr, "button", toolcore.ParamTypeString, true, Some(mouseButtonEnum()), "tool.gui.click.arg.button", Some(toolcore.ParameterDefinition{
 			Type: toolcore.ParamTypeString,
 			Description: map[string]string{
 				"en": "The mouse button to click",
 				"zh": "要点击的鼠标按钮",
 			},
 		})),
-		t.createParamDef(ctx, "double", toolcore.ParamTypeBoolean, true, None[[]any](), "tool.gui.click.arg.double", None[toolcore.ParameterDefinition]()),
+		common.CreateParamDef(ctx, t.i18nMgr, "double", toolcore.ParamTypeBoolean, true, nil, "tool.gui.click.arg.double", nil),
 	}
 }
 
 func (t *Tool) createToggleMouseButtonParams(ctx context.Context) []toolcore.ParameterDefinition {
 	return []toolcore.ParameterDefinition{
-		t.createParamDef(ctx, "button", toolcore.ParamTypeString, true, Some(mouseButtonEnum()), "tool.gui.toggle_mouse_button.arg.button", Some(toolcore.ParameterDefinition{
+		common.CreateParamDef(ctx, t.i18nMgr, "button", toolcore.ParamTypeString, true, Some(mouseButtonEnum()), "tool.gui.toggle_mouse_button.arg.button", Some(toolcore.ParameterDefinition{
 			Type: toolcore.ParamTypeString,
 			Description: map[string]string{
 				"en": "The mouse button to toggle",
 				"zh": "要切换的鼠标按钮",
 			},
 		})),
-		t.createParamDef(ctx, "up", toolcore.ParamTypeBoolean, true, None[[]any](), "tool.gui.toggle_mouse_button.arg.up", None[toolcore.ParameterDefinition]()),
+		common.CreateParamDef(ctx, t.i18nMgr, "up", toolcore.ParamTypeBoolean, true, nil, "tool.gui.toggle_mouse_button.arg.up", nil),
 	}
 }
 
 func (t *Tool) createToggleKeyParams(ctx context.Context) []toolcore.ParameterDefinition {
 	return []toolcore.ParameterDefinition{
-		t.createParamDef(ctx, "up", toolcore.ParamTypeBoolean, true, None[[]any](), "tool.gui.toggle_key.arg.up", None[toolcore.ParameterDefinition]()),
-		t.createParamDef(ctx, "keys", toolcore.ParamTypeArray, true, Some(stringSliceToAnySlice(KeyEnum())), "tool.gui.toggle_key.arg.keys", Some(toolcore.ParameterDefinition{
+		common.CreateParamDef(ctx, t.i18nMgr, "up", toolcore.ParamTypeBoolean, true, nil, "tool.gui.toggle_key.arg.up", nil),
+		common.CreateParamDef(ctx, t.i18nMgr, "keys", toolcore.ParamTypeArray, true, Some(stringSliceToAnySlice(KeyEnum())), "tool.gui.toggle_key.arg.keys", Some(toolcore.ParameterDefinition{
 			Type: toolcore.ParamTypeString,
 			Description: map[string]string{
 				"en": "The keys to toggle",
@@ -722,7 +723,7 @@ func (t *Tool) createToggleKeyParams(ctx context.Context) []toolcore.ParameterDe
 
 func (t *Tool) createKeyTapParams(ctx context.Context) []toolcore.ParameterDefinition {
 	return []toolcore.ParameterDefinition{
-		t.createParamDef(ctx, "keys", toolcore.ParamTypeArray, true, Some(stringSliceToAnySlice(KeyEnum())), "tool.gui.key_tap.arg.keys", Some(toolcore.ParameterDefinition{
+		common.CreateParamDef(ctx, t.i18nMgr, "keys", toolcore.ParamTypeArray, true, Some(stringSliceToAnySlice(KeyEnum())), "tool.gui.key_tap.arg.keys", Some(toolcore.ParameterDefinition{
 			Type: toolcore.ParamTypeString,
 			Description: map[string]string{
 				"en": "The keys to tap",
@@ -734,40 +735,19 @@ func (t *Tool) createKeyTapParams(ctx context.Context) []toolcore.ParameterDefin
 
 func (t *Tool) createTypeStringParams(ctx context.Context) []toolcore.ParameterDefinition {
 	return []toolcore.ParameterDefinition{
-		t.createParamDef(ctx, "content", toolcore.ParamTypeString, true, None[[]any](), "tool.gui.type_string.arg.content", None[toolcore.ParameterDefinition]()),
+		common.CreateParamDef(ctx, t.i18nMgr, "content", toolcore.ParamTypeString, true, nil, "tool.gui.type_string.arg.content", nil),
 	}
 }
 
 func (t *Tool) createKeySleepMilliParams(ctx context.Context) []toolcore.ParameterDefinition {
 	return []toolcore.ParameterDefinition{
-		t.createParamDef(ctx, "ms", toolcore.ParamTypeInteger, true, None[[]any](), "tool.gui.key_sleep_milli.arg.ms", None[toolcore.ParameterDefinition]()),
+		common.CreateParamDef(ctx, t.i18nMgr, "ms", toolcore.ParamTypeInteger, true, nil, "tool.gui.key_sleep_milli.arg.ms", nil),
 	}
 }
 
 func (t *Tool) createSleepMilliParams(ctx context.Context) []toolcore.ParameterDefinition {
 	return []toolcore.ParameterDefinition{
-		t.createParamDef(ctx, "ms", toolcore.ParamTypeInteger, true, None[[]any](), "tool.gui.sleep_milli.arg.ms", None[toolcore.ParameterDefinition]()),
-	}
-}
-
-func (t *Tool) createParamDef(ctx context.Context, name string, paramType toolcore.ParameterType,
-	required bool, enumValues Option[[]any], descKey string, arrayItemType Option[toolcore.ParameterDefinition],
-) toolcore.ParameterDefinition {
-	langs := t.i18nMgr.GetSupportedLanguages()
-	descriptions := make(map[string]string, len(langs))
-
-	for _, lang := range langs {
-		langCtx := i18n.ContextWithLanguage(ctx, lang)
-		descriptions[lang] = t.i18nMgr.T(langCtx, descKey, nil)
-	}
-
-	return toolcore.ParameterDefinition{
-		Name:        name,
-		Type:        paramType,
-		Description: descriptions,
-		Required:    required,
-		EnumValues:  enumValues,
-		Items:       arrayItemType,
+		common.CreateParamDef(ctx, t.i18nMgr, "ms", toolcore.ParamTypeInteger, true, nil, "tool.gui.sleep_milli.arg.ms", nil),
 	}
 }
 
