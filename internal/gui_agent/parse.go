@@ -22,14 +22,14 @@ func ParseActionOutput(outputText string) (string, error) {
 	}
 
 	// 提取Thought部分
-	thoughtRegex := regexp.MustCompile(`(?s)Thought:(.*?)\nAction:`)
+	thoughtRegex := regexp.MustCompile(`(?s)Thought:(.*?)\nAction:`) // Satety: const pattern
 	thoughtMatches := thoughtRegex.FindStringSubmatch(outputText)
 	if len(thoughtMatches) > 1 {
 		result.Thought = strings.TrimSpace(thoughtMatches[1])
 	}
 
 	// 提取Action部分
-	actionRegex := regexp.MustCompile(`(?s)Action:(.*?)(?:\n|$)`)
+	actionRegex := regexp.MustCompile(`(?s)Action:(.*?)(?:\n|$)`) // Satety: const pattern
 	actionMatches := actionRegex.FindStringSubmatch(outputText)
 	if len(actionMatches) > 1 { //nolint:nestif // ParseActionOutput 的逻辑是必要的
 		actionText := strings.TrimSpace(actionMatches[1])

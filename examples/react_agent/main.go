@@ -81,9 +81,15 @@ func main() {
 		case reactagent.AgentChunkTypeText:
 			// 立即显示增量文本
 			fmt.Print(chunk.TextDelta)
+
+		case reactagent.AgentChunkTypeReasoning:
+			// 打印推理内容
+			fmt.Print(chunk.ThoughtContent)
+
 		case reactagent.AgentChunkTypeToolStart:
 			// 显示工具正在执行的指示
 			fmt.Printf("\n[执行工具: %s %s]\n", chunk.ToolName, chunk.ToolArguments)
+
 		case reactagent.AgentChunkTypeToolEnd:
 			// 显示工具执行完成的指示
 			if chunk.Error != "" {
@@ -91,9 +97,11 @@ func main() {
 			} else {
 				fmt.Printf("\n[工具执行完成: %s]\n", chunk.ToolName)
 			}
+
 		case reactagent.AgentChunkTypeError:
 			// 显示错误
 			fmt.Printf("\n错误: %s\n", chunk.Error)
+
 		case reactagent.AgentChunkTypeFinish, reactagent.AgentChunkTypeMaxIter:
 			// 显示结束信息
 			if chunk.Error != "" {

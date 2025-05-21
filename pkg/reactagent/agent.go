@@ -174,8 +174,8 @@ func (a *Agent) Run(ctx context.Context, userInput, conversationID string) (<-ch
 			// 记录工具调用的顺序
 			toolCallOrder := make([]string, 0)
 			// 记录当前正在组装参数的工具调用ID（如果在处理参数流）
-			var currentToolCallID string
-			var finishReason Option[string]
+			currentToolCallID := ""
+			finishReason := None[string]()
 
 			// 处理 LLM 输出流
 			for chunk := range llmOutputChan {
@@ -192,6 +192,13 @@ func (a *Agent) Run(ctx context.Context, userInput, conversationID string) (<-ch
 
 				if chunk.FinishReason.IsSome() {
 					finishReason = chunk.FinishReason
+				}
+
+				if chunk.Reasoning.IsSome() {
+					outputChan <- AgentOutputChunk{
+						Type:           AgentChunkTypeReasoning,
+						ThoughtContent: chunk.Reasoning.Unwrap(),
+					}
 				}
 
 				// 处理内容部分
@@ -463,6 +470,8 @@ type AgentOutputChunk struct {
 type AgentOutputChunkType string
 
 const (
+	// AgentChunkTypeReasoning 推理内容
+	AgentChunkTypeReasoning AgentOutputChunkType = "reasoning"
 	// AgentChunkTypeText 纯文本输出
 	AgentChunkTypeText AgentOutputChunkType = "text"
 	// AgentChunkTypeToolStart 工具开始执行的信号
