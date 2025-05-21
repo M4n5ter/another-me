@@ -129,7 +129,7 @@ func parseKeysArray(value string) ([]string, error) {
 
 	// 分割字符串
 	var keys []string
-	for _, key := range strings.Split(value, ",") {
+	for key := range strings.SplitSeq(value, ",") {
 		key = strings.TrimSpace(key)
 		key = strings.Trim(key, "\"'")
 		if key != "" {
