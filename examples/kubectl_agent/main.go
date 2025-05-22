@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"log/slog"
 	"os"
 
@@ -153,12 +152,12 @@ func registerTools(registry *toolcore.Registry, i18nMgr *i18n.Manager) {
 	kubectltool := kubectltool.NewKubectlTool(i18nMgr)
 	err := registry.Register(ctx, kubectltool)
 	if err != nil {
-		log.Fatalf("注册Kube工具失败: %v", err)
+		slog.Error("注册Kube工具失败", "error", err)
 	}
 
 	fetchTool := fetchtool.NewFetchTool(i18nMgr)
 	err = registry.Register(ctx, fetchTool)
 	if err != nil {
-		log.Fatalf("注册 Fetch 工具失败: %v", err)
+		slog.Error("注册 Fetch 工具失败", "error", err)
 	}
 }
