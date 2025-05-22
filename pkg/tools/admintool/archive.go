@@ -60,7 +60,7 @@ func NewArchiveTool(i18nMgr *i18n.Manager) *ArchiveTool {
 		logger:  slog.Default().WithGroup("archive_tool"),
 		i18nMgr: i18nMgr,
 		runner:  NewRealCommandRunner(),
-		fs:      NewRealFileSystem(),
+		fs:      &RealFileSystem{},
 	}
 }
 

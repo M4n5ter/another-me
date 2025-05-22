@@ -13,5 +13,7 @@ func NewAdminTools(i18nMgr *i18n.Manager) []toolcore.Tool {
 		NewProcInfoTool(i18nMgr),
 		NewFileTool(i18nMgr),
 		NewArchiveTool(i18nMgr),
+		NewTimeTool(i18nMgr),
+		NewSearchTool(i18nMgr),
 	}
 }

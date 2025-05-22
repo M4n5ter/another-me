@@ -10,7 +10,7 @@ import (
 type CommandRunner interface {
 	// Run 执行命令并返回结果
 	Run(ctx context.Context, cmd string, args ...string) ([]byte, error)
-	// RunShell 执行shell命令
+	// RunShell 执行shell命令, sh -c
 	RunShell(ctx context.Context, cmdStr string) ([]byte, error)
 }
 
@@ -31,7 +31,7 @@ func (r *RealCommandRunner) Run(ctx context.Context, cmd string, args ...string)
 	return output, nil
 }
 
-// RunShell 运行shell命令
+// RunShell 运行shell命令, sh -c
 func (r *RealCommandRunner) RunShell(ctx context.Context, cmdStr string) ([]byte, error) {
 	output, err := exec.CommandContext(ctx, "sh", "-c", cmdStr).CombinedOutput()
 	if err != nil {

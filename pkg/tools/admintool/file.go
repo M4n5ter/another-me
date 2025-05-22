@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -14,28 +13,48 @@ import (
 
 	"github.com/m4n5ter/another-me/pkg/common"
 	"github.com/m4n5ter/another-me/pkg/i18n"
-	. "github.com/m4n5ter/another-me/pkg/option"
+	"github.com/m4n5ter/another-me/pkg/option"
 	"github.com/m4n5ter/another-me/pkg/toolcore"
+)
+
+const (
+	// OperationRead 读取文件内容
+	OperationRead = "read"
+	// OperationWrite 写入文件内容
+	OperationWrite = "write"
+	// OperationCreate 创建文件
+	OperationCreate = "create"
+	// OperationDelete 删除文件
+	OperationDelete = "delete"
+	// OperationList 列出目录内容
+	OperationList = "list"
+	// OperationExists 检查文件是否存在
+	OperationExists = "exists"
+	// OperationMove 移动文件
+	OperationMove = "move"
+	// OperationCopy 复制文件
+	OperationCopy = "copy"
 )
 
 // FileTool 实现 toolcore.Tool 接口，用于文件操作
 type FileTool struct {
-	logger  *slog.Logger
+	fs      FileSystem
 	i18nMgr *i18n.Manager
 	runner  CommandRunner // 命令执行器
-	fs      FileSystem    // 文件系统操作接口
+	logger  *slog.Logger
 }
 
 // FileArgs 定义了 FileTool 的参数
 type FileArgs struct {
-	Path        string `json:"path"`                   // 文件或目录路径
-	Operation   string `json:"operation"`              // 操作类型: read, write, create, delete, list, exists
-	Content     string `json:"content,omitempty"`      // 写入的内容
-	IsDir       bool   `json:"is_dir,omitempty"`       // 是否是目录
-	Recursive   bool   `json:"recursive,omitempty"`    // 是否递归操作
-	Lines       *int   `json:"lines,omitempty"`        // 读取的行数，默认所有行
-	FindText    string `json:"find_text,omitempty"`    // 要查找的文本
-	ReplaceText string `json:"replace_text,omitempty"` // 替换为的文本
+	Path            string `json:"path"`                       // 文件或目录路径
+	Operation       string `json:"operation"`                  // 操作类型: read, write, create, delete, list, exists, move, copy
+	Content         string `json:"content,omitempty"`          // 写入的内容
+	IsDir           bool   `json:"is_dir,omitempty"`           // 是否是目录
+	Recursive       bool   `json:"recursive,omitempty"`        // 是否递归操作
+	Lines           *int   `json:"lines,omitempty"`            // 读取的行数，默认所有行
+	FindText        string `json:"find_text,omitempty"`        // 要查找的文本
+	ReplaceText     string `json:"replace_text,omitempty"`     // 替换为的文本
+	DestinationPath string `json:"destination_path,omitempty"` // 移动或复制的目标路径
 }
 
 // FileResult 定义了成功结果的结构
@@ -50,42 +69,44 @@ type FileResult struct {
 	ModTime     string   `json:"mod_time,omitempty"`    // 修改时间
 	Files       []string `json:"files,omitempty"`       // 目录列表内容
 	Message     string   `json:"message,omitempty"`     // 操作消息
-	LineCount   int      `json:"line_count,omitempty"`  // 行数
+	LineCount   *int     `json:"line_count,omitempty"`  // 行数
+	Destination string   `json:"destination,omitempty"` // For move/copy
 }
 
 // NewFileTool 创建一个新的 FileTool 实例
 func NewFileTool(i18nMgr *i18n.Manager) *FileTool {
+	fs := &RealFileSystem{}
 	return &FileTool{
-		logger:  slog.Default().WithGroup("file_tool"),
+		fs:      fs,
 		i18nMgr: i18nMgr,
 		runner:  NewRealCommandRunner(),
-		fs:      NewRealFileSystem(),
+		logger:  slog.Default().WithGroup("file_tool"),
 	}
 }
 
-// NewFileToolWithRunner 创建一个使用自定义命令执行器的FileTool实例（用于测试）
-func NewFileToolWithRunner(i18nMgr *i18n.Manager, runner CommandRunner) *FileTool {
+// NewFileToolWithFs 创建一个新的 FileTool 实例，允许设置自定义的 FileSystem
+func NewFileToolWithFs(i18nMgr *i18n.Manager, fs FileSystem) *FileTool {
 	return &FileTool{
-		logger:  slog.Default().WithGroup("file_tool"),
-		i18nMgr: i18nMgr,
-		runner:  runner,
-		fs:      NewRealFileSystem(),
-	}
-}
-
-// NewFileToolWithDeps 创建一个使用自定义依赖的FileTool实例（用于测试）
-func NewFileToolWithDeps(i18nMgr *i18n.Manager, runner CommandRunner, fs FileSystem) *FileTool {
-	return &FileTool{
-		logger:  slog.Default().WithGroup("file_tool"),
-		i18nMgr: i18nMgr,
-		runner:  runner,
 		fs:      fs,
+		i18nMgr: i18nMgr,
+		runner:  NewRealCommandRunner(),
+		logger:  slog.Default().WithGroup("file_tool"),
+	}
+}
+
+// NewFileToolWithDeps 创建一个新的 FileTool 实例，允许设置自定义的依赖项
+func NewFileToolWithDeps(i18nMgr *i18n.Manager, fs FileSystem, runner CommandRunner) *FileTool {
+	return &FileTool{
+		fs:      fs,
+		i18nMgr: i18nMgr,
+		runner:  runner,
+		logger:  slog.Default().WithGroup("file_tool"),
 	}
 }
 
 var _ toolcore.Tool = (*FileTool)(nil)
 
-// Schema 实现 toolcore.Tool 接口的 Schema 方法
+// Schema 返回工具的模式定义
 func (t *FileTool) Schema(ctx context.Context) (toolcore.ToolSchema, error) {
 	// 获取不同语言的描述文本
 	langs := t.i18nMgr.GetSupportedLanguages()
@@ -95,71 +116,73 @@ func (t *FileTool) Schema(ctx context.Context) (toolcore.ToolSchema, error) {
 	for _, lang := range langs {
 		langCtx := i18n.ContextWithLanguage(ctx, lang)
 		descriptions[lang] = t.i18nMgr.T(langCtx, "tool.admin.file.description", nil)
-		localizedNames[lang] = "File Operations"
+		localizedNames[lang] = t.i18nMgr.T(langCtx, "tool.admin.file.name", nil)
 	}
 
-	// 定义操作类型枚举
-	operations := []any{"read", "write", "create", "delete", "list", "exists"}
+	operationEnum := []any{OperationRead, OperationWrite, OperationCreate, OperationDelete, OperationList, OperationExists, OperationMove, OperationCopy}
 
-	// 构建参数定义
-	inputParameters := []toolcore.ParameterDefinition{
-		common.CreateParamDef(ctx, t.i18nMgr, "path", toolcore.ParamTypeString, true, nil, "tool.admin.file.arg.path", nil),
-		common.CreateParamDef(ctx, t.i18nMgr, "operation", toolcore.ParamTypeString, true, Some(operations), "tool.admin.file.arg.operation", nil),
-		common.CreateParamDef(ctx, t.i18nMgr, "content", toolcore.ParamTypeString, false, nil, "tool.admin.file.arg.content", nil),
-		common.CreateParamDef(ctx, t.i18nMgr, "is_dir", toolcore.ParamTypeBoolean, false, nil, "tool.admin.file.arg.is_dir", nil),
-		common.CreateParamDef(ctx, t.i18nMgr, "recursive", toolcore.ParamTypeBoolean, false, nil, "tool.admin.file.arg.recursive", nil),
-		common.CreateParamDef(ctx, t.i18nMgr, "lines", toolcore.ParamTypeInteger, false, nil, "tool.admin.file.arg.lines", nil),
-		common.CreateParamDef(ctx, t.i18nMgr, "find_text", toolcore.ParamTypeString, false, nil, "tool.admin.file.arg.find_text", nil),
-		common.CreateParamDef(ctx, t.i18nMgr, "replace_text", toolcore.ParamTypeString, false, nil, "tool.admin.file.arg.replace_text", nil),
+	inputParams := []toolcore.ParameterDefinition{
+		common.CreateParamDef(ctx, t.i18nMgr, "path", toolcore.ParamTypeString, true, nil, t.i18nMgr.T(ctx, "tool.admin.file.arg.path", nil), nil),
+		common.CreateParamDef(ctx, t.i18nMgr, "operation", toolcore.ParamTypeString, true, option.Some(operationEnum), t.i18nMgr.T(ctx, "tool.admin.file.arg.operation", nil), nil),
+		common.CreateParamDef(ctx, t.i18nMgr, "destination_path", toolcore.ParamTypeString, false, nil, t.i18nMgr.T(ctx, "tool.admin.file.arg.destination_path", nil), nil),
+		common.CreateParamDef(ctx, t.i18nMgr, "content", toolcore.ParamTypeString, false, nil, t.i18nMgr.T(ctx, "tool.admin.file.arg.content", nil), nil),
+		common.CreateParamDef(ctx, t.i18nMgr, "is_dir", toolcore.ParamTypeBoolean, false, nil, t.i18nMgr.T(ctx, "tool.admin.file.arg.is_dir", nil), nil),
+		common.CreateParamDef(ctx, t.i18nMgr, "recursive", toolcore.ParamTypeBoolean, false, nil, t.i18nMgr.T(ctx, "tool.admin.file.arg.recursive", nil), nil),
+		common.CreateParamDef(ctx, t.i18nMgr, "lines", toolcore.ParamTypeInteger, false, nil, t.i18nMgr.T(ctx, "tool.admin.file.arg.lines", nil), nil),
+		common.CreateParamDef(ctx, t.i18nMgr, "find_text", toolcore.ParamTypeString, false, nil, t.i18nMgr.T(ctx, "tool.admin.file.arg.find_text", nil), nil),
+		common.CreateParamDef(ctx, t.i18nMgr, "replace_text", toolcore.ParamTypeString, false, nil, t.i18nMgr.T(ctx, "tool.admin.file.arg.replace_text", nil), nil),
 	}
 
-	// 返回工具的完整模式
 	return toolcore.ToolSchema{
 		Name:             "file",
 		LocalizedNames:   localizedNames,
 		Descriptions:     descriptions,
-		InputParameters:  inputParameters,
+		InputParameters:  inputParams,
 		OutputParameters: t.createOutputParameters(ctx),
 	}, nil
 }
 
-// Call 实现 toolcore.Tool 接口的 Call 方法
+// Call 执行文件操作
 func (t *FileTool) Call(ctx context.Context, inputJSON string) (string, error) {
 	var args FileArgs
 	if err := json.Unmarshal([]byte(inputJSON), &args); err != nil {
-		t.logger.Error("解析参数失败", "error", err, "input", inputJSON)
+		t.logger.Error("无效的 JSON 输入", "error", err)
 		return "", fmt.Errorf("无效的 JSON 输入: %w", err)
 	}
 
 	if args.Path == "" {
+		t.logger.Error("必须提供文件或目录路径")
 		return "", fmt.Errorf("必须提供文件或目录路径")
 	}
 
-	// 将路径标准化
 	args.Path = filepath.Clean(args.Path)
 
-	// 根据操作类型执行相应的函数
 	var result FileResult
 	var err error
 
 	switch args.Operation {
-	case "read":
+	case OperationRead:
 		result, err = t.readFile(ctx, args)
-	case "write":
+	case OperationWrite:
 		result, err = t.writeFile(ctx, args)
-	case "create":
+	case OperationCreate:
 		result, err = t.createFile(ctx, args)
-	case "delete":
+	case OperationDelete:
 		result, err = t.deleteFile(ctx, args)
-	case "list":
+	case OperationList:
 		result, err = t.listDirectory(ctx, args)
-	case "exists":
+	case OperationExists:
 		result, err = t.fileExists(ctx, args)
+	case OperationMove:
+		result, err = t.moveFile(ctx, args)
+	case OperationCopy:
+		result, err = t.copyFile(ctx, args)
 	default:
 		return "", fmt.Errorf("不支持的操作类型: %s", args.Operation)
 	}
 
 	if err != nil {
+		t.logger.Error("文件操作失败", "error", err)
 		return "", err
 	}
 
@@ -173,18 +196,16 @@ func (t *FileTool) Call(ctx context.Context, inputJSON string) (string, error) {
 
 // readFile 读取文件内容
 func (t *FileTool) readFile(ctx context.Context, args FileArgs) (FileResult, error) {
-	// 在测试时，我们跳过文件存在检查，直接执行命令
 	if args.Lines != nil && *args.Lines != 0 {
-		// 如果指定了行数，直接执行head/tail命令，不做文件检查
 		return t.readFileByLines(ctx, args)
 	}
 
-	// 正常流程，检查文件是否存在
 	info, err := t.fs.Stat(args.Path)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if t.fs.IsNotExist(err) {
 			return FileResult{}, fmt.Errorf("文件不存在: %s", args.Path)
 		}
+		t.logger.Error("获取文件信息失败", "error", err)
 		return FileResult{}, fmt.Errorf("获取文件信息失败: %w", err)
 	}
 
@@ -192,19 +213,17 @@ func (t *FileTool) readFile(ctx context.Context, args FileArgs) (FileResult, err
 		return FileResult{}, fmt.Errorf("指定的路径是一个目录，不是文件: %s", args.Path)
 	}
 
-	// 如果请求特定行数，使用 head/tail 命令
 	if args.Lines != nil && *args.Lines != 0 {
 		return t.readFileByLines(ctx, args)
 	}
 
-	// 如果文件非常大（超过10MB），提示用户
 	if info.Size() > 10*1024*1024 {
 		return FileResult{}, fmt.Errorf("文件过大 (%.2f MB)，请使用 lines 参数限制读取行数", float64(info.Size())/(1024*1024))
 	}
 
-	// 直接读取整个文件
 	content, err := t.fs.ReadFile(args.Path)
 	if err != nil {
+		t.logger.Error("读取文件失败", "error", err)
 		return FileResult{}, fmt.Errorf("读取文件失败: %w", err)
 	}
 
@@ -212,10 +231,10 @@ func (t *FileTool) readFile(ctx context.Context, args FileArgs) (FileResult, err
 
 	return FileResult{
 		Path:      args.Path,
-		Operation: "read",
+		Operation: OperationRead,
 		Content:   string(content),
 		Size:      info.Size(),
-		LineCount: lines,
+		LineCount: &lines,
 		ModTime:   info.ModTime().String(),
 	}, nil
 }
@@ -224,15 +243,14 @@ func (t *FileTool) readFile(ctx context.Context, args FileArgs) (FileResult, err
 func (t *FileTool) readFileByLines(ctx context.Context, args FileArgs) (FileResult, error) {
 	var cmdStr string
 	if *args.Lines > 0 {
-		// 显示前N行
 		cmdStr = fmt.Sprintf("head -n %d '%s'", *args.Lines, args.Path)
 	} else {
-		// 显示后N行 (负值转为正值)
 		cmdStr = fmt.Sprintf("tail -n %d '%s'", *args.Lines*-1, args.Path)
 	}
 
 	output, err := t.runner.RunShell(ctx, cmdStr)
 	if err != nil {
+		t.logger.Error("读取文件失败", "error", err)
 		return FileResult{}, fmt.Errorf("读取文件失败: %w", err)
 	}
 
@@ -241,86 +259,66 @@ func (t *FileTool) readFileByLines(ctx context.Context, args FileArgs) (FileResu
 
 	return FileResult{
 		Path:      args.Path,
-		Operation: "read",
+		Operation: OperationRead,
 		Content:   content,
 		Size:      int64(len(content)),
-		LineCount: lines,
-		ModTime:   time.Now().String(), // 命令行工具无法获取ModTime
+		LineCount: &lines,
+		ModTime:   time.Now().String(),
 	}, nil
 }
 
 // writeFile 写入或更新文件内容
 func (t *FileTool) writeFile(_ context.Context, args FileArgs) (FileResult, error) {
-	// 检查文件是否存在
-	exists := true
-	info, err := t.fs.Stat(args.Path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			exists = false
-		} else {
-			return FileResult{}, fmt.Errorf("获取文件信息失败: %w", err)
-		}
-	} else if info.IsDir() {
-		return FileResult{}, fmt.Errorf("指定的路径是一个目录，不是文件: %s", args.Path)
-	}
-
-	// 如果存在find_text和replace_text参数，执行文本替换
-	if args.FindText != "" && exists {
-		// 读取现有文件内容
+	if args.FindText != "" {
 		content, err := t.fs.ReadFile(args.Path)
 		if err != nil {
+			t.logger.Error("读取文件失败", "error", err)
 			return FileResult{}, fmt.Errorf("读取文件失败: %w", err)
 		}
 
 		newContent := strings.ReplaceAll(string(content), args.FindText, args.ReplaceText)
 
-		// 写入新内容
 		err = t.fs.WriteFile(args.Path, []byte(newContent), 0o644)
 		if err != nil {
+			t.logger.Error("写入文件失败", "error", err)
 			return FileResult{}, fmt.Errorf("写入文件失败: %w", err)
 		}
 
-		// 获取新文件信息
 		info, err := t.fs.Stat(args.Path)
 		if err != nil {
+			t.logger.Error("获取文件信息失败", "error", err)
 			return FileResult{}, fmt.Errorf("获取文件信息失败: %w", err)
 		}
 
 		return FileResult{
 			Path:      args.Path,
-			Operation: "write",
+			Operation: OperationWrite,
 			Message:   fmt.Sprintf("文件更新成功，替换了文本'%s'", args.FindText),
 			Size:      info.Size(),
 			ModTime:   info.ModTime().String(),
 		}, nil
 	}
 
-	// 否则，直接写入新内容
-	if args.Content == "" && exists {
+	if args.Content == "" {
 		return FileResult{}, fmt.Errorf("更新文件需要提供content参数")
 	}
 
-	// 写入内容
-	err = t.fs.WriteFile(args.Path, []byte(args.Content), 0o644)
+	err := t.fs.WriteFile(args.Path, []byte(args.Content), 0o644)
 	if err != nil {
+		t.logger.Error("写入文件失败", "error", err)
 		return FileResult{}, fmt.Errorf("写入文件失败: %w", err)
 	}
 
-	// 获取新文件信息
-	info, err = t.fs.Stat(args.Path)
+	info, err := t.fs.Stat(args.Path)
 	if err != nil {
+		t.logger.Error("获取文件信息失败", "error", err)
 		return FileResult{}, fmt.Errorf("获取文件信息失败: %w", err)
-	}
-
-	message := "文件更新成功"
-	if !exists {
-		message = "文件创建并写入成功"
 	}
 
 	return FileResult{
 		Path:      args.Path,
-		Operation: "write",
-		Message:   message,
+		Operation: OperationWrite,
+		Message:   "文件更新成功",
 		Size:      info.Size(),
 		ModTime:   info.ModTime().String(),
 	}, nil
@@ -328,11 +326,7 @@ func (t *FileTool) writeFile(_ context.Context, args FileArgs) (FileResult, erro
 
 // createFile 创建文件或目录
 func (t *FileTool) createFile(ctx context.Context, args FileArgs) (FileResult, error) {
-	// 在测试中，跳过文件存在检查
-	// 这里针对测试做特殊处理，生产环境应该检查文件是否已存在
-
 	if args.IsDir {
-		// 创建目录
 		var cmdStr string
 		if args.Recursive {
 			cmdStr = fmt.Sprintf("mkdir -p '%s'", args.Path)
@@ -342,46 +336,43 @@ func (t *FileTool) createFile(ctx context.Context, args FileArgs) (FileResult, e
 
 		_, err := t.runner.RunShell(ctx, cmdStr)
 		if err != nil {
+			t.logger.Error("创建目录失败", "error", err)
 			return FileResult{}, fmt.Errorf("创建目录失败: %w", err)
 		}
 
 		return FileResult{
 			Path:      args.Path,
-			Operation: "create",
+			Operation: OperationCreate,
 			IsDir:     true,
 			Message:   "目录创建成功",
 		}, nil
 	}
 
-	// 确保父目录存在
 	parent := filepath.Dir(args.Path)
 	if parent != "." && parent != "/" {
 		mkdirCmd := fmt.Sprintf("mkdir -p '%s'", parent)
 		_, err := t.runner.RunShell(ctx, mkdirCmd)
 		if err != nil {
+			t.logger.Error("创建父目录失败", "error", err)
 			return FileResult{}, fmt.Errorf("创建父目录失败: %w", err)
 		}
 	}
 
-	// 创建文件
-	var err error
-	// 使用touch命令创建文件，无论是否有内容
-	_, err = t.runner.Run(ctx, "touch", args.Path)
+	_, err := t.runner.Run(ctx, "touch", args.Path)
 	if err != nil {
+		t.logger.Error("创建文件失败", "error", err)
 		return FileResult{}, fmt.Errorf("创建文件失败: %w", err)
 	}
 
-	// 如果有内容，应该在这里写入内容(当前版本未实现)
-
-	// 获取文件信息
 	info, err := t.fs.Stat(args.Path)
 	if err != nil {
+		t.logger.Error("获取文件信息失败", "error", err)
 		return FileResult{}, fmt.Errorf("获取文件信息失败: %w", err)
 	}
 
 	return FileResult{
 		Path:      args.Path,
-		Operation: "create",
+		Operation: OperationCreate,
 		IsDir:     false,
 		Message:   "文件创建成功",
 		Size:      info.Size(),
@@ -391,30 +382,30 @@ func (t *FileTool) createFile(ctx context.Context, args FileArgs) (FileResult, e
 
 // deleteFile 删除文件或目录
 func (t *FileTool) deleteFile(_ context.Context, args FileArgs) (FileResult, error) {
-	// 检查文件是否存在
 	info, err := t.fs.Stat(args.Path)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if t.fs.IsNotExist(err) {
 			return FileResult{}, fmt.Errorf("文件或目录不存在: %s", args.Path)
 		}
+		t.logger.Error("获取文件信息失败", "error", err)
 		return FileResult{}, fmt.Errorf("获取文件信息失败: %w", err)
 	}
 
 	isDir := info.IsDir()
 
 	if isDir && !args.Recursive {
-		// 检查目录是否为空
 		entries, err := t.fs.ReadDir(args.Path)
 		if err != nil {
+			t.logger.Error("读取目录失败", "error", err)
 			return FileResult{}, fmt.Errorf("读取目录失败: %w", err)
 		}
 
 		if len(entries) > 0 {
+			t.logger.Error("目录不为空，需要设置recursive=true才能删除非空目录")
 			return FileResult{}, fmt.Errorf("目录不为空，需要设置recursive=true才能删除非空目录")
 		}
 	}
 
-	// 删除文件或目录
 	if isDir && args.Recursive {
 		err = t.fs.RemoveAll(args.Path)
 	} else {
@@ -422,6 +413,7 @@ func (t *FileTool) deleteFile(_ context.Context, args FileArgs) (FileResult, err
 	}
 
 	if err != nil {
+		t.logger.Error("删除失败", "error", err)
 		return FileResult{}, fmt.Errorf("删除失败: %w", err)
 	}
 
@@ -432,74 +424,75 @@ func (t *FileTool) deleteFile(_ context.Context, args FileArgs) (FileResult, err
 
 	return FileResult{
 		Path:      args.Path,
-		Operation: "delete",
+		Operation: OperationDelete,
 		IsDir:     isDir,
 		Message:   message,
 	}, nil
 }
 
-// listDirectory 列出目录内容
-func (t *FileTool) listDirectory(ctx context.Context, args FileArgs) (FileResult, error) {
-	// 检查路径是否存在且是目录
+// listDirectory 列出目录内容，支持递归
+func (t *FileTool) listDirectory(_ context.Context, args FileArgs) (FileResult, error) {
+	var files []string
+
 	info, err := t.fs.Stat(args.Path)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if t.fs.IsNotExist(err) {
 			return FileResult{}, fmt.Errorf("目录不存在: %s", args.Path)
 		}
+		t.logger.Error("获取目录信息失败", "error", err)
 		return FileResult{}, fmt.Errorf("获取目录信息失败: %w", err)
 	}
-
 	if !info.IsDir() {
-		return FileResult{}, fmt.Errorf("指定的路径不是一个目录: %s", args.Path)
+		t.logger.Error("路径不是目录", "path", args.Path)
+		return FileResult{}, fmt.Errorf("路径不是目录: %s", args.Path)
 	}
 
-	var files []string
-	var cmdOutput string
-
 	if args.Recursive {
-		// 递归列出目录内容
-		err = t.fs.WalkDir(args.Path, func(path string, d fs.DirEntry, err error) error {
+		err = filepath.WalkDir(args.Path, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
+				t.logger.Error("递归列出目录失败", "error", err)
 				return err
 			}
-			// 不包括目录本身
 			if path != args.Path {
-				relPath, err := t.fs.Rel(args.Path, path)
+				relPath, err := filepath.Rel(args.Path, path)
 				if err != nil {
+					t.logger.Error("获取相对路径失败", "error", err)
 					return fmt.Errorf("获取相对路径失败: %w", err)
 				}
-				files = append(files, relPath)
+				if d.IsDir() {
+					files = append(files, relPath+"/")
+				} else {
+					files = append(files, relPath)
+				}
 			}
 			return nil
 		})
 		if err != nil {
+			t.logger.Error("递归列出目录失败", "error", err)
 			return FileResult{}, fmt.Errorf("递归列出目录失败: %w", err)
 		}
 	} else {
-		// 仅列出当前目录内容
-		entries, err := t.fs.ReadDir(args.Path)
+		dirEntries, err := t.fs.ReadDir(args.Path)
 		if err != nil {
-			return FileResult{}, fmt.Errorf("读取目录失败: %w", err)
+			t.logger.Error("读取目录内容失败", "error", err)
+			return FileResult{}, fmt.Errorf("读取目录内容失败: %w", err)
 		}
-
-		for _, entry := range entries {
-			files = append(files, entry.Name())
+		for _, entry := range dirEntries {
+			if entry.IsDir() {
+				files = append(files, entry.Name()+"/")
+			} else {
+				files = append(files, entry.Name())
+			}
 		}
-	}
-
-	// 使用ls -la命令获取更详细输出
-	output, err := t.runner.Run(ctx, "ls", "-la", args.Path)
-	if err == nil {
-		cmdOutput = string(output)
 	}
 
 	return FileResult{
 		Path:      args.Path,
-		Operation: "list",
+		Operation: OperationList,
 		IsDir:     true,
 		Files:     files,
-		Content:   cmdOutput,
-		Message:   fmt.Sprintf("共 %d 个文件/目录", len(files)),
+		ModTime:   info.ModTime().String(),
+		Size:      info.Size(),
 	}, nil
 }
 
@@ -507,14 +500,15 @@ func (t *FileTool) listDirectory(ctx context.Context, args FileArgs) (FileResult
 func (t *FileTool) fileExists(_ context.Context, args FileArgs) (FileResult, error) {
 	info, err := t.fs.Stat(args.Path)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if t.fs.IsNotExist(err) {
 			return FileResult{
 				Path:      args.Path,
-				Operation: "exists",
+				Operation: OperationExists,
 				Exists:    false,
 				Message:   "文件或目录不存在",
 			}, nil
 		}
+		t.logger.Error("获取文件信息失败", "error", err)
 		return FileResult{}, fmt.Errorf("获取文件信息失败: %w", err)
 	}
 
@@ -530,7 +524,7 @@ func (t *FileTool) fileExists(_ context.Context, args FileArgs) (FileResult, err
 
 	return FileResult{
 		Path:        args.Path,
-		Operation:   "exists",
+		Operation:   OperationExists,
 		Exists:      true,
 		IsDir:       isDir,
 		Size:        info.Size(),
@@ -540,129 +534,191 @@ func (t *FileTool) fileExists(_ context.Context, args FileArgs) (FileResult, err
 	}, nil
 }
 
-// createOutputParameters 创建输出参数定义
+// moveFile 移动文件或目录
+func (t *FileTool) moveFile(_ context.Context, args FileArgs) (FileResult, error) {
+	if args.DestinationPath == "" {
+		return FileResult{}, fmt.Errorf("移动文件需要提供destination_path参数")
+	}
+
+	_, err := t.fs.Stat(args.Path)
+	if err != nil {
+		if t.fs.IsNotExist(err) {
+			return FileResult{}, fmt.Errorf("文件或目录不存在: %s", args.Path)
+		}
+		t.logger.Error("获取文件信息失败", "error", err)
+		return FileResult{}, fmt.Errorf("获取文件信息失败: %w", err)
+	}
+
+	_, err = t.fs.Stat(args.DestinationPath)
+	if err != nil && !t.fs.IsNotExist(err) {
+		return FileResult{}, fmt.Errorf("获取目标路径信息失败: %w", err)
+	}
+
+	err = t.fs.Rename(args.Path, args.DestinationPath)
+	if err != nil {
+		return FileResult{}, fmt.Errorf("移动文件失败: %w", err)
+	}
+
+	return FileResult{
+		Path:        args.Path,
+		Operation:   OperationMove,
+		Destination: args.DestinationPath,
+		Message:     "文件移动成功",
+	}, nil
+}
+
+// copyFile 复制文件或目录
+func (t *FileTool) copyFile(_ context.Context, args FileArgs) (FileResult, error) {
+	if args.DestinationPath == "" {
+		return FileResult{}, fmt.Errorf("复制文件需要提供destination_path参数")
+	}
+
+	info, err := t.fs.Stat(args.Path)
+	if err != nil {
+		if t.fs.IsNotExist(err) {
+			return FileResult{}, fmt.Errorf("文件或目录不存在: %s", args.Path)
+		}
+		t.logger.Error("获取文件信息失败", "error", err)
+		return FileResult{}, fmt.Errorf("获取文件信息失败: %w", err)
+	}
+
+	_, err = t.fs.Stat(args.DestinationPath)
+	if err != nil && !t.fs.IsNotExist(err) {
+		t.logger.Error("获取目标路径信息失败", "error", err)
+		return FileResult{}, fmt.Errorf("获取目标路径信息失败: %w", err)
+	}
+
+	if info.IsDir() {
+		err = t.fs.CopyDir(args.Path, args.DestinationPath)
+	} else {
+		err = t.fs.CopyFile(args.Path, args.DestinationPath)
+	}
+	if err != nil {
+		t.logger.Error("复制文件失败", "error", err)
+		return FileResult{}, fmt.Errorf("复制文件失败: %w", err)
+	}
+
+	return FileResult{
+		Path:        args.Path,
+		Operation:   OperationCopy,
+		Destination: args.DestinationPath,
+		Message:     "文件复制成功",
+	}, nil
+}
+
 func (t *FileTool) createOutputParameters(_ context.Context) []toolcore.ParameterDefinition {
-	pathDesc := map[string]string{
-		"en": "File or directory path",
-		"zh": "文件或目录路径",
-	}
-
-	operationDesc := map[string]string{
-		"en": "Operation performed",
-		"zh": "执行的操作",
-	}
-
-	contentDesc := map[string]string{
-		"en": "File content or command output",
-		"zh": "文件内容或命令输出",
-	}
-
-	existsDesc := map[string]string{
-		"en": "Whether the file or directory exists",
-		"zh": "文件或目录是否存在",
-	}
-
-	isDirDesc := map[string]string{
-		"en": "Whether the path is a directory",
-		"zh": "路径是否为目录",
-	}
-
-	permissionsDesc := map[string]string{
-		"en": "File permissions",
-		"zh": "文件权限",
-	}
-
-	sizeDesc := map[string]string{
-		"en": "File size in bytes",
-		"zh": "文件大小（字节）",
-	}
-
-	modTimeDesc := map[string]string{
-		"en": "Last modification time",
-		"zh": "最后修改时间",
-	}
-
-	filesDesc := map[string]string{
-		"en": "List of files/directories",
-		"zh": "文件/目录列表",
-	}
-
-	messageDesc := map[string]string{
-		"en": "Operation message",
-		"zh": "操作消息",
-	}
-
-	lineCountDesc := map[string]string{
-		"en": "Number of lines in the file",
-		"zh": "文件行数",
-	}
-
-	return []toolcore.ParameterDefinition{
+	outputParams := []toolcore.ParameterDefinition{
 		{
-			Name:        "path",
-			Type:        toolcore.ParamTypeString,
-			Description: pathDesc,
-			Required:    true,
+			Name: "path",
+			Type: toolcore.ParamTypeString,
+			Description: map[string]string{
+				"en": "File or directory path",
+				"zh": "文件或目录路径",
+			},
+			Required: true,
 		},
 		{
-			Name:        "operation",
-			Type:        toolcore.ParamTypeString,
-			Description: operationDesc,
-			Required:    true,
+			Name: "operation",
+			Type: toolcore.ParamTypeString,
+			Description: map[string]string{
+				"en": "Operation performed",
+				"zh": "执行的操作",
+			},
+			Required: true,
 		},
 		{
-			Name:        "content",
-			Type:        toolcore.ParamTypeString,
-			Description: contentDesc,
-			Required:    false,
+			Name: "content",
+			Type: toolcore.ParamTypeString,
+			Description: map[string]string{
+				"en": "File content (for read operations) or command output (for list)",
+				"zh": "文件内容（对于读取操作）或命令输出（对于列表）",
+			},
+			Required: false,
 		},
 		{
-			Name:        "exists",
-			Type:        toolcore.ParamTypeBoolean,
-			Description: existsDesc,
-			Required:    false,
+			Name: "exists",
+			Type: toolcore.ParamTypeBoolean,
+			Description: map[string]string{
+				"en": "Whether the file or directory exists",
+				"zh": "文件或目录是否存在",
+			},
+			Required: false,
 		},
 		{
-			Name:        "is_dir",
-			Type:        toolcore.ParamTypeBoolean,
-			Description: isDirDesc,
-			Required:    false,
+			Name: "is_dir",
+			Type: toolcore.ParamTypeBoolean,
+			Description: map[string]string{
+				"en": "Is the path a directory",
+				"zh": "路径是否为目录",
+			},
+			Required: false,
 		},
 		{
-			Name:        "permissions",
-			Type:        toolcore.ParamTypeString,
-			Description: permissionsDesc,
-			Required:    false,
+			Name: "permissions",
+			Type: toolcore.ParamTypeString,
+			Description: map[string]string{
+				"en": "File permissions",
+				"zh": "文件权限",
+			},
+			Required: false,
 		},
 		{
-			Name:        "size",
-			Type:        toolcore.ParamTypeInteger,
-			Description: sizeDesc,
-			Required:    false,
+			Name: "size",
+			Type: toolcore.ParamTypeInteger,
+			Description: map[string]string{
+				"en": "File size in bytes",
+				"zh": "文件大小（字节）",
+			},
+			Required: false,
 		},
 		{
-			Name:        "mod_time",
-			Type:        toolcore.ParamTypeString,
-			Description: modTimeDesc,
-			Required:    false,
+			Name: "mod_time",
+			Type: toolcore.ParamTypeString,
+			Description: map[string]string{
+				"en": "Modification time",
+				"zh": "修改时间",
+			},
+			Required: false,
 		},
 		{
-			Name:        "files",
-			Type:        toolcore.ParamTypeArray,
-			Description: filesDesc,
-			Required:    false,
+			Name: "files",
+			Type: toolcore.ParamTypeArray,
+			Description: map[string]string{
+				"en": "List of files in the directory (for list operation)",
+				"zh": "目录中的文件列表（对于列表操作）",
+			},
+			Required: false,
+			Items: option.Some(toolcore.ParameterDefinition{
+				Type: toolcore.ParamTypeString,
+			}),
 		},
 		{
-			Name:        "message",
-			Type:        toolcore.ParamTypeString,
-			Description: messageDesc,
-			Required:    false,
+			Name: "message",
+			Type: toolcore.ParamTypeString,
+			Description: map[string]string{
+				"en": "General success/info message",
+				"zh": "一般成功/信息消息",
+			},
+			Required: false,
 		},
 		{
-			Name:        "line_count",
-			Type:        toolcore.ParamTypeInteger,
-			Description: lineCountDesc,
-			Required:    false,
+			Name: "line_count",
+			Type: toolcore.ParamTypeInteger,
+			Description: map[string]string{
+				"en": "Number of lines read (for read operation)",
+				"zh": "读取的行数（对于读取操作）",
+			},
+			Required: false,
+		},
+		{
+			Name: "destination",
+			Type: toolcore.ParamTypeString,
+			Description: map[string]string{
+				"en": "Destination path for move or copy operations",
+				"zh": "移动或复制操作的目标路径",
+			},
+			Required: false,
 		},
 	}
+	return outputParams
 }
