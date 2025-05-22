@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
-	"os/exec"
+	"log/slog"
 	"path/filepath"
 	"strings"
 	"time"
@@ -41,6 +41,7 @@ type FileTool struct {
 	fs      FileSystem
 	i18nMgr *i18n.Manager
 	runner  CommandRunner // 命令执行器
+	logger  *slog.Logger
 }
 
 // FileArgs 定义了 FileTool 的参数
@@ -79,6 +80,7 @@ func NewFileTool(i18nMgr *i18n.Manager) *FileTool {
 		fs:      fs,
 		i18nMgr: i18nMgr,
 		runner:  NewRealCommandRunner(),
+		logger:  slog.Default().WithGroup("file_tool"),
 	}
 }
 
@@ -88,6 +90,7 @@ func NewFileToolWithFs(i18nMgr *i18n.Manager, fs FileSystem) *FileTool {
 		fs:      fs,
 		i18nMgr: i18nMgr,
 		runner:  NewRealCommandRunner(),
+		logger:  slog.Default().WithGroup("file_tool"),
 	}
 }
 
@@ -97,6 +100,7 @@ func NewFileToolWithDeps(i18nMgr *i18n.Manager, fs FileSystem, runner CommandRun
 		fs:      fs,
 		i18nMgr: i18nMgr,
 		runner:  runner,
+		logger:  slog.Default().WithGroup("file_tool"),
 	}
 }
 
@@ -142,10 +146,12 @@ func (t *FileTool) Schema(ctx context.Context) (toolcore.ToolSchema, error) {
 func (t *FileTool) Call(ctx context.Context, inputJSON string) (string, error) {
 	var args FileArgs
 	if err := json.Unmarshal([]byte(inputJSON), &args); err != nil {
+		t.logger.Error("无效的 JSON 输入", "error", err)
 		return "", fmt.Errorf("无效的 JSON 输入: %w", err)
 	}
 
 	if args.Path == "" {
+		t.logger.Error("必须提供文件或目录路径")
 		return "", fmt.Errorf("必须提供文件或目录路径")
 	}
 
@@ -176,11 +182,13 @@ func (t *FileTool) Call(ctx context.Context, inputJSON string) (string, error) {
 	}
 
 	if err != nil {
+		t.logger.Error("文件操作失败", "error", err)
 		return "", err
 	}
 
 	resultJSON, err := json.Marshal(result)
 	if err != nil {
+		t.logger.Error("序列化结果失败", "error", err)
 		return "", fmt.Errorf("序列化结果失败: %w", err)
 	}
 	return string(resultJSON), nil
@@ -197,6 +205,7 @@ func (t *FileTool) readFile(ctx context.Context, args FileArgs) (FileResult, err
 		if t.fs.IsNotExist(err) {
 			return FileResult{}, fmt.Errorf("文件不存在: %s", args.Path)
 		}
+		t.logger.Error("获取文件信息失败", "error", err)
 		return FileResult{}, fmt.Errorf("获取文件信息失败: %w", err)
 	}
 
@@ -214,6 +223,7 @@ func (t *FileTool) readFile(ctx context.Context, args FileArgs) (FileResult, err
 
 	content, err := t.fs.ReadFile(args.Path)
 	if err != nil {
+		t.logger.Error("读取文件失败", "error", err)
 		return FileResult{}, fmt.Errorf("读取文件失败: %w", err)
 	}
 
@@ -240,6 +250,7 @@ func (t *FileTool) readFileByLines(ctx context.Context, args FileArgs) (FileResu
 
 	output, err := t.runner.RunShell(ctx, cmdStr)
 	if err != nil {
+		t.logger.Error("读取文件失败", "error", err)
 		return FileResult{}, fmt.Errorf("读取文件失败: %w", err)
 	}
 
@@ -261,6 +272,7 @@ func (t *FileTool) writeFile(_ context.Context, args FileArgs) (FileResult, erro
 	if args.FindText != "" {
 		content, err := t.fs.ReadFile(args.Path)
 		if err != nil {
+			t.logger.Error("读取文件失败", "error", err)
 			return FileResult{}, fmt.Errorf("读取文件失败: %w", err)
 		}
 
@@ -268,11 +280,13 @@ func (t *FileTool) writeFile(_ context.Context, args FileArgs) (FileResult, erro
 
 		err = t.fs.WriteFile(args.Path, []byte(newContent), 0o644)
 		if err != nil {
+			t.logger.Error("写入文件失败", "error", err)
 			return FileResult{}, fmt.Errorf("写入文件失败: %w", err)
 		}
 
 		info, err := t.fs.Stat(args.Path)
 		if err != nil {
+			t.logger.Error("获取文件信息失败", "error", err)
 			return FileResult{}, fmt.Errorf("获取文件信息失败: %w", err)
 		}
 
@@ -291,11 +305,13 @@ func (t *FileTool) writeFile(_ context.Context, args FileArgs) (FileResult, erro
 
 	err := t.fs.WriteFile(args.Path, []byte(args.Content), 0o644)
 	if err != nil {
+		t.logger.Error("写入文件失败", "error", err)
 		return FileResult{}, fmt.Errorf("写入文件失败: %w", err)
 	}
 
 	info, err := t.fs.Stat(args.Path)
 	if err != nil {
+		t.logger.Error("获取文件信息失败", "error", err)
 		return FileResult{}, fmt.Errorf("获取文件信息失败: %w", err)
 	}
 
@@ -320,6 +336,7 @@ func (t *FileTool) createFile(ctx context.Context, args FileArgs) (FileResult, e
 
 		_, err := t.runner.RunShell(ctx, cmdStr)
 		if err != nil {
+			t.logger.Error("创建目录失败", "error", err)
 			return FileResult{}, fmt.Errorf("创建目录失败: %w", err)
 		}
 
@@ -336,17 +353,20 @@ func (t *FileTool) createFile(ctx context.Context, args FileArgs) (FileResult, e
 		mkdirCmd := fmt.Sprintf("mkdir -p '%s'", parent)
 		_, err := t.runner.RunShell(ctx, mkdirCmd)
 		if err != nil {
+			t.logger.Error("创建父目录失败", "error", err)
 			return FileResult{}, fmt.Errorf("创建父目录失败: %w", err)
 		}
 	}
 
 	_, err := t.runner.Run(ctx, "touch", args.Path)
 	if err != nil {
+		t.logger.Error("创建文件失败", "error", err)
 		return FileResult{}, fmt.Errorf("创建文件失败: %w", err)
 	}
 
 	info, err := t.fs.Stat(args.Path)
 	if err != nil {
+		t.logger.Error("获取文件信息失败", "error", err)
 		return FileResult{}, fmt.Errorf("获取文件信息失败: %w", err)
 	}
 
@@ -367,6 +387,7 @@ func (t *FileTool) deleteFile(_ context.Context, args FileArgs) (FileResult, err
 		if t.fs.IsNotExist(err) {
 			return FileResult{}, fmt.Errorf("文件或目录不存在: %s", args.Path)
 		}
+		t.logger.Error("获取文件信息失败", "error", err)
 		return FileResult{}, fmt.Errorf("获取文件信息失败: %w", err)
 	}
 
@@ -375,10 +396,12 @@ func (t *FileTool) deleteFile(_ context.Context, args FileArgs) (FileResult, err
 	if isDir && !args.Recursive {
 		entries, err := t.fs.ReadDir(args.Path)
 		if err != nil {
+			t.logger.Error("读取目录失败", "error", err)
 			return FileResult{}, fmt.Errorf("读取目录失败: %w", err)
 		}
 
 		if len(entries) > 0 {
+			t.logger.Error("目录不为空，需要设置recursive=true才能删除非空目录")
 			return FileResult{}, fmt.Errorf("目录不为空，需要设置recursive=true才能删除非空目录")
 		}
 	}
@@ -390,6 +413,7 @@ func (t *FileTool) deleteFile(_ context.Context, args FileArgs) (FileResult, err
 	}
 
 	if err != nil {
+		t.logger.Error("删除失败", "error", err)
 		return FileResult{}, fmt.Errorf("删除失败: %w", err)
 	}
 
@@ -409,27 +433,30 @@ func (t *FileTool) deleteFile(_ context.Context, args FileArgs) (FileResult, err
 // listDirectory 列出目录内容，支持递归
 func (t *FileTool) listDirectory(_ context.Context, args FileArgs) (FileResult, error) {
 	var files []string
-	var cmdOutput string
 
 	info, err := t.fs.Stat(args.Path)
 	if err != nil {
 		if t.fs.IsNotExist(err) {
 			return FileResult{}, fmt.Errorf("目录不存在: %s", args.Path)
 		}
+		t.logger.Error("获取目录信息失败", "error", err)
 		return FileResult{}, fmt.Errorf("获取目录信息失败: %w", err)
 	}
 	if !info.IsDir() {
+		t.logger.Error("路径不是目录", "path", args.Path)
 		return FileResult{}, fmt.Errorf("路径不是目录: %s", args.Path)
 	}
 
 	if args.Recursive {
 		err = filepath.WalkDir(args.Path, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
+				t.logger.Error("递归列出目录失败", "error", err)
 				return err
 			}
 			if path != args.Path {
 				relPath, err := filepath.Rel(args.Path, path)
 				if err != nil {
+					t.logger.Error("获取相对路径失败", "error", err)
 					return fmt.Errorf("获取相对路径失败: %w", err)
 				}
 				if d.IsDir() {
@@ -441,11 +468,13 @@ func (t *FileTool) listDirectory(_ context.Context, args FileArgs) (FileResult, 
 			return nil
 		})
 		if err != nil {
+			t.logger.Error("递归列出目录失败", "error", err)
 			return FileResult{}, fmt.Errorf("递归列出目录失败: %w", err)
 		}
 	} else {
 		dirEntries, err := t.fs.ReadDir(args.Path)
 		if err != nil {
+			t.logger.Error("读取目录内容失败", "error", err)
 			return FileResult{}, fmt.Errorf("读取目录内容失败: %w", err)
 		}
 		for _, entry := range dirEntries {
@@ -457,17 +486,11 @@ func (t *FileTool) listDirectory(_ context.Context, args FileArgs) (FileResult, 
 		}
 	}
 
-	output, err := exec.Command("bash", "-c", fmt.Sprintf("ls -la '%s'", args.Path)).Output()
-	if err == nil {
-		cmdOutput = string(output)
-	}
-
 	return FileResult{
 		Path:      args.Path,
 		Operation: OperationList,
 		IsDir:     true,
 		Files:     files,
-		Content:   cmdOutput,
 		ModTime:   info.ModTime().String(),
 		Size:      info.Size(),
 	}, nil
@@ -485,6 +508,7 @@ func (t *FileTool) fileExists(_ context.Context, args FileArgs) (FileResult, err
 				Message:   "文件或目录不存在",
 			}, nil
 		}
+		t.logger.Error("获取文件信息失败", "error", err)
 		return FileResult{}, fmt.Errorf("获取文件信息失败: %w", err)
 	}
 
@@ -521,6 +545,7 @@ func (t *FileTool) moveFile(_ context.Context, args FileArgs) (FileResult, error
 		if t.fs.IsNotExist(err) {
 			return FileResult{}, fmt.Errorf("文件或目录不存在: %s", args.Path)
 		}
+		t.logger.Error("获取文件信息失败", "error", err)
 		return FileResult{}, fmt.Errorf("获取文件信息失败: %w", err)
 	}
 
@@ -553,11 +578,13 @@ func (t *FileTool) copyFile(_ context.Context, args FileArgs) (FileResult, error
 		if t.fs.IsNotExist(err) {
 			return FileResult{}, fmt.Errorf("文件或目录不存在: %s", args.Path)
 		}
+		t.logger.Error("获取文件信息失败", "error", err)
 		return FileResult{}, fmt.Errorf("获取文件信息失败: %w", err)
 	}
 
 	_, err = t.fs.Stat(args.DestinationPath)
 	if err != nil && !t.fs.IsNotExist(err) {
+		t.logger.Error("获取目标路径信息失败", "error", err)
 		return FileResult{}, fmt.Errorf("获取目标路径信息失败: %w", err)
 	}
 
@@ -567,6 +594,7 @@ func (t *FileTool) copyFile(_ context.Context, args FileArgs) (FileResult, error
 		err = t.fs.CopyFile(args.Path, args.DestinationPath)
 	}
 	if err != nil {
+		t.logger.Error("复制文件失败", "error", err)
 		return FileResult{}, fmt.Errorf("复制文件失败: %w", err)
 	}
 

@@ -112,7 +112,6 @@
     "tool.admin.time.name": "Get Current Time",
     "tool.admin.time.description": "Gets the current system time, optionally formatted.",
     "tool.admin.time.arg.format": "Optional. The layout string for formatting the time (e.g., '2006-01-02 15:04:05'). If not provided, RFC3339 format is used.",
-    "tool.admin.time.result.current_time": "The current time as a string.",
 
     "tool.admin.archive.description": "Compress and extract files in various formats including zip, tar, tar.gz, and more.",
     "tool.admin.archive.arg.operation": "Operation to perform: compress or extract.",

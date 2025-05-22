@@ -3,6 +3,7 @@ package admintool
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	json "github.com/json-iterator/go"
@@ -16,6 +17,7 @@ import (
 // TimeTool 提供获取当前时间的功能
 type TimeTool struct {
 	i18nMgr *i18n.Manager
+	logger  *slog.Logger
 }
 
 // InputGetCurrentTime 定义了 get_current_time 的输入参数
@@ -30,7 +32,7 @@ type OutputGetTime struct {
 
 // NewTimeTool 创建 TimeTool 的实例
 func NewTimeTool(i18nMgr *i18n.Manager) toolcore.Tool {
-	return &TimeTool{i18nMgr: i18nMgr}
+	return &TimeTool{i18nMgr: i18nMgr, logger: slog.Default().WithGroup("time_tool")}
 }
 
 var _ toolcore.Tool = (*TimeTool)(nil)
@@ -70,10 +72,12 @@ func (t *TimeTool) Call(ctx context.Context, inputJSON string) (outputJSON strin
 		// 只有当输入是 "{}" 并且解析它也失败时（理论上不太可能），我们才进入更深层的错误处理。
 		// 这样可以确保像 `{"format":{}}` 或 `{invalid_json` 这样的错误被正确捕获并报告。
 		if inputJSON != "{}" {
+			t.logger.Error("无效的输入 JSON", "error", err)
 			return "", fmt.Errorf("无效的输入 JSON: %w", err)
 		}
 		// 如果输入是 "{}" 但解析仍然失败（例如，Unmarshal 本身出现意外问题），则报告此特定错误。
 		if e := json.Unmarshal([]byte("{}"), &input); e != nil {
+			t.logger.Error("尝试解析 '{}' 作为备用输入时出错", "error", e, "original_error", err.Error())
 			return "", fmt.Errorf("尝试解析 '{}' 作为备用输入时出错: %w (原始错误: %s)", e, err.Error())
 		}
 		// 如果输入是 "{}" 并且成功解析（这是预期的备用路径），err 将被重置为 nil。
@@ -93,6 +97,7 @@ func (t *TimeTool) Call(ctx context.Context, inputJSON string) (outputJSON strin
 
 	outputBytes, err := json.Marshal(output)
 	if err != nil {
+		t.logger.Error("failed to marshal output for TimeTool", "error", err)
 		return "", fmt.Errorf("failed to marshal output for TimeTool: %w", err)
 	}
 	return string(outputBytes), nil

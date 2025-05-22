@@ -64,17 +64,29 @@ func (rfs *RealFileSystem) ReadFile(name string) ([]byte, error) {
 
 // Remove 删除文件
 func (rfs *RealFileSystem) Remove(name string) error {
-	return fmt.Errorf("failed to remove %s: %w", name, os.Remove(name))
+	err := os.Remove(name)
+	if err != nil {
+		return fmt.Errorf("failed to remove %s: %w", name, err)
+	}
+	return nil
 }
 
 // RemoveAll 删除目录
 func (rfs *RealFileSystem) RemoveAll(path string) error {
-	return fmt.Errorf("failed to remove %s: %w", path, os.RemoveAll(path))
+	err := os.RemoveAll(path)
+	if err != nil {
+		return fmt.Errorf("failed to remove %s: %w", path, err)
+	}
+	return nil
 }
 
 // MkdirAll 创建目录
 func (rfs *RealFileSystem) MkdirAll(path string, perm fs.FileMode) error {
-	return fmt.Errorf("failed to mkdir %s: %w", path, os.MkdirAll(path, perm))
+	err := os.MkdirAll(path, perm)
+	if err != nil {
+		return fmt.Errorf("failed to mkdir %s: %w", path, err)
+	}
+	return nil
 }
 
 // ReadDir 读取目录
@@ -93,7 +105,11 @@ func (rfs *RealFileSystem) IsNotExist(err error) bool {
 
 // Rename 重命名文件或目录
 func (rfs *RealFileSystem) Rename(oldpath, newpath string) error {
-	return fmt.Errorf("failed to rename %s to %s: %w", oldpath, newpath, os.Rename(oldpath, newpath))
+	err := os.Rename(oldpath, newpath)
+	if err != nil {
+		return fmt.Errorf("failed to rename %s to %s: %w", oldpath, newpath, err)
+	}
+	return nil
 }
 
 // CopyFile copies a single file from src to dst
