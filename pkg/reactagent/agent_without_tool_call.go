@@ -20,6 +20,7 @@ type TextFormatParser interface {
 // TextBasedAgent 表示一个基于文本格式的 ReAct 智能体，不依赖 function call 能力
 type TextBasedAgent struct {
 	llmAdapter       llminterface.ChatAdapter
+	taskEvaluator    Option[llminterface.ChatAdapter]
 	toolRegistry     *toolcore.Registry
 	logger           *slog.Logger
 	maxIterations    int
@@ -31,6 +32,7 @@ type TextBasedAgent struct {
 // TextBasedAgentBuilder 是用于构建 TextBasedAgent 的构建器
 type TextBasedAgentBuilder struct {
 	llmAdapter       llminterface.ChatAdapter
+	taskEvaluator    Option[llminterface.ChatAdapter]
 	toolRegistry     *toolcore.Registry
 	logger           *slog.Logger
 	maxIterations    int
@@ -49,6 +51,12 @@ func NewTextBasedAgentBuilder() *TextBasedAgentBuilder {
 // WithLLMAdapter 设置 LLM 适配器
 func (b *TextBasedAgentBuilder) WithLLMAdapter(adapter llminterface.ChatAdapter) *TextBasedAgentBuilder {
 	b.llmAdapter = adapter
+	return b
+}
+
+// WithTaskEvaluator 设置任务评估器
+func (b *TextBasedAgentBuilder) WithTaskEvaluator(evaluator llminterface.ChatAdapter) *TextBasedAgentBuilder {
+	b.taskEvaluator = Some(evaluator)
 	return b
 }
 
@@ -123,6 +131,7 @@ func (b *TextBasedAgentBuilder) Build() (*TextBasedAgent, error) {
 
 	return &TextBasedAgent{
 		llmAdapter:       b.llmAdapter,
+		taskEvaluator:    b.taskEvaluator,
 		toolRegistry:     b.toolRegistry,
 		logger:           logger,
 		maxIterations:    b.maxIterations,
@@ -152,10 +161,10 @@ func (a *TextBasedAgent) Run(ctx context.Context, userInput, conversationID stri
 	go func() {
 		defer close(outputChan) // 确保在函数退出时关闭通道
 
-		messages := PrepareInitialMessages(a.systemPrompt, userInput, a.logger)
+		messages := prepareInitialMessages(a.systemPrompt, userInput, a.logger)
 
 		// 执行ReAct循环核心逻辑
-		a.handleReactLoop(ctx, messages, conversationID, outputChan)
+		a.handleReactLoop(ctx, messages, conversationID, userInput, outputChan)
 	}()
 
 	return outputChan, nil
@@ -179,10 +188,10 @@ func (a *TextBasedAgent) ContinueFromCheckpoint(ctx context.Context, userInput s
 	go func() {
 		defer close(outputChan) // 确保在函数退出时关闭通道
 
-		messages := PrepareCheckpointMessages(checkpoint, userInput, a.logger)
+		messages := prepareCheckpointMessages(checkpoint, userInput, a.logger)
 
 		// 执行ReAct循环核心逻辑
-		a.handleReactLoop(ctx, messages, conversationID, outputChan)
+		a.handleReactLoop(ctx, messages, conversationID, userInput, outputChan)
 	}()
 
 	return outputChan, nil
@@ -193,6 +202,7 @@ func (a *TextBasedAgent) handleReactLoop(
 	ctx context.Context,
 	messages []llminterface.InputMessage,
 	conversationID string,
+	initialUserInput string,
 	outputChan chan<- AgentOutputChunk,
 ) {
 	var lastResponseText string
@@ -220,7 +230,7 @@ func (a *TextBasedAgent) handleReactLoop(
 		// 调用 LLM
 		llmOutputChan, err := a.llmAdapter.Chat(ctx, chatInput)
 		if err != nil {
-			outputChan <- HandleLLMChatInitError(a.logger, err, conversationID, messages)
+			outputChan <- handleLLMChatInitError(a.logger, err, conversationID, messages)
 			return
 		}
 
@@ -231,12 +241,12 @@ func (a *TextBasedAgent) handleReactLoop(
 		for chunk := range llmOutputChan {
 			// 错误处理
 			if chunk.Error != nil {
-				outputChan <- HandleLLMStreamError(a.logger, chunk.Error, conversationID, messages)
+				outputChan <- handleLLMStreamError(a.logger, chunk.Error, conversationID, messages)
 				return
 			}
 
 			if chunk.Reasoning.IsSome() {
-				outputChan <- CreateReasoningChunk(chunk.Reasoning.Unwrap())
+				outputChan <- createReasoningChunk(chunk.Reasoning.Unwrap())
 			}
 
 			// 处理内容部分
@@ -244,7 +254,7 @@ func (a *TextBasedAgent) handleReactLoop(
 				// 处理文本部分 - 流式传输到 outputChan 并累积内部状态
 				if part.Type == llminterface.PartTypeText {
 					// 流式输出文本
-					outputChan <- CreateTextChunk(part.Text)
+					outputChan <- createTextChunk(part.Text)
 
 					// 累积文本，用于内部使用
 					currentIterationThinks += part.Text
@@ -252,35 +262,48 @@ func (a *TextBasedAgent) handleReactLoop(
 			}
 		}
 
+		// 将LLM的完整回复添加到消息历史
+		assistantMessage := createAssistantMessage(currentIterationThinks)
+		messages = append(messages, assistantMessage)
+		a.logger.Debug("Assistant's full response added to messages", "conversationID", conversationID)
+
 		// 发送当前迭代的LLM思考内容
 		if currentIterationThinks != "" {
-			outputChan <- CreateThoughtChunk(currentIterationThinks)
+			outputChan <- createThoughtChunk(currentIterationThinks)
 		}
 
 		lastResponseText = currentIterationThinks // 保存最后一次LLM的文本输出，以备没有工具调用时作为最终结果
 
 		// 更新累积的思考内容
-		llmThinks = UpdateAccumulatedThoughts(llmThinks, currentIterationThinks, i)
+		llmThinks = updateAccumulatedThoughts(llmThinks, currentIterationThinks, i)
 
 		// 解析LLM响应中的工具调用
 		toolCalls, remainingText := a.textFormatParser.ParseToolCalls(currentIterationThinks)
 
-		// 如果没有工具调用，结束循环并返回最终响应
+		// 如果没有工具调用，尝试使用任务评估器
 		if len(toolCalls) == 0 {
-			a.logger.Info("No tool calls parsed, returning final response", "conversationID", conversationID)
-			outputChan <- CreateFinishChunk(remainingText, llmThinks, messages, conversationID)
-			return
-		}
+			evaluated, needContinue := taskEvaluate(ctx, a.logger, a.taskEvaluator, initialUserInput, llmThinks, remainingText, &messages, outputChan, conversationID)
+			if evaluated {
+				if needContinue {
+					continue
+				}
 
-		// 将LLM的完整回复添加到消息历史
-		assistantMessage := CreateAssistantMessage(currentIterationThinks)
-		messages = append(messages, assistantMessage)
-		a.logger.Debug("Assistant's full response added to messages", "conversationID", conversationID)
+				outputChan <- createFinishChunk(lastResponseText, llmThinks, messages, conversationID)
+				return
+			}
+
+			// 评估器不存在或者没能正确评估
+			if !evaluated {
+				a.logger.Info("No tool calls parsed, returning final response", "conversationID", conversationID)
+				outputChan <- createFinishChunk(remainingText, llmThinks, messages, conversationID)
+				return
+			}
+		}
 
 		// 执行工具调用
 		for _, toolCall := range toolCalls {
 			// 发送工具开始执行的信号
-			outputChan <- CreateToolStartChunk(toolCall.ID, toolCall.Name, toolCall.Arguments)
+			outputChan <- createToolStartChunk(toolCall.ID, toolCall.Name, toolCall.Arguments)
 
 			a.logger.Info("Executing tool", "toolName", toolCall.Name, "toolID", toolCall.ID, "argsLength", len(toolCall.Arguments), "conversationID", conversationID)
 
@@ -288,11 +311,11 @@ func (a *TextBasedAgent) handleReactLoop(
 			if !exists {
 				a.logger.Error("Tool not found in registry", "toolName", toolCall.Name, "conversationID", conversationID)
 				errorMsg := fmt.Sprintf("未找到工具: %s", toolCall.Name)
-				toolResultMessage := CreateTextBasedToolErrorMessage(toolCall.Name, errorMsg)
+				toolResultMessage := createTextBasedToolErrorMessage(toolCall.Name, errorMsg)
 				messages = append(messages, toolResultMessage)
 
 				// 发送工具结束执行的信号（带错误）
-				outputChan <- CreateToolEndChunk(toolCall.ID, toolCall.Name, toolCall.Arguments, "", fmt.Sprintf("错误：工具 '%s' 未找到。", toolCall.Name))
+				outputChan <- createToolEndChunk(toolCall.ID, toolCall.Name, toolCall.Arguments, "", fmt.Sprintf("错误：工具 '%s' 未找到。", toolCall.Name))
 
 				continue
 			}
@@ -302,25 +325,25 @@ func (a *TextBasedAgent) handleReactLoop(
 			if toolErr != nil {
 				a.logger.Error("Tool execution failed", "toolName", toolCall.Name, "toolID", toolCall.ID, "error", toolErr, "conversationID", conversationID)
 				errorMsg := fmt.Sprintf("执行失败: %s", toolErr.Error())
-				toolResultMessage := CreateTextBasedToolErrorMessage(toolCall.Name, errorMsg)
+				toolResultMessage := createTextBasedToolErrorMessage(toolCall.Name, errorMsg)
 				messages = append(messages, toolResultMessage)
 
 				// 发送工具结束执行的信号（带错误）
-				outputChan <- CreateToolEndChunk(toolCall.ID, toolCall.Name, toolCall.Arguments, "", fmt.Sprintf("错误：工具 '%s' 执行失败: %s", toolCall.Name, toolErr.Error()))
+				outputChan <- createToolEndChunk(toolCall.ID, toolCall.Name, toolCall.Arguments, "", fmt.Sprintf("错误：工具 '%s' 执行失败: %s", toolCall.Name, toolErr.Error()))
 
 				continue
 			}
 
 			// 添加工具调用结果
-			toolResultMessage := CreateTextBasedToolResultMessage(toolCall.Name, toolOutputJSON)
+			toolResultMessage := createTextBasedToolResultMessage(toolCall.Name, toolOutputJSON)
 			messages = append(messages, toolResultMessage)
 			a.logger.Debug("Tool result added to messages", "toolName", toolCall.Name, "toolID", toolCall.ID, "conversationID", conversationID)
 
 			// 发送工具结束执行的信号（成功）
-			outputChan <- CreateToolEndChunk(toolCall.ID, toolCall.Name, toolCall.Arguments, toolOutputJSON, "")
+			outputChan <- createToolEndChunk(toolCall.ID, toolCall.Name, toolCall.Arguments, toolOutputJSON, "")
 		}
 	}
 
 	// 如果达到最大迭代次数
-	outputChan <- HandleMaxIterations(a.logger, a.maxIterations, conversationID, lastResponseText, llmThinks, messages)
+	outputChan <- handleMaxIterations(a.logger, a.maxIterations, conversationID, lastResponseText, llmThinks, messages)
 }
