@@ -2,113 +2,197 @@ package admintool
 
 import (
 	"fmt"
+	"io"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 )
 
-// FileSystem 定义文件系统操作接口
+// FileSystem 定义了文件系统操作的接口，方便测试
 type FileSystem interface {
-	// Stat 获取文件信息
-	Stat(name string) (os.FileInfo, error)
-	// ReadFile 读取文件内容
-	ReadFile(filename string) ([]byte, error)
-	// WriteFile 写入文件内容
-	WriteFile(filename string, data []byte, perm os.FileMode) error
-	// Remove 删除文件或空目录
+	Stat(name string) (fs.FileInfo, error)
+	Create(name string) (*os.File, error)
+	WriteFile(name string, data []byte, perm fs.FileMode) error
+	ReadFile(name string) ([]byte, error)
 	Remove(name string) error
-	// RemoveAll 递归删除目录及内容
 	RemoveAll(path string) error
-	// MkdirAll 创建目录及所需的父目录
-	MkdirAll(path string, perm os.FileMode) error
-	// ReadDir 读取目录内容
-	ReadDir(name string) ([]os.DirEntry, error)
-	// WalkDir 递归遍历目录
-	WalkDir(root string, fn fs.WalkDirFunc) error
-	// Rel 获取相对路径
-	Rel(basepath, targpath string) (string, error)
+	MkdirAll(path string, perm fs.FileMode) error
+	ReadDir(name string) ([]fs.DirEntry, error)
+	IsNotExist(err error) bool
+	Rename(oldpath, newpath string) error
+	CopyFile(src, dst string) error
+	CopyDir(src, dst string) error
 }
 
-// RealFileSystem 真实文件系统操作实现
+// RealFileSystem 使用真实的 os 包实现 FileSystem 接口
 type RealFileSystem struct{}
 
-// NewRealFileSystem 创建真实文件系统操作实例
-func NewRealFileSystem() FileSystem {
-	return &RealFileSystem{}
-}
+var _ FileSystem = (*RealFileSystem)(nil)
 
-// Stat 调用os.Stat以获取文件信息
-func (fs *RealFileSystem) Stat(name string) (os.FileInfo, error) {
+// Stat 获取文件信息
+func (rfs *RealFileSystem) Stat(name string) (fs.FileInfo, error) {
 	info, err := os.Stat(name)
 	if err != nil {
-		return nil, fmt.Errorf("获取文件信息失败: %w", err)
+		return nil, fmt.Errorf("failed to stat %s: %w", name, err)
 	}
 	return info, nil
 }
 
-// ReadFile 调用os.ReadFile读取整个文件内容
-func (fs *RealFileSystem) ReadFile(filename string) ([]byte, error) {
-	data, err := os.ReadFile(filename)
+// Create 创建文件
+func (rfs *RealFileSystem) Create(name string) (*os.File, error) {
+	file, err := os.Create(name)
 	if err != nil {
-		return nil, fmt.Errorf("读取文件失败: %w", err)
+		return nil, fmt.Errorf("failed to create %s: %w", name, err)
+	}
+	return file, nil
+}
+
+// WriteFile 写入文件
+func (rfs *RealFileSystem) WriteFile(name string, data []byte, perm fs.FileMode) error {
+	return fmt.Errorf("failed to write %s: %w", name, os.WriteFile(name, data, perm))
+}
+
+// ReadFile 读取文件
+func (rfs *RealFileSystem) ReadFile(name string) ([]byte, error) {
+	data, err := os.ReadFile(name)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read %s: %w", name, err)
 	}
 	return data, nil
 }
 
-// WriteFile 调用os.WriteFile将数据写入文件
-func (fs *RealFileSystem) WriteFile(filename string, data []byte, perm os.FileMode) error {
-	if err := os.WriteFile(filename, data, perm); err != nil {
-		return fmt.Errorf("写入文件失败: %w", err)
-	}
-	return nil
+// Remove 删除文件
+func (rfs *RealFileSystem) Remove(name string) error {
+	return fmt.Errorf("failed to remove %s: %w", name, os.Remove(name))
 }
 
-// Remove 调用os.Remove删除文件或空目录
-func (fs *RealFileSystem) Remove(name string) error {
-	if err := os.Remove(name); err != nil {
-		return fmt.Errorf("删除文件失败: %w", err)
-	}
-	return nil
+// RemoveAll 删除目录
+func (rfs *RealFileSystem) RemoveAll(path string) error {
+	return fmt.Errorf("failed to remove %s: %w", path, os.RemoveAll(path))
 }
 
-// RemoveAll 调用os.RemoveAll递归删除文件或目录
-func (fs *RealFileSystem) RemoveAll(path string) error {
-	if err := os.RemoveAll(path); err != nil {
-		return fmt.Errorf("递归删除失败: %w", err)
-	}
-	return nil
+// MkdirAll 创建目录
+func (rfs *RealFileSystem) MkdirAll(path string, perm fs.FileMode) error {
+	return fmt.Errorf("failed to mkdir %s: %w", path, os.MkdirAll(path, perm))
 }
 
-// MkdirAll 调用os.MkdirAll递归创建目录
-func (fs *RealFileSystem) MkdirAll(path string, perm os.FileMode) error {
-	if err := os.MkdirAll(path, perm); err != nil {
-		return fmt.Errorf("创建目录失败: %w", err)
-	}
-	return nil
-}
-
-// ReadDir 调用os.ReadDir获取目录内容
-func (fs *RealFileSystem) ReadDir(name string) ([]os.DirEntry, error) {
+// ReadDir 读取目录
+func (rfs *RealFileSystem) ReadDir(name string) ([]fs.DirEntry, error) {
 	entries, err := os.ReadDir(name)
 	if err != nil {
-		return nil, fmt.Errorf("读取目录失败: %w", err)
+		return nil, fmt.Errorf("failed to read dir %s: %w", name, err)
 	}
 	return entries, nil
 }
 
-// WalkDir 调用filepath.WalkDir递归遍历目录
-func (fs *RealFileSystem) WalkDir(root string, fn fs.WalkDirFunc) error {
-	if err := filepath.WalkDir(root, fn); err != nil {
-		return fmt.Errorf("遍历目录失败: %w", err)
+// IsNotExist 判断错误是否是文件不存在
+func (rfs *RealFileSystem) IsNotExist(err error) bool {
+	return os.IsNotExist(err)
+}
+
+// Rename 重命名文件或目录
+func (rfs *RealFileSystem) Rename(oldpath, newpath string) error {
+	return fmt.Errorf("failed to rename %s to %s: %w", oldpath, newpath, os.Rename(oldpath, newpath))
+}
+
+// CopyFile copies a single file from src to dst
+func (rfs *RealFileSystem) CopyFile(src, dst string) error {
+	return copyFileUtil(src, dst)
+}
+
+// CopyDir recursively copies a directory from src to dst
+func (rfs *RealFileSystem) CopyDir(src, dst string) error {
+	return copyDirUtil(src, dst)
+}
+
+// copyFileUtil is a helper function to copy a file.
+func copyFileUtil(src, dst string) error {
+	sourceFileStat, err := os.Stat(src)
+	if err != nil {
+		return fmt.Errorf("failed to stat %s: %w", src, err)
 	}
+
+	if !sourceFileStat.Mode().IsRegular() {
+		return fmt.Errorf("%s is not a regular file", src)
+	}
+
+	source, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("failed to open %s: %w", src, err)
+	}
+	defer func() {
+		if err := source.Close(); err != nil {
+			fmt.Printf("failed to close %s: %v\n", src, err)
+		}
+	}()
+
+	destination, err := os.Create(dst)
+	if err != nil {
+		return fmt.Errorf("failed to create %s: %w", dst, err)
+	}
+	defer func() {
+		if err := destination.Close(); err != nil {
+			fmt.Printf("failed to close %s: %v\n", dst, err)
+		}
+	}()
+
+	buf := make([]byte, 4096) // 4KB buffer
+	for {
+		n, errRead := source.Read(buf)
+		if errRead != nil && errRead != io.EOF {
+			return fmt.Errorf("failed to read %s: %w", src, errRead)
+		}
+		if n == 0 {
+			break
+		}
+
+		if _, errWrite := destination.Write(buf[:n]); errWrite != nil {
+			return fmt.Errorf("failed to write %s: %w", dst, errWrite)
+		}
+	}
+
+	// 保留权限
+	err = os.Chmod(dst, sourceFileStat.Mode())
+	if err != nil {
+		slog.Error("failed to chmod %s: %v", dst, err)
+	}
+
 	return nil
 }
 
-// Rel 调用filepath.Rel计算相对路径
-func (fs *RealFileSystem) Rel(basepath, targpath string) (string, error) {
-	rel, err := filepath.Rel(basepath, targpath)
+// copyDirUtil is a helper function to recursively copy a directory.
+func copyDirUtil(src, dst string) error {
+	srcInfo, err := os.Stat(src)
 	if err != nil {
-		return "", fmt.Errorf("计算相对路径失败: %w", err)
+		return fmt.Errorf("failed to stat %s: %w", src, err)
 	}
-	return rel, nil
+
+	err = os.MkdirAll(dst, srcInfo.Mode())
+	if err != nil {
+		return fmt.Errorf("failed to mkdir %s: %w", dst, err)
+	}
+
+	dirEntries, err := os.ReadDir(src)
+	if err != nil {
+		return fmt.Errorf("failed to read dir %s: %w", src, err)
+	}
+
+	for _, entry := range dirEntries {
+		srcPath := filepath.Join(src, entry.Name())
+		dstPath := filepath.Join(dst, entry.Name())
+
+		if entry.IsDir() {
+			err = copyDirUtil(srcPath, dstPath)
+			if err != nil {
+				return err
+			}
+		} else {
+			err = copyFileUtil(srcPath, dstPath)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
