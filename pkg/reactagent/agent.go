@@ -313,16 +313,23 @@ func (a *ToolCallingAgent) handleReactLoop(
 			a.logger.Debug("Assistant's full response added to messages", "conversationID", conversationID, "partsCount", len(assistantResponseContentParts))
 		}
 
-		if currentIterationThinks != "" {
+		// 根据当前迭代的LLM输出和工具调用情况，确定本次迭代的思考内容
+		thoughtForThisIteration := ""
+		switch {
+		case currentIterationThinks != "":
+			thoughtForThisIteration = currentIterationThinks
 			lastResponseText = currentIterationThinks // 保存最后一次LLM的文本输出，以备没有工具调用时作为最终结果
-		} else { // 当前迭代没有文本输出则尝试将工具调用请求转化为 lastResponseText
-			lastResponseText += "\n"
-			for _, toolCall := range toolCallsToExecute {
-				lastResponseText += fmt.Sprintf("工具调用: %s, 参数: %s\n", toolCall.Name, toolCall.Arguments)
+		case len(toolCallsToExecute) > 0:
+			var sb strings.Builder
+			for _, tc := range toolCallsToExecute {
+				sb.WriteString(fmt.Sprintf("Tool Call: %s, Args: %s\n", tc.Name, tc.Arguments))
 			}
+			thoughtForThisIteration = sb.String()
+		default:
+			thoughtForThisIteration = "[No LLM text output or tool calls in this iteration]"
 		}
 
-		llmThinks = updateAccumulatedThoughts(llmThinks, lastResponseText, i)
+		llmThinks = updateAccumulatedThoughts(llmThinks, thoughtForThisIteration, i)
 
 		if len(toolCallsToExecute) == 0 {
 			evaluated, needContinue := taskEvaluate(ctx, a.logger, a.taskEvaluator, initialUserInput, llmThinks, lastResponseText, &messages, outputChan, conversationID)
