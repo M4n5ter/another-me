@@ -9,6 +9,8 @@
 
     "browser.prompt.default": "您是一个功能强大的浏览器自动化助手，能够执行各种网页交互和调试任务。您的能力包括：\\n\\n1. **导航**：导航到任何指定的URL以加载网页。\\n\\n2. **截图**：捕获整个页面或使用CSS选择器捕获特定元素的屏幕截图，默认尺寸为1700x1100像素。\\n\\n3. **元素交互**：\\n   - 点击通过CSS选择器识别的元素\\n   - 在指定元素上悬停\\n   - 在输入字段中填写指定值\\n   - 在下拉菜单中选择选项\\n\\n4. **JavaScript执行**：\\n   - 在浏览器上下文中运行任意JavaScript代码\\n   - 评估脚本并返回结果\\n\\n5. **调试工具**：\\n   - 启用/禁用JavaScript调试模式\\n   - 在特定脚本位置设置断点（URL+行号+可选列/条件）\\n   - 通过ID删除现有断点\\n   - 暂停和恢复脚本执行\\n   - 暂停时获取当前调用堆栈\\n\\n对于所有需要元素选择的操作，您必须使用精确的CSS选择器。在捕获屏幕截图时，您可以指定整个页面或特定元素。对于调试操作，您可以精确控制执行流和检查运行时行为。\\n\\n请提供清晰的指令，包括：\\n- 您想执行的特定操作\\n- 必需的参数（URL、选择器、值等）\\n- 任何可选参数（尺寸、条件等）\\n- 相关的预期结果\\n\\n在处理敏感操作或破坏性命令时，您应该在执行前确认操作。报告时要提供清晰的状态更新、成功/失败指示以及任何相关的输出或捕获的数据。",
     
+    "kube.prompt.default": "执行 kubectl 命令来查询或修改用户的 Kubernetes 集群状态。仅在需要查询或修改用户的 Kubernetes 集群状态时使用此工具。",
+
     "tool.browser.description": "一个强大的浏览器自动化工具，允许您通过编程接口控制Web浏览器。",
     "tool.browser.arg.operation": "要执行的操作",
     "tool.browser.arg.url": "要导航到的URL",
@@ -99,5 +101,14 @@
     "tool.admin.archive.arg.target_path": "目标文件或目录的路径。",
     "tool.admin.archive.arg.format": "使用的归档格式：zip、tar、targz、tarbz2或tarxz。",
     "tool.admin.archive.arg.source_paths": "要压缩的多个源路径（压缩多个文件/目录时）。",
-    "tool.admin.archive.arg.verbose": "是否在操作过程中显示详细信息。"
-} 
+
+    "tool.kubectl.arg.command": "要执行的完整 kubectl 命令。对于多行命令，建议使用 heredoc 语法。请包含 kubectl 前缀。\n示例：\n用户：集群中运行着哪些 pod？\n助手：kubectl get pods\n用户：pod my-pod 的状态是什么？\n助手：kubectl get pod my-pod -o jsonpath='{.status.phase\n   }'",
+    "tool.kubectl.arg.modifies_resource": "命令是否会修改 Kubernetes 资源。\n可能的值：\n- \"yes\" 如果命令会修改资源\n- \"no\" 如果命令不会修改资源\n- \"unknown\" 如果命令对资源的影响未知",
+    "tool.kubectl.arg.workdir": "执行 kubectl 命令的工作目录。如果未指定，默认为用户主目录。",
+    "tool.kubectl.arg.kubeconfig": "kubeconfig 文件的路径。如果未指定，默认为 ~/.kube/config。",
+    "tool.kubectl.result.success": "操作是否成功",
+    "tool.kubectl.result.error": "错误信息（如果发生）",
+    "tool.kubectl.result.stdout": "命令执行的标准输出",
+    "tool.kubectl.result.stderr": "命令执行的标准错误输出",
+    "tool.kubectl.result.exit_code": "命令执行的退出码"
+}

@@ -9,6 +9,8 @@
 
     "browser.prompt.default": "You are a powerful browser automation assistant capable of performing various web interactions and debugging tasks. Your capabilities include:\\n\\n1. **Navigation**: Navigate to any specified URL to load web pages.\\n\\n2. **Screenshots**: Capture screenshots of the entire page or specific elements using CSS selectors, with a default size of 1700x1100 pixels.\\n\\n3. **Element Interactions**:\\n   - Click on elements identified by CSS selectors\\n   - Hover over specified elements\\n   - Fill input fields with specified values\\n   - Select options from dropdown menus\\n\\n4. **JavaScript Execution**:\\n   - Run arbitrary JavaScript code in the browser context\\n   - Evaluate scripts and return results\\n\\n5. **Debugging Tools**:\\n   - Enable/disable JavaScript debugging mode\\n   - Set breakpoints at specific script locations (URL+line+optional column/condition)\\n   - Remove existing breakpoints by ID\\n   - Pause and resume script execution\\n   - Get the current call stack when paused\\n\\nFor all operations requiring element selection, you must use precise CSS selectors. When capturing screenshots, you can specify the entire page or specific elements. For debugging operations, you have precise control over execution flow and can inspect runtime behavior.\\n\\nPlease provide clear instructions, including:\\n- The specific operation you want to perform\\n- Required parameters (URL, selectors, values, etc.)\\n- Any optional parameters (dimensions, conditions, etc.)\\n- Related expected results\\n\\nYou should confirm sensitive or destructive commands before execution. Report with clear status updates, success/failure indications, and any relevant output or captured data.",
     
+    "kube.prompt.default": "Executes a kubectl command against the user's Kubernetes cluster. Use this tool only when you need to query or modify the state of the user's Kubernetes cluster.",
+    
     "tool.browser.description": "A powerful browser automation tool that allows you to control web browsers through a programmatic interface.",
     "tool.browser.arg.operation": "The operation to perform",
     "tool.browser.arg.url": "The URL to navigate to",
@@ -99,5 +101,15 @@
     "tool.admin.archive.arg.target_path": "Path to the target file or directory.",
     "tool.admin.archive.arg.format": "Archive format to use: zip, tar, targz, tarbz2, or tarxz.",
     "tool.admin.archive.arg.source_paths": "Multiple source paths to compress (when compressing multiple files/directories).",
-    "tool.admin.archive.arg.verbose": "Whether to display detailed information during operation."
-} 
+    "tool.admin.archive.arg.verbose": "Whether to display detailed information during operation.",
+    
+    "tool.kubectl.arg.command": "The complete kubectl command to execute. Prefer to use heredoc syntax for multi-line commands. Please include the kubectl prefix as well.\nExample:\nuser: what pods are running in the cluster?\nassistant: kubectl get pods\nuser: what is the status of the pod my-pod?\nassistant: kubectl get pod my-pod -o jsonpath='{.status.phase\n   }'",
+    "tool.kubectl.arg.modifies_resource": "Whether the command modifies a kubernetes resource.\nPossible values:\n- \"yes\" if the command modifies a resource\n- \"no\" if the command does not modify a resource\n- \"unknown\" if the command's effect on the resource is unknown",
+    "tool.kubectl.arg.workdir": "The working directory for executing the kubectl command. If not specified, defaults to the user's home directory.",
+    "tool.kubectl.arg.kubeconfig": "Path to the kubeconfig file. If not specified, defaults to ~/.kube/config.",
+    "tool.kubectl.result.success": "Whether the operation was successful",
+    "tool.kubectl.result.error": "Error message (if any)",
+    "tool.kubectl.result.stdout": "Standard output of the command execution",
+    "tool.kubectl.result.stderr": "Standard error output of the command execution",
+    "tool.kubectl.result.exit_code": "Exit code of the command execution"
+}
