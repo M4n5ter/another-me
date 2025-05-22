@@ -116,7 +116,7 @@ func (t *KubeTool) Call(ctx context.Context, inputJSON string) (string, error) {
 		args.WorkDir = homeDir
 	}
 	if args.Kubeconfig == "" {
-		args.Kubeconfig = homeDir + "/.kube/config"
+		args.Kubeconfig = filepath.Join(homeDir, ".kube", "config")
 	}
 
 	// 执行 kubectl 命令
