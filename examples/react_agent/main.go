@@ -54,6 +54,7 @@ func main() {
 	// --- ReAct Agent 测试 ---
 	reactAgent, err := reactagent.NewToolCallingAgentBuilder().
 		WithLLMAdapter(chatAdapter).
+		WithTaskEvaluator(chatAdapter).
 		WithToolRegistry(registry).
 		WithLogger(logger.WithGroup("react_agent_main")).
 		WithMaxIterations(7).
@@ -64,7 +65,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	userInput := "获取 Hacker News (news.ycombinator.com) 首页的最新5条消息的标题和链接，并根据它们各自的链接中的内容，生成一个关于这些消息的总结。"
+	userInput := "通过网络抓取去调查如何实现方便的为每个用户提供一个隔离的虚拟安卓 GUI 环境，并给出一份最终报告。"
 	conversationID := "test-react-hackernews-001"
 
 	// 获取流式输出通道
