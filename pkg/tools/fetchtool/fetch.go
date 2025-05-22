@@ -428,8 +428,6 @@ func (t *FetchTool) createOutputParameters(_ context.Context) []toolcore.Paramet
 		"zh": "截断前原始内容的总长度",
 	}
 
-	// 其他输出参数的描述...
-
 	return []toolcore.ParameterDefinition{
 		{
 			Name:        "url",
@@ -449,6 +447,5 @@ func (t *FetchTool) createOutputParameters(_ context.Context) []toolcore.Paramet
 			Description: originalLengthDesc,
 			Required:    true,
 		},
-		// 其他输出参数...
 	}
 }
