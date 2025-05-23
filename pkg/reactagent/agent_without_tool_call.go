@@ -267,7 +267,9 @@ func (a *TextBasedAgent) handleReactLoop(
 				// 将LLM的完整回复添加到消息历史
 				assistantMessage := createAssistantMessage(currentIterationThinks)
 				messages = append(messages, assistantMessage)
-				a.logger.Info("Context canceled, exiting loop, messages", "messages", messages)
+				a.logger.Info("Context canceled, exiting loop, sending last chunk", "conversationID", conversationID, "why", ctx.Err().Error())
+				// 上下文取消不认为是错误块，而是正常结束
+				outputChan <- createFinishChunk(currentIterationThinks, llmThinks+currentIterationThinks, messages, conversationID)
 				return
 			default:
 				continue

@@ -278,7 +278,9 @@ func (a *ToolCallingAgent) handleReactLoop(
 					toolCallsToExecute = append(toolCallsToExecute, toolCallsMap[id])
 				}
 				messages = composeMessage(messages, currentIterationThinks, toolCallsToExecute)
-				a.logger.Info("Context canceled, exiting loop,", "messages", messages)
+				a.logger.Info("Context canceled, exiting loop, sending last chunk", "conversationID", conversationID, "why", ctx.Err().Error())
+				// 上下文取消不认为是错误块，而是正常结束
+				outputChan <- createFinishChunk(currentIterationThinks, llmThinks+currentIterationThinks, messages, conversationID)
 				return
 			default:
 				continue
