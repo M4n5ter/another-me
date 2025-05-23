@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"log/slog"
 	"os"
 	"time"
@@ -131,7 +130,8 @@ func registerTools(registry *toolcore.Registry, i18nMgr *i18n.Manager) {
 	fetchTool := fetchtool.NewFetchTool(i18nMgr)
 	err := registry.Register(ctx, fetchTool)
 	if err != nil {
-		log.Fatalf("Failed to register fetch tool: %v", err)
+		slog.Error("Failed to register fetch tool", "error", err)
+		os.Exit(1)
 	}
 
 	// 注册 GUI 工具
@@ -139,7 +139,8 @@ func registerTools(registry *toolcore.Registry, i18nMgr *i18n.Manager) {
 	for _, tool := range guiTools {
 		err := registry.Register(ctx, tool)
 		if err != nil {
-			log.Fatalf("Failed to register gui tool: %v", err)
+			slog.Error("Failed to register gui tool", "error", err)
+			os.Exit(1)
 		}
 	}
 
