@@ -122,5 +122,5 @@
     "tool.admin.archive.arg.verbose": "Whether to display detailed information during operation.",
 
     "tool.cryptoexchange.binance.list_ticker_prices.description": "List ticker prices from Binance.",
-    "tool.cryptoexchange.binance.list_ticker_prices.arg.symbols": "Symbols to list prices for."
+    "tool.cryptoexchange.binance.list_ticker_prices.arg.symbols": "Symbols to list prices for. (e.g., [\"BTCUSDT\", \"ETHUSDT\", \"SOLUSDT\", \"XRPUSDT\", \"DOGEUSDT\"])"
 } 

@@ -122,5 +122,5 @@
     "tool.admin.archive.arg.verbose": "是否在操作过程中显示详细信息。",
 
     "tool.cryptoexchange.binance.list_ticker_prices.description": "从 Binance 获取交易对价格。",
-    "tool.cryptoexchange.binance.list_ticker_prices.arg.symbols": "要获取价格的交易对。"
+    "tool.cryptoexchange.binance.list_ticker_prices.arg.symbols": "要获取价格的交易对。(例如: [\"BTCUSDT\", \"ETHUSDT\", \"SOLUSDT\", \"XRPUSDT\", \"DOGEUSDT\"])"
 } 
