@@ -61,7 +61,7 @@ func TestContentPartJSON(t *testing.T) {
 	imageJSON, err := json.MarshalToString(imagePart)
 	require.NoError(t, err, "Marshal 图像 URL 类型的 ContentPart 不应返回错误")
 
-	expectedImageJSON := `{"type":"image_url","image_url":{"url":"https://example.com/image.jpg","detail":"high"}}`	
+	expectedImageJSON := `{"type":"image_url","image_url":{"url":"https://example.com/image.jpg","detail":"high"}}`
 	assert.JSONEq(t, expectedImageJSON, imageJSON, "图像 URL 类型的 ContentPart 应正确编码为 JSON")
 
 	var decodedImagePart ContentPart
@@ -145,8 +145,8 @@ func TestChatInputJSON(t *testing.T) {
 	require.NoError(t, err, "Marshal ChatInput 不应返回错误")
 
 	// ConversationID 应被省略，因为其 JSON 标签为 "-"
-	assert.NotContains(t, string(chatInputJSON), "conversation_id", "ConversationID 不应出现在 JSON 中")
-	assert.NotContains(t, string(chatInputJSON), "test-conversation", "ConversationID 的值不应出现在 JSON 中")
+	assert.NotContains(t, chatInputJSON, "conversation_id", "ConversationID 不应出现在 JSON 中")
+	assert.NotContains(t, chatInputJSON, "test-conversation", "ConversationID 的值不应出现在 JSON 中")
 
 	var decodedChatInput ChatInput
 	err = json.UnmarshalFromString(chatInputJSON, &decodedChatInput)
@@ -207,7 +207,7 @@ func TestChatOutputChunkJSON(t *testing.T) {
 	require.NoError(t, err, "Marshal 带有错误的 ChatOutputChunk 不应返回错误")
 
 	// Error 应被省略，因为其 JSON 标签为 "-"
-	assert.NotContains(t, string(errorJSON), "error", "Error 不应出现在 JSON 中")
+	assert.NotContains(t, errorJSON, "error", "Error 不应出现在 JSON 中")
 
 	var decodedErrorChunk ChatOutputChunk
 	err = json.UnmarshalFromString(errorJSON, &decodedErrorChunk)
