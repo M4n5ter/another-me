@@ -272,7 +272,13 @@ func (a *ToolCallingAgent) handleReactLoop(
 
 			switch {
 			case ctx.Err() != nil:
-				a.logger.Info("Context canceled, exiting loop", "conversationID", conversationID)
+				// 按照原始顺序重建工具调用列表
+				toolCallsToExecute := make([]llminterface.ToolCall, 0, len(toolCallOrder))
+				for _, id := range toolCallOrder {
+					toolCallsToExecute = append(toolCallsToExecute, toolCallsMap[id])
+				}
+				messages = append(messages, composeMessage(messages, currentIterationThinks, toolCallsToExecute)...)
+				a.logger.Info("Context canceled, exiting loop,", "conversationID", messages)
 				return
 			default:
 				continue
@@ -290,36 +296,7 @@ func (a *ToolCallingAgent) handleReactLoop(
 			outputChan <- createThoughtChunk(currentIterationThinks)
 		}
 
-		// 重建 assistant 的响应内容，确保工具调用信息是完整的
-		assistantResponseContentParts := make([]llminterface.ContentPart, 0)
-
-		// 添加文本部分（如果有）
-		if currentIterationThinks != "" {
-			assistantResponseContentParts = append(assistantResponseContentParts, llminterface.ContentPart{
-				Type: llminterface.PartTypeText,
-				Text: currentIterationThinks,
-			})
-		}
-
-		// 添加工具调用部分（如果有）
-		if len(toolCallsToExecute) > 0 {
-			assistantResponseContentParts = append(assistantResponseContentParts, llminterface.ContentPart{
-				Type: llminterface.PartTypeToolCallRequest,
-				ToolCallValues: Some(llminterface.ToolCallContent{
-					Calls: toolCallsToExecute,
-				}),
-			})
-		}
-
-		// 将LLM的完整回复（包括思考和工具调用请求）添加到消息历史
-		if len(assistantResponseContentParts) > 0 {
-			assistantMessage := llminterface.InputMessage{
-				Role:    llminterface.RoleAssistant,
-				Content: assistantResponseContentParts,
-			}
-			messages = append(messages, assistantMessage)
-			a.logger.Debug("Assistant's full response added to messages", "conversationID", conversationID, "partsCount", len(assistantResponseContentParts))
-		}
+		messages = append(messages, composeMessage(messages, currentIterationThinks, toolCallsToExecute)...)
 
 		// 根据当前迭代的LLM输出和工具调用情况，确定本次迭代的思考内容
 		thoughtForThisIteration := ""
@@ -617,4 +594,37 @@ func mergeJSONArgs(existing, new string) (string, error) {
 
 	// 如果上述尝试都失败，回退到简单拼接，并返回错误以便调用者记录
 	return existing + new, fmt.Errorf("无法安全合并JSON参数，回退到简单拼接")
+}
+
+func composeMessage(messages []llminterface.InputMessage, currentIterationThinks string, toolCallsToExecute []llminterface.ToolCall) []llminterface.InputMessage {
+	// 重建 assistant 的响应内容，确保工具调用信息是完整的
+	assistantResponseContentParts := make([]llminterface.ContentPart, 0)
+
+	// 添加文本部分（如果有）
+	if currentIterationThinks != "" {
+		assistantResponseContentParts = append(assistantResponseContentParts, llminterface.ContentPart{
+			Type: llminterface.PartTypeText,
+			Text: currentIterationThinks,
+		})
+	}
+
+	// 添加工具调用部分（如果有）
+	if len(toolCallsToExecute) > 0 {
+		assistantResponseContentParts = append(assistantResponseContentParts, llminterface.ContentPart{
+			Type: llminterface.PartTypeToolCallRequest,
+			ToolCallValues: Some(llminterface.ToolCallContent{
+				Calls: toolCallsToExecute,
+			}),
+		})
+	}
+
+	// 将LLM的完整回复（包括思考和工具调用请求）添加到消息历史
+	if len(assistantResponseContentParts) > 0 {
+		assistantMessage := llminterface.InputMessage{
+			Role:    llminterface.RoleAssistant,
+			Content: assistantResponseContentParts,
+		}
+		messages = append(messages, assistantMessage)
+	}
+	return messages
 }

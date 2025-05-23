@@ -263,7 +263,10 @@ func (a *TextBasedAgent) handleReactLoop(
 
 			switch {
 			case ctx.Err() != nil:
-				a.logger.Info("Context canceled, exiting loop", "conversationID", conversationID)
+				// 将LLM的完整回复添加到消息历史
+				assistantMessage := createAssistantMessage(currentIterationThinks)
+				messages = append(messages, assistantMessage)
+				a.logger.Info("Context canceled, exiting loop, messages", "messages", messages)
 				return
 			default:
 				continue

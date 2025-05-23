@@ -70,9 +70,8 @@ func main() {
 	conversationID := "test-react-hackernews-001"
 
 	ctx, cancel := context.WithCancel(context.Background())
-
 	go func() {
-		time.Sleep(10 * time.Second)
+		time.Sleep(5 * time.Second)
 		cancel()
 	}()
 
