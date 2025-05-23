@@ -277,7 +277,7 @@ func (a *ToolCallingAgent) handleReactLoop(
 				for _, id := range toolCallOrder {
 					toolCallsToExecute = append(toolCallsToExecute, toolCallsMap[id])
 				}
-				messages = append(messages, composeMessage(messages, currentIterationThinks, toolCallsToExecute)...)
+				messages = composeMessage(messages, currentIterationThinks, toolCallsToExecute)
 				a.logger.Info("Context canceled, exiting loop,", "messages", messages)
 				return
 			default:
