@@ -242,11 +242,11 @@ func (t *SearchTool) Call(ctx context.Context, inputJSON string) (outputJSON str
 
 	// 步骤 4: 格式化并返回输出 JSON
 	output := OutputSearchFileSystem{Results: results}
-	outputBytes, err := json.Marshal(output)
+	outputBytes, err := json.MarshalToString(output)
 	if err != nil {
 		return "", fmt.Errorf("序列化搜索结果为 JSON 时出错: %w", err)
 	}
-	return string(outputBytes), nil
+	return outputBytes, nil
 }
 
 // SearchFiles 根据提供的选项执行搜索操作。

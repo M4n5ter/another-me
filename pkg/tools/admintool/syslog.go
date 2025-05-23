@@ -128,13 +128,13 @@ func (t *SyslogTool) Call(ctx context.Context, inputJSON string) (string, error)
 			Command: cmdStr,
 		}
 
-		resultJSON, err := json.Marshal(result)
+		resultJSON, err := json.MarshalToString(result)
 		if err != nil {
 			t.logger.Error("序列化结果失败", "error", err)
 			return "", fmt.Errorf("序列化结果失败: %w", err)
 		}
 
-		return string(resultJSON), nil
+		return resultJSON, nil
 
 	default:
 		// 默认使用 journalctl 或 cat /var/log/syslog
@@ -202,13 +202,13 @@ func (t *SyslogTool) Call(ctx context.Context, inputJSON string) (string, error)
 			Command: cmdStr,
 		}
 
-		resultJSON, err := json.Marshal(result)
+		resultJSON, err := json.MarshalToString(result)
 		if err != nil {
 			t.logger.Error("序列化结果失败", "error", err)
 			return "", fmt.Errorf("序列化结果失败: %w", err)
 		}
 
-		return string(resultJSON), nil
+		return resultJSON, nil
 	}
 }
 

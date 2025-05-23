@@ -202,12 +202,12 @@ func (t *Tool) Screenshot() (string, error) {
 		"height": rect.Max.Y,
 	}
 
-	resultJSON, err := json.Marshal(result)
+	resultJSON, err := json.MarshalToString(result)
 	if err != nil {
 		return "", fmt.Errorf("序列化结果失败: %w", err)
 	}
 
-	return string(resultJSON), nil
+	return resultJSON, nil
 }
 
 // MoveMouse 移动鼠标
@@ -231,12 +231,12 @@ func (t *Tool) MoveMouse(inputJSON string) (string, error) {
 		"y":      newY,
 	}
 
-	resultJSON, err := json.Marshal(result)
+	resultJSON, err := json.MarshalToString(result)
 	if err != nil {
 		return "", fmt.Errorf("序列化结果失败: %w", err)
 	}
 
-	return string(resultJSON), nil
+	return resultJSON, nil
 }
 
 // MouseLocation 获取鼠标当前坐标位置
@@ -249,12 +249,12 @@ func (t *Tool) MouseLocation() (string, error) {
 		"y":      y,
 	}
 
-	resultJSON, err := json.Marshal(result)
+	resultJSON, err := json.MarshalToString(result)
 	if err != nil {
 		return "", fmt.Errorf("序列化结果失败: %w", err)
 	}
 
-	return string(resultJSON), nil
+	return resultJSON, nil
 }
 
 // Drag 拖动
@@ -278,12 +278,12 @@ func (t *Tool) Drag(inputJSON string) (string, error) {
 		"y":      newY,
 	}
 
-	resultJSON, err := json.Marshal(result)
+	resultJSON, err := json.MarshalToString(result)
 	if err != nil {
 		return "", fmt.Errorf("序列化结果失败: %w", err)
 	}
 
-	return string(resultJSON), nil
+	return resultJSON, nil
 }
 
 // Scroll 滚动
@@ -305,12 +305,12 @@ func (t *Tool) Scroll(inputJSON string) (string, error) {
 		"result": fmt.Sprintf("滚动完成，目标: y=%d, x=%d, 次数=%d, 间隔=%dms", args.ToY, args.ToX, args.Num, args.MsSleep),
 	}
 
-	resultJSON, err := json.Marshal(result)
+	resultJSON, err := json.MarshalToString(result)
 	if err != nil {
 		return "", fmt.Errorf("序列化结果失败: %w", err)
 	}
 
-	return string(resultJSON), nil
+	return resultJSON, nil
 }
 
 // ScrollRelative 相对坐标滚动
@@ -331,12 +331,12 @@ func (t *Tool) ScrollRelative(inputJSON string) (string, error) {
 		"result": fmt.Sprintf("相对滚动完成，x=%d, y=%d, 延迟=%dms", args.X, args.Y, args.MsDelay),
 	}
 
-	resultJSON, err := json.Marshal(result)
+	resultJSON, err := json.MarshalToString(result)
 	if err != nil {
 		return "", fmt.Errorf("序列化结果失败: %w", err)
 	}
 
-	return string(resultJSON), nil
+	return resultJSON, nil
 }
 
 // ScrollDirection 选择指定方向滚动
@@ -369,12 +369,12 @@ func (t *Tool) ScrollDirection(inputJSON string) (string, error) {
 		"result": fmt.Sprintf("方向滚动完成，x=%d, 方向=%s", args.X, args.Direction),
 	}
 
-	resultJSON, err := json.Marshal(result)
+	resultJSON, err := json.MarshalToString(result)
 	if err != nil {
 		return "", fmt.Errorf("序列化结果失败: %w", err)
 	}
 
-	return string(resultJSON), nil
+	return resultJSON, nil
 }
 
 // Click 点击
@@ -412,12 +412,12 @@ func (t *Tool) Click(inputJSON string) (string, error) {
 		"result": fmt.Sprintf("%s点击完成，按钮=%s", doubleStr, args.Button),
 	}
 
-	resultJSON, err := json.Marshal(result)
+	resultJSON, err := json.MarshalToString(result)
 	if err != nil {
 		return "", fmt.Errorf("序列化结果失败: %w", err)
 	}
 
-	return string(resultJSON), nil
+	return resultJSON, nil
 }
 
 // ToggleMouseButton 操作鼠标按键
@@ -463,12 +463,12 @@ func (t *Tool) ToggleMouseButton(inputJSON string) (string, error) {
 		"result": fmt.Sprintf("%s鼠标按钮=%s", actionStr, args.Button),
 	}
 
-	resultJSON, err := json.Marshal(result)
+	resultJSON, err := json.MarshalToString(result)
 	if err != nil {
 		return "", fmt.Errorf("序列化结果失败: %w", err)
 	}
 
-	return string(resultJSON), nil
+	return resultJSON, nil
 }
 
 // ToggleKey 操作键盘按键
@@ -515,12 +515,12 @@ func (t *Tool) ToggleKey(inputJSON string) (string, error) {
 		"result": fmt.Sprintf("%s按键=%v", actionStr, args.Keys),
 	}
 
-	resultJSON, err := json.Marshal(result)
+	resultJSON, err := json.MarshalToString(result)
 	if err != nil {
 		return "", fmt.Errorf("序列化结果失败: %w", err)
 	}
 
-	return string(resultJSON), nil
+	return resultJSON, nil
 }
 
 // KeyTap 点按键盘按键
@@ -556,12 +556,12 @@ func (t *Tool) KeyTap(inputJSON string) (string, error) {
 		"result": fmt.Sprintf("点按按键=%v", args.Keys),
 	}
 
-	resultJSON, err := json.Marshal(result)
+	resultJSON, err := json.MarshalToString(result)
 	if err != nil {
 		return "", fmt.Errorf("序列化结果失败: %w", err)
 	}
 
-	return string(resultJSON), nil
+	return resultJSON, nil
 }
 
 // TypeString 输入字符串
@@ -580,12 +580,12 @@ func (t *Tool) TypeString(inputJSON string) (string, error) {
 		"result": fmt.Sprintf("输入字符串=%s", args.Content),
 	}
 
-	resultJSON, err := json.Marshal(result)
+	resultJSON, err := json.MarshalToString(result)
 	if err != nil {
 		return "", fmt.Errorf("序列化结果失败: %w", err)
 	}
 
-	return string(resultJSON), nil
+	return resultJSON, nil
 }
 
 // KeySleepMilli 设置按键睡眠时间
@@ -604,12 +604,12 @@ func (t *Tool) KeySleepMilli(inputJSON string) (string, error) {
 		"result": fmt.Sprintf("设置按键睡眠时间=%dms", args.Ms),
 	}
 
-	resultJSON, err := json.Marshal(result)
+	resultJSON, err := json.MarshalToString(result)
 	if err != nil {
 		return "", fmt.Errorf("序列化结果失败: %w", err)
 	}
 
-	return string(resultJSON), nil
+	return resultJSON, nil
 }
 
 // SleepMilli 睡眠 ms 毫秒
@@ -628,12 +628,12 @@ func (t *Tool) SleepMilli(inputJSON string) (string, error) {
 		"result": fmt.Sprintf("睡眠=%dms", args.Ms),
 	}
 
-	resultJSON, err := json.Marshal(result)
+	resultJSON, err := json.MarshalToString(result)
 	if err != nil {
 		return "", fmt.Errorf("序列化结果失败: %w", err)
 	}
 
-	return string(resultJSON), nil
+	return resultJSON, nil
 }
 
 // 以下是各种参数定义方法

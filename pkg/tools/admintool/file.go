@@ -186,12 +186,12 @@ func (t *FileTool) Call(ctx context.Context, inputJSON string) (string, error) {
 		return "", err
 	}
 
-	resultJSON, err := json.Marshal(result)
+	resultJSON, err := json.MarshalToString(result)
 	if err != nil {
 		t.logger.Error("序列化结果失败", "error", err)
 		return "", fmt.Errorf("序列化结果失败: %w", err)
 	}
-	return string(resultJSON), nil
+	return resultJSON, nil
 }
 
 // readFile 读取文件内容
