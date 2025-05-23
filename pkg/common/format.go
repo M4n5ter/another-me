@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// SanitizeValue 递归地清洗数据，将结构体转为 map[string]any
+// SanitizeValue 递归地清洗数据结构（结构体、切片、数组、映射），将 NaN/Inf 浮点值替换为 nil。将结构体和映射转换为 map[string]any 和切片/数组转换为 []any。
 func SanitizeValue(val any) any {
 	if val == nil {
 		return nil
