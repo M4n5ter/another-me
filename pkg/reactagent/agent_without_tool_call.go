@@ -2,6 +2,7 @@ package reactagent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -240,7 +241,7 @@ func (a *TextBasedAgent) handleReactLoop(
 		// 处理 LLM 输出流
 		for chunk := range llmOutputChan {
 			// 错误处理
-			if chunk.Error != nil {
+			if chunk.Error != nil && !errors.Is(chunk.Error, context.Canceled) {
 				outputChan <- handleLLMStreamError(a.logger, chunk.Error, conversationID, messages)
 				return
 			}
@@ -259,6 +260,17 @@ func (a *TextBasedAgent) handleReactLoop(
 					// 累积文本，用于内部使用
 					currentIterationThinks += part.Text
 				}
+			}
+
+			switch {
+			case ctx.Err() != nil:
+				// 将LLM的完整回复添加到消息历史
+				assistantMessage := createAssistantMessage(currentIterationThinks)
+				messages = append(messages, assistantMessage)
+				a.logger.Info("Context canceled, exiting loop, messages", "messages", messages)
+				return
+			default:
+				continue
 			}
 		}
 

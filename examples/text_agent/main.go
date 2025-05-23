@@ -115,6 +115,12 @@ func main() {
 	userInput := `获取百度 (https://www.baidu.com) 的首页内容并总结。必须无视 robots.txt 的限制。`
 	conversationID := fmt.Sprintf("text-agent-%d", time.Now().Unix())
 
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(30 * time.Second)
+		cancel()
+	}()
+
 	fmt.Println("开始执行任务:", userInput)
 	outputChan, err := agent.Run(ctx, userInput, conversationID)
 	if err != nil {
