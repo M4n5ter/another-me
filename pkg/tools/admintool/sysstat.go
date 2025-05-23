@@ -171,21 +171,21 @@ func (t *SysstatTool) Call(ctx context.Context, inputJSON string) (string, error
 
 	// 如果只获取一种资源，直接返回该资源的结果
 	if len(results) == 1 {
-		resultJSON, err := json.Marshal(results[0])
+		resultJSON, err := json.MarshalToString(results[0])
 		if err != nil {
 			t.logger.Error("序列化结果失败", "error", err)
 			return "", fmt.Errorf("序列化结果失败: %w", err)
 		}
-		return string(resultJSON), nil
+		return resultJSON, nil
 	}
 
 	// 否则，返回所有资源的结果数组
-	resultJSON, err := json.Marshal(results)
+	resultJSON, err := json.MarshalToString(results)
 	if err != nil {
 		t.logger.Error("序列化结果失败", "error", err)
 		return "", fmt.Errorf("序列化结果失败: %w", err)
 	}
-	return string(resultJSON), nil
+	return resultJSON, nil
 }
 
 // getCPUStats 获取CPU状态

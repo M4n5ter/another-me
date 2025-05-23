@@ -300,14 +300,14 @@ func (t *FetchTool) Call(ctx context.Context, inputJSON string) (string, error) 
 		ContentType:    contentType,
 	}
 
-	resultJSON, err := json.Marshal(result)
+	resultJSON, err := json.MarshalToString(result)
 	if err != nil {
 		t.logger.Error("序列化结果失败", "error", err)
 		return "", fmt.Errorf("序列化结果失败: %w", err)
 	}
 
 	t.logger.Info("获取成功", "url", args.URL, "returnedLength", result.ReturnedLength, "isTruncated", result.IsTruncated)
-	return string(resultJSON), nil
+	return resultJSON, nil
 }
 
 // setupHTTPClient 配置并返回一个带有代理和超时的 HTTP 客户端。

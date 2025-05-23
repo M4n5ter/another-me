@@ -194,12 +194,12 @@ func (t *BrowserTool) Call(ctx context.Context, inputJSON string) (string, error
 		return "", fmt.Errorf("执行操作 %s 失败: %w", args.Operation, err)
 	}
 
-	resultJSON, err := json.Marshal(result)
+	resultJSON, err := json.MarshalToString(result)
 	if err != nil {
 		t.logger.Error("序列化结果失败", "error", err)
 		return "", fmt.Errorf("序列化结果失败: %w", err)
 	}
-	return string(resultJSON), nil
+	return resultJSON, nil
 }
 
 // initBrowser 初始化浏览器

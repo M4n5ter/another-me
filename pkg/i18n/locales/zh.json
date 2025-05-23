@@ -119,5 +119,8 @@
     "tool.admin.archive.arg.target_path": "目标文件或目录的路径。",
     "tool.admin.archive.arg.format": "使用的归档格式：zip、tar、targz、tarbz2或tarxz。",
     "tool.admin.archive.arg.source_paths": "要压缩的多个源路径（压缩多个文件/目录时）。",
-    "tool.admin.archive.arg.verbose": "是否在操作过程中显示详细信息。"
+    "tool.admin.archive.arg.verbose": "是否在操作过程中显示详细信息。",
+
+    "tool.cryptoexchange.binance.list_ticker_prices.description": "从 Binance 获取交易对价格。",
+    "tool.cryptoexchange.binance.list_ticker_prices.arg.symbols": "要获取价格的交易对。"
 } 

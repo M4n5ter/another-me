@@ -119,5 +119,8 @@
     "tool.admin.archive.arg.target_path": "Path to the target file or directory.",
     "tool.admin.archive.arg.format": "Archive format to use: zip, tar, targz, tarbz2, or tarxz.",
     "tool.admin.archive.arg.source_paths": "Multiple source paths to compress (when compressing multiple files/directories).",
-    "tool.admin.archive.arg.verbose": "Whether to display detailed information during operation."
+    "tool.admin.archive.arg.verbose": "Whether to display detailed information during operation.",
+
+    "tool.cryptoexchange.binance.list_ticker_prices.description": "List ticker prices from Binance.",
+    "tool.cryptoexchange.binance.list_ticker_prices.arg.symbols": "Symbols to list prices for."
 } 

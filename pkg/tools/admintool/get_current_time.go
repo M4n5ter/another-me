@@ -95,12 +95,12 @@ func (t *TimeTool) Call(ctx context.Context, inputJSON string) (outputJSON strin
 	currentTime := time.Now().Format(format)
 	output := OutputGetTime{CurrentTime: currentTime}
 
-	outputBytes, err := json.Marshal(output)
+	outputBytes, err := json.MarshalToString(output)
 	if err != nil {
 		t.logger.Error("failed to marshal output for TimeTool", "error", err)
 		return "", fmt.Errorf("failed to marshal output for TimeTool: %w", err)
 	}
-	return string(outputBytes), nil
+	return outputBytes, nil
 }
 
 func (t *TimeTool) createOutputParameters(_ context.Context) []toolcore.ParameterDefinition {
