@@ -46,7 +46,7 @@ func main() {
 	}
 
 	// 创建 eino 适配器
-	chatAdapter, err := eino.NewChatAdapter(context.Background(), chatModel, registry, "zh")
+	chatAdapter, err := eino.NewChatAdapter(context.Background(), chatModel, registry)
 	if err != nil {
 		logger.Error("Failed to create eino adapter", "error", err)
 		os.Exit(1)
@@ -71,7 +71,7 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
-		time.Sleep(5 * time.Second)
+		time.Sleep(300 * time.Second)
 		cancel()
 	}()
 

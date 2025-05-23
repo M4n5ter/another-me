@@ -72,6 +72,11 @@ func (m *Manager) GetDefaultLanguage() string {
 	return m.defaultLanguage
 }
 
+// SetDefaultLanguage 设置 Manager 的默认语言。
+func (m *Manager) SetDefaultLanguage(lang string) {
+	m.defaultLanguage = lang
+}
+
 // loadTranslationsFromFS 从给定的 fsys 文件系统中加载指定目录下的所有 .json 翻译文件。
 // 文件名（去除 .json 后缀）被用作语言代码。
 func (m *Manager) loadTranslationsFromFS(fsys fs.FS, dirPath string) error {

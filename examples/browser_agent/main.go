@@ -56,7 +56,7 @@ func runBasicExample() {
 	}
 
 	// 创建 eino 适配器
-	chatAdapter, err := eino.NewChatAdapter(ctx, chatModel, registry, "zh")
+	chatAdapter, err := eino.NewChatAdapter(ctx, chatModel, registry)
 	if err != nil {
 		logger.Error("创建eino适配器失败", "error", err)
 		os.Exit(1)

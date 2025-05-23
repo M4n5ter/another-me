@@ -418,11 +418,11 @@ func (a *GUIAgent) executeAction(_ context.Context, action ActionResult) (string
 	}
 }
 
-// MustMarshalJSONWithoutPanic 将任何值转换为JSON字符串，如果出错则panic
+// MustMarshalJSONWithoutPanic 将任何值转换为JSON字符串
 func MustMarshalJSONWithoutPanic(v any) string {
-	jsonBytes, err := json.Marshal(v)
+	json, err := json.MarshalToString(v)
 	if err != nil {
 		slog.Error("failed to marshal json", "error", err)
 	}
-	return string(jsonBytes)
+	return json
 }

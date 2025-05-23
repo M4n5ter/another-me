@@ -159,16 +159,16 @@ func (a *mcpToolAdapter) Call(ctx context.Context, inputJSON string) (outputJSON
 	}
 
 	// 序列化结果
-	resultBytes, err := json.Marshal(result)
+	resultJSON, err := json.MarshalToString(result)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal result: %w", err)
 	}
 
 	if result.IsError {
-		return "", fmt.Errorf("MCP tool execution failed: %s", string(resultBytes))
+		return "", fmt.Errorf("MCP tool execution failed: %s", resultJSON)
 	}
 
-	return string(resultBytes), nil
+	return resultJSON, nil
 }
 
 // convertInputSchemaToParams 将MCP的ToolInputSchema转换为 []ParameterDefinition

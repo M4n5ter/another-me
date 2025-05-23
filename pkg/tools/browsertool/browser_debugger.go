@@ -134,16 +134,16 @@ func (t *BrowserTool) debugSetBreakpoint(args BrowserArgs) (BrowserResult, error
 		"locations":     locations,
 	}
 
-	breakpointJSON, err := json.Marshal(breakpointInfo)
+	breakpointJSON, err := json.MarshalToString(breakpointInfo)
 	if err != nil {
-		breakpointJSON = []byte(fmt.Sprintf(`{"breakpoint_id":"%s"}`, breakpointID))
+		breakpointJSON = fmt.Sprintf(`{"breakpoint_id":"%s"}`, breakpointID)
 	}
 
 	return BrowserResult{
 		Operation: OperationDebug,
 		Success:   true,
 		Message:   fmt.Sprintf("在 %s 的第 %d 行成功设置断点", args.Debug.URL, args.Debug.LineNumber),
-		DebugInfo: string(breakpointJSON),
+		DebugInfo: breakpointJSON,
 	}, nil
 }
 
@@ -257,15 +257,15 @@ func (t *BrowserTool) debugGetCallstack() (BrowserResult, error) {
 	}
 
 	// 将调用堆栈信息格式化为JSON
-	callstackJSON, err := json.Marshal(callFrames)
+	callstackJSON, err := json.MarshalToString(callFrames)
 	if err != nil {
-		callstackJSON = []byte("[]")
+		callstackJSON = "[]"
 	}
 
 	return BrowserResult{
 		Operation: OperationDebug,
 		Success:   true,
 		Message:   "成功获取调用堆栈",
-		DebugInfo: string(callstackJSON),
+		DebugInfo: callstackJSON,
 	}, nil
 }

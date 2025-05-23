@@ -248,11 +248,11 @@ func TestBrowserResult(t *testing.T) {
 		Message:   "成功导航到https://example.com",
 	}
 
-	jsonData, err := json.Marshal(result)
+	jsonData, err := json.MarshalToString(result)
 	assert.NoError(t, err)
-	assert.Contains(t, string(jsonData), `"operation":"navigate"`)
-	assert.Contains(t, string(jsonData), `"success":true`)
-	assert.Contains(t, string(jsonData), `"message":"成功导航到https://example.com"`)
+	assert.Contains(t, jsonData, `"operation":"navigate"`)
+	assert.Contains(t, jsonData, `"success":true`)
+	assert.Contains(t, jsonData, `"message":"成功导航到https://example.com"`)
 
 	// 测试带截图的结果
 	result = BrowserResult{
@@ -262,10 +262,10 @@ func TestBrowserResult(t *testing.T) {
 		Screenshot: "data:image/png;base64,abc123",
 	}
 
-	jsonData, err = json.Marshal(result)
+	jsonData, err = json.MarshalToString(result)
 	assert.NoError(t, err)
-	assert.Contains(t, string(jsonData), `"operation":"screenshot"`)
-	assert.Contains(t, string(jsonData), `"screenshot":"data:image/png;base64,abc123"`)
+	assert.Contains(t, jsonData, `"operation":"screenshot"`)
+	assert.Contains(t, jsonData, `"screenshot":"data:image/png;base64,abc123"`)
 
 	// 测试带有脚本执行结果的结果
 	result = BrowserResult{
@@ -275,10 +275,10 @@ func TestBrowserResult(t *testing.T) {
 		Value:     `{"result":42}`,
 	}
 
-	jsonData, err = json.Marshal(result)
+	jsonData, err = json.MarshalToString(result)
 	assert.NoError(t, err)
-	assert.Contains(t, string(jsonData), `"operation":"evaluate"`)
-	assert.Contains(t, string(jsonData), `"value":"{\"result\":42}"`)
+	assert.Contains(t, jsonData, `"operation":"evaluate"`)
+	assert.Contains(t, jsonData, `"value":"{\"result\":42}"`)
 
 	// 测试带有调试信息的结果
 	result = BrowserResult{
@@ -288,10 +288,10 @@ func TestBrowserResult(t *testing.T) {
 		DebugInfo: `{"breakpoint_id":"123456"}`,
 	}
 
-	jsonData, err = json.Marshal(result)
+	jsonData, err = json.MarshalToString(result)
 	assert.NoError(t, err)
-	assert.Contains(t, string(jsonData), `"operation":"debug"`)
-	assert.Contains(t, string(jsonData), `"debug_info":"{\"breakpoint_id\":\"123456\"}"`)
+	assert.Contains(t, jsonData, `"operation":"debug"`)
+	assert.Contains(t, jsonData, `"debug_info":"{\"breakpoint_id\":\"123456\"}"`)
 }
 
 // TestNewBrowserTools 测试工具注册函数

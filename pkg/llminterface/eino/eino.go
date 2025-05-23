@@ -24,7 +24,7 @@ type ChatAdapter struct {
 
 // NewChatAdapter 创建一个新的 eino ChatAdapter 实例。
 // 它会从 toolRegistry 中获取所有工具，将它们转换为 eino 格式，并绑定到 einoModel。
-func NewChatAdapter(ctx context.Context, initialModel model.ToolCallingChatModel, toolRegistry *toolcore.Registry, defaultLang string) (*ChatAdapter, error) {
+func NewChatAdapter(ctx context.Context, initialModel model.ToolCallingChatModel, toolRegistry *toolcore.Registry) (*ChatAdapter, error) {
 	adapter := &ChatAdapter{
 		einoModel: initialModel,
 	}

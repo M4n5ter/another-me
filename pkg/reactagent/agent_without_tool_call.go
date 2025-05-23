@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/m4n5ter/another-me/pkg/llminterface"
 	. "github.com/m4n5ter/another-me/pkg/option"
@@ -16,6 +17,8 @@ type TextFormatParser interface {
 	// ParseToolCalls 从文本中解析出工具调用请求
 	// 返回解析出的工具调用列表和解析后的剩余文本
 	ParseToolCalls(text string) ([]llminterface.ToolCall, string)
+	// ExceptFormat 返回解析器期望的格式
+	ExceptFormat() string
 }
 
 // TextBasedAgent 表示一个基于文本格式的 ReAct 智能体，不依赖 function call 能力
@@ -116,6 +119,15 @@ func (b *TextBasedAgentBuilder) Build() (*TextBasedAgent, error) {
 		logger = slog.Default().WithGroup("text_based_react_agent")
 	}
 
+	// 文本格式解析器提示词
+	textFormatParserPrompt := fmt.Sprintf("Expected format:\n%s", b.textFormatParser.ExceptFormat())
+
+	// 工具注册表提示词
+	toolRegistryPrompt, err := toolRegistryToPrompt(b.toolRegistry)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create tool registry prompt: %w", err)
+	}
+
 	// 系统提示
 	var sysPromptOpt Option[llminterface.InputMessage]
 	if b.systemPrompt.IsSome() {
@@ -124,7 +136,7 @@ func (b *TextBasedAgentBuilder) Build() (*TextBasedAgent, error) {
 			Content: []llminterface.ContentPart{
 				{
 					Type: llminterface.PartTypeText,
-					Text: b.systemPrompt.Unwrap(),
+					Text: fmt.Sprintf("%s\n\n%s\n\n%s", b.systemPrompt.Unwrap(), textFormatParserPrompt, toolRegistryPrompt),
 				},
 			},
 		})
@@ -315,46 +327,61 @@ func (a *TextBasedAgent) handleReactLoop(
 		}
 
 		// 执行工具调用
-		for _, toolCall := range toolCalls {
-			// 发送工具开始执行的信号
-			outputChan <- createToolStartChunk(toolCall.ID, toolCall.Name, toolCall.Arguments)
+		if len(toolCalls) > 0 {
+			var allToolExecutionOutputs []string // 存储每个工具的执行输出或错误信息
 
-			a.logger.Info("Executing tool", "toolName", toolCall.Name, "toolID", toolCall.ID, "argsLength", len(toolCall.Arguments), "conversationID", conversationID)
+			for _, toolCall := range toolCalls {
+				// 发送工具开始执行的信号
+				outputChan <- createToolStartChunk(toolCall.ID, toolCall.Name, toolCall.Arguments)
 
-			tool, exists := a.toolRegistry.Get(toolCall.Name)
-			if !exists {
-				a.logger.Error("Tool not found in registry", "toolName", toolCall.Name, "conversationID", conversationID)
-				errorMsg := fmt.Sprintf("未找到工具: %s", toolCall.Name)
-				toolResultMessage := createTextBasedToolErrorMessage(toolCall.Name, errorMsg)
-				messages = append(messages, toolResultMessage)
+				a.logger.Info("Executing tool", "toolName", toolCall.Name, "toolID", toolCall.ID, "argsLength", len(toolCall.Arguments), "conversationID", conversationID)
 
-				// 发送工具结束执行的信号（带错误）
-				outputChan <- createToolEndChunk(toolCall.ID, toolCall.Name, toolCall.Arguments, "", fmt.Sprintf("错误：工具 '%s' 未找到。", toolCall.Name))
+				tool, exists := a.toolRegistry.Get(toolCall.Name)
+				var currentToolOutputForLLM string
+				var toolResultForChunk string // For createToolEndChunk
+				var errorMsgForChunk string   // For createToolEndChunk
 
-				continue
+				if !exists {
+					a.logger.Error("Tool not found in registry", "toolName", toolCall.Name, "conversationID", conversationID)
+					errMsg := fmt.Sprintf("未找到工具: %s", toolCall.Name)
+					// 格式化字符串，加到LLM的输出中
+					currentToolOutputForLLM = fmt.Sprintf("错误：工具 '%s' %s", toolCall.Name, errMsg)
+					errorMsgForChunk = fmt.Sprintf("错误：工具 '%s' 未找到。", toolCall.Name)
+				} else {
+					// 执行工具调用
+					toolOutputJSON, toolErr := tool.Call(ctx, toolCall.Arguments)
+					if toolErr != nil {
+						a.logger.Error("Tool execution failed", "toolName", toolCall.Name, "toolID", toolCall.ID, "error", toolErr, "conversationID", conversationID)
+						errMsg := fmt.Sprintf("执行失败: %s", toolErr.Error())
+						currentToolOutputForLLM = fmt.Sprintf("错误：工具 '%s' %s", toolCall.Name, errMsg)
+						errorMsgForChunk = fmt.Sprintf("错误：工具 '%s' 执行失败: %s", toolCall.Name, toolErr.Error())
+					} else {
+						currentToolOutputForLLM = fmt.Sprintf("工具 '%s' 执行结果:\n%s", toolCall.Name, toolOutputJSON)
+						toolResultForChunk = toolOutputJSON
+					}
+				}
+				allToolExecutionOutputs = append(allToolExecutionOutputs, currentToolOutputForLLM)
+				// 发送工具结束执行的信号（成功或失败）
+				outputChan <- createToolEndChunk(toolCall.ID, toolCall.Name, toolCall.Arguments, toolResultForChunk, errorMsgForChunk)
 			}
 
-			// 执行工具调用
-			toolOutputJSON, toolErr := tool.Call(ctx, toolCall.Arguments)
-			if toolErr != nil {
-				a.logger.Error("Tool execution failed", "toolName", toolCall.Name, "toolID", toolCall.ID, "error", toolErr, "conversationID", conversationID)
-				errorMsg := fmt.Sprintf("执行失败: %s", toolErr.Error())
-				toolResultMessage := createTextBasedToolErrorMessage(toolCall.Name, errorMsg)
-				messages = append(messages, toolResultMessage)
-
-				// 发送工具结束执行的信号（带错误）
-				outputChan <- createToolEndChunk(toolCall.ID, toolCall.Name, toolCall.Arguments, "", fmt.Sprintf("错误：工具 '%s' 执行失败: %s", toolCall.Name, toolErr.Error()))
-
-				continue
+			// 所有工具执行完成后，将它们的组合结果添加到消息历史中
+			if len(allToolExecutionOutputs) > 0 {
+				aggregatedResultsText := strings.Join(allToolExecutionOutputs, "\n\n")
+				// 创建一个包含所有工具执行结果的单个用户消息（避免相同角色的消息连续出现，一些模型不支持，比如deepseek-reasoner）
+				// 这个消息代表了执行后的观察结果
+				aggregatedObservationMessage := llminterface.InputMessage{
+					Role: llminterface.RoleUser, // 这是从用户角度来看的"观察"部分，用于LLM
+					Content: []llminterface.ContentPart{
+						{
+							Type: llminterface.PartTypeText,
+							Text: aggregatedResultsText,
+						},
+					},
+				}
+				messages = append(messages, aggregatedObservationMessage)
+				a.logger.Debug("Aggregated tool results added to messages as a single user message", "count", len(allToolExecutionOutputs), "conversationID", conversationID)
 			}
-
-			// 添加工具调用结果
-			toolResultMessage := createTextBasedToolResultMessage(toolCall.Name, toolOutputJSON)
-			messages = append(messages, toolResultMessage)
-			a.logger.Debug("Tool result added to messages", "toolName", toolCall.Name, "toolID", toolCall.ID, "conversationID", conversationID)
-
-			// 发送工具结束执行的信号（成功）
-			outputChan <- createToolEndChunk(toolCall.ID, toolCall.Name, toolCall.Arguments, toolOutputJSON, "")
 		}
 	}
 
