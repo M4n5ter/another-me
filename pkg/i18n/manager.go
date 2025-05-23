@@ -74,6 +74,8 @@ func (m *Manager) GetDefaultLanguage() string {
 
 // SetDefaultLanguage 设置 Manager 的默认语言。
 func (m *Manager) SetDefaultLanguage(lang string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.defaultLanguage = lang
 }
 
