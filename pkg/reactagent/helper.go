@@ -7,9 +7,12 @@ import (
 	"regexp"
 	"strings"
 
+	json "github.com/json-iterator/go"
+
 	"github.com/m4n5ter/another-me/pkg/i18n"
 	"github.com/m4n5ter/another-me/pkg/llminterface"
 	. "github.com/m4n5ter/another-me/pkg/option"
+	"github.com/m4n5ter/another-me/pkg/toolcore"
 )
 
 // updateAccumulatedThoughts 更新累积的思考内容，按照迭代格式化
@@ -195,32 +198,6 @@ func createToolErrorMessage(toolID, toolName, errorMsg string) llminterface.Inpu
 	}
 }
 
-// createTextBasedToolResultMessage 创建文本格式的工具结果消息（非工具调用版本）
-func createTextBasedToolResultMessage(toolName, result string) llminterface.InputMessage {
-	return llminterface.InputMessage{
-		Role: llminterface.RoleUser,
-		Content: []llminterface.ContentPart{
-			{
-				Type: llminterface.PartTypeText,
-				Text: fmt.Sprintf("工具 '%s' 执行结果:\n%s", toolName, result),
-			},
-		},
-	}
-}
-
-// createTextBasedToolErrorMessage 创建文本格式的工具错误消息（非工具调用版本）
-func createTextBasedToolErrorMessage(toolName, errorMsg string) llminterface.InputMessage {
-	return llminterface.InputMessage{
-		Role: llminterface.RoleUser,
-		Content: []llminterface.ContentPart{
-			{
-				Type: llminterface.PartTypeText,
-				Text: fmt.Sprintf("错误：工具 '%s' %s", toolName, errorMsg),
-			},
-		},
-	}
-}
-
 // prepareInitialMessages 准备初始消息
 func prepareInitialMessages(systemPrompt Option[llminterface.InputMessage], userInput string, logger *slog.Logger) []llminterface.InputMessage {
 	messages := make([]llminterface.InputMessage, 0)
@@ -266,7 +243,7 @@ func taskEvaluate(ctx context.Context, logger *slog.Logger, taskEvaluator Option
 
 		if evaluatorPromptMsg, err := prepareEvaluatorPrompt(initialUserInput, llmThinks); err == nil {
 			if evaluatorResponse, err := llminterface.ChatAndGetFullResponse(ctx, evaluator, llminterface.ChatInput{
-				Messages: []llminterface.InputMessage{evaluatorPromptMsg},
+				Messages: evaluatorPromptMsg,
 			}); err == nil {
 				if isCompleted, feedback, err := parseEvaluatorResponse(evaluatorResponse.FullText); err == nil {
 					logger.Info("Task evaluator response", "isCompleted", isCompleted, "feedback", feedback, "conversationID", conversationID)
@@ -301,16 +278,24 @@ func taskEvaluate(ctx context.Context, logger *slog.Logger, taskEvaluator Option
 }
 
 // prepareEvaluatorPrompt 准备评估器提示
-func prepareEvaluatorPrompt(initialUserInput, llmThinks string) (llminterface.InputMessage, error) {
+func prepareEvaluatorPrompt(initialUserInput, llmThinks string) ([]llminterface.InputMessage, error) {
 	promptTemplate := i18n.GlobalManager.T(context.Background(), "evaluator.prompt", nil)
 
 	prompt := strings.ReplaceAll(promptTemplate, "{userInput}", initialUserInput)
 	prompt = strings.ReplaceAll(prompt, "{llmThinks}", llmThinks)
 
-	return llminterface.InputMessage{
-		Role: llminterface.RoleSystem,
-		Content: []llminterface.ContentPart{
-			{Type: llminterface.PartTypeText, Text: prompt},
+	return []llminterface.InputMessage{
+		{
+			Role: llminterface.RoleSystem,
+			Content: []llminterface.ContentPart{
+				{Type: llminterface.PartTypeText, Text: prompt},
+			},
+		},
+		{
+			Role: llminterface.RoleUser,
+			Content: []llminterface.ContentPart{
+				{Type: llminterface.PartTypeText, Text: "Evaluate Now!"},
+			},
 		},
 	}, nil
 }
@@ -339,4 +324,61 @@ func parseEvaluatorResponse(responseText string) (isCompleted bool, feedback str
 		}
 	}
 	return isCompleted, feedback, nil
+}
+
+// toolRegistryToPrompt 将工具注册表转换为工具信息列表，主要用于基于文本的 ReAct Agent 的系统提示词
+func toolRegistryToPrompt(registry *toolcore.Registry) (string, error) {
+	promptTemplate := i18n.GlobalManager.T(context.Background(), "tool.registry.prompt", nil)
+	// - tool name: tool description
+	//   - arg1: arg1 description
+	//     - arg1 type
+	//     - arg1 required
+	//     - arg1 example/enums/etc.
+	//   - arg2: arg2 description
+	//     - arg2 type
+	//     - arg2 required
+	//   - arg3: arg3 description
+	//     - arg3 type
+	//     - arg3 required
+	//     - arg3 example/enums/etc.
+	//   - ...
+	//   - argN: argN description
+	toolInfos := make([]string, 0)
+	for _, tool := range registry.GetAll() {
+		schema, err := tool.Schema(context.Background())
+		if err != nil {
+			return "", fmt.Errorf("failed to get tool schema: %w", err)
+		}
+		toolInfo := fmt.Sprintf("- %s: %s", schema.Name, schema.Descriptions[i18n.GlobalManager.GetDefaultLanguage()])
+		for _, arg := range schema.InputParameters {
+			toolInfo += fmt.Sprintf("\n  - %s: %s", arg.Name, arg.Description)
+			toolInfo += fmt.Sprintf("\n    - type: %s", arg.Type)
+			toolInfo += fmt.Sprintf("\n    - required: %v", arg.Required)
+			if arg.EnumValues.IsSome() {
+				enumString, err := json.MarshalToString(arg.EnumValues.Unwrap())
+				if err == nil {
+					toolInfo += fmt.Sprintf("\n    - enum: %s", enumString)
+				}
+			}
+			if arg.Properties.IsSome() {
+				propertiesString, err := json.MarshalToString(arg.Properties.Unwrap())
+				if err == nil {
+					toolInfo += fmt.Sprintf("\n    - properties: %s", propertiesString)
+				}
+			}
+			if arg.Items.IsSome() {
+				itemsString, err := json.MarshalToString(arg.Items.Unwrap())
+				if err == nil {
+					toolInfo += fmt.Sprintf("\n    - items: %s", itemsString)
+				}
+			}
+		}
+		toolInfos = append(toolInfos, toolInfo)
+	}
+
+	toolInfosString := strings.Join(toolInfos, "\n")
+
+	prompt := strings.ReplaceAll(promptTemplate, "{toolRegistry}", toolInfosString)
+
+	return prompt, nil
 }

@@ -63,45 +63,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	systemPrompt := `你是一个强大的助手，需要使用工具来帮助用户完成任务。
-
-对于所有任务，你必须使用以下Markdown代码块格式来调用工具：
-
-首先，分析问题：
-我需要解决的问题是...
-
-然后，必须使用Markdown代码块来调用工具，格式如下：
-` + "```" + `工具名称
-{"参数1": "值1", "参数2": "值2"}
-` + "```" + `
-
-可用的工具有：
-1. fetch - 从网络获取内容
-   参数: 
-   - url: 要获取的URL (必需参数，字符串格式)
-   - start_index: 返回内容的起始索引 (可选参数，数字格式，默认0)
-   - max_length: 最大返回字符数 (可选参数，数字格式，默认10000)
-   - raw: 是否返回原始内容 (可选参数，布尔值格式，默认false)
-   - ignore_robots_txt: 是否忽略 robots.txt 限制 (可选参数，布尔值格式，默认false)
-   - user_agent: 自定义 User-Agent 字符串 (可选参数，字符串格式)
-   - proxy_url: 代理URL (可选参数，字符串格式，例如 socks5://127.0.0.1:55535)
-   - is_manual_request: 是否由用户操作手动触发 (可选参数，布尔值格式，默认false)
-
-例如，要获取某网站的内容，应该这样调用：
-
-我需要获取网站内容，应该使用fetch工具。
-
-` + "```" + `fetch
-{"url": "https://example.com", "ignore_robots_txt": true}
-` + "```" + `
-
-你必须严格按照这个Markdown代码块格式输出工具调用，否则系统将无法执行并处理你的请求。必须记住所有的工具调用都不是来自用户，而是由你通过工具调用操控系统来执行的。
-`
-	parser := &reactagent.MarkdownFormatParser{}
+	systemPrompt := `你是一个强大的助手，需要使用工具来帮助用户完成任务。`
+	parser := &reactagent.PredefinedPatternParser{
+		StartPattern: "ToolCall:",
+		ArgPattern:   "Args:",
+	}
 	agentBuilder := reactagent.NewTextBasedAgentBuilder()
 	agent, err := agentBuilder.
 		WithLLMAdapter(llmAdapter).
 		WithToolRegistry(registry).
+		WithTaskEvaluator(llmAdapter).
 		WithLogger(logger).
 		WithSystemPrompt(systemPrompt).
 		WithTextFormatParser(parser).
@@ -117,7 +88,7 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
-		time.Sleep(30 * time.Second)
+		time.Sleep(300 * time.Second)
 		cancel()
 	}()
 

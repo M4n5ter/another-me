@@ -9,6 +9,8 @@
 
     "browser.prompt.default": "您是一个功能强大的浏览器自动化助手，能够执行各种网页交互和调试任务。您的能力包括：\\n\\n1. **导航**：导航到任何指定的URL以加载网页。\\n\\n2. **截图**：捕获整个页面或使用CSS选择器捕获特定元素的屏幕截图，默认尺寸为1700x1100像素。\\n\\n3. **元素交互**：\\n   - 点击通过CSS选择器识别的元素\\n   - 在指定元素上悬停\\n   - 在输入字段中填写指定值\\n   - 在下拉菜单中选择选项\\n\\n4. **JavaScript执行**：\\n   - 在浏览器上下文中运行任意JavaScript代码\\n   - 评估脚本并返回结果\\n\\n5. **调试工具**：\\n   - 启用/禁用JavaScript调试模式\\n   - 在特定脚本位置设置断点（URL+行号+可选列/条件）\\n   - 通过ID删除现有断点\\n   - 暂停和恢复脚本执行\\n   - 暂停时获取当前调用堆栈\\n\\n对于所有需要元素选择的操作，您必须使用精确的CSS选择器。在捕获屏幕截图时，您可以指定整个页面或特定元素。对于调试操作，您可以精确控制执行流和检查运行时行为。\\n\\n请提供清晰的指令，包括：\\n- 您想执行的特定操作\\n- 必需的参数（URL、选择器、值等）\\n- 任何可选参数（尺寸、条件等）\\n- 相关的预期结果\\n\\n在处理敏感操作或破坏性命令时，您应该在执行前确认操作。报告时要提供清晰的状态更新、成功/失败指示以及任何相关的输出或捕获的数据。",
     
+    "tool.registry.prompt": "当需要多次调用工具时，给出多个符合格式的调用请求即可，你拥有以下工具可供使用:\\n{toolRegistry}",
+
     "tool.browser.description": "一个强大的浏览器自动化工具，允许您通过编程接口控制Web浏览器。",
     "tool.browser.arg.operation": "要执行的操作",
     "tool.browser.arg.url": "要导航到的URL",
@@ -113,6 +115,7 @@
     "tool.admin.time.description": "获取当前系统时间，可选格式化。",
     "tool.admin.time.arg.format": "可选。时间格式化布局字符串（例如 '2006-01-02 15:04:05'）。如果未提供，则使用 RFC3339 格式。",
 
+    "tool.admin.archive.name": "压缩和解压缩文件",
     "tool.admin.archive.description": "压缩和解压缩各种格式的文件，包括zip、tar、tar.gz等。",
     "tool.admin.archive.arg.operation": "要执行的操作：compress（压缩）或extract（解压缩）。",
     "tool.admin.archive.arg.source_path": "源文件或目录的路径。",
@@ -121,6 +124,7 @@
     "tool.admin.archive.arg.source_paths": "要压缩的多个源路径（压缩多个文件/目录时）。",
     "tool.admin.archive.arg.verbose": "是否在操作过程中显示详细信息。",
 
+    "tool.cryptoexchange.binance.list_ticker_prices.name": "获取交易对价格",
     "tool.cryptoexchange.binance.list_ticker_prices.description": "从 Binance 获取交易对价格。",
     "tool.cryptoexchange.binance.list_ticker_prices.arg.symbols": "要获取价格的交易对。(例如: [\"BTCUSDT\", \"ETHUSDT\", \"SOLUSDT\", \"XRPUSDT\", \"DOGEUSDT\"])"
 } 

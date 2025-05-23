@@ -38,14 +38,14 @@ func TestContentPartJSON(t *testing.T) {
 		Text: "Hello, world!",
 	}
 
-	textJSON, err := json.Marshal(textPart)
+	textJSON, err := json.MarshalToString(textPart)
 	require.NoError(t, err, "Marshal 文本类型的 ContentPart 不应返回错误")
 
 	expectedTextJSON := `{"type":"text","text":"Hello, world!"}`
-	assert.JSONEq(t, expectedTextJSON, string(textJSON), "文本类型的 ContentPart 应正确编码为 JSON")
+	assert.JSONEq(t, expectedTextJSON, textJSON, "文本类型的 ContentPart 应正确编码为 JSON")
 
 	var decodedTextPart ContentPart
-	err = json.Unmarshal(textJSON, &decodedTextPart)
+	err = json.UnmarshalFromString(textJSON, &decodedTextPart)
 	require.NoError(t, err, "Unmarshal 文本类型的 JSON 不应返回错误")
 	assert.Equal(t, textPart, decodedTextPart, "解码后的 ContentPart 应与原始对象相同")
 
@@ -58,14 +58,14 @@ func TestContentPartJSON(t *testing.T) {
 		}),
 	}
 
-	imageJSON, err := json.Marshal(imagePart)
+	imageJSON, err := json.MarshalToString(imagePart)
 	require.NoError(t, err, "Marshal 图像 URL 类型的 ContentPart 不应返回错误")
 
 	expectedImageJSON := `{"type":"image_url","image_url":{"url":"https://example.com/image.jpg","detail":"high"}}`
-	assert.JSONEq(t, expectedImageJSON, string(imageJSON), "图像 URL 类型的 ContentPart 应正确编码为 JSON")
+	assert.JSONEq(t, expectedImageJSON, imageJSON, "图像 URL 类型的 ContentPart 应正确编码为 JSON")
 
 	var decodedImagePart ContentPart
-	err = json.Unmarshal(imageJSON, &decodedImagePart)
+	err = json.UnmarshalFromString(imageJSON, &decodedImagePart)
 	require.NoError(t, err, "Unmarshal 图像 URL 类型的 JSON 不应返回错误")
 	assert.Equal(t, imagePart.Type, decodedImagePart.Type, "解码后的 Type 应匹配")
 	assert.Equal(t, imagePart.ImageURL.Unwrap().URL, decodedImagePart.ImageURL.Unwrap().URL, "解码后的 URL 应匹配")
@@ -92,11 +92,11 @@ func TestInputMessageJSON(t *testing.T) {
 		},
 	}
 
-	messageJSON, err := json.Marshal(message)
+	messageJSON, err := json.MarshalToString(message)
 	require.NoError(t, err, "Marshal InputMessage 不应返回错误")
 
 	var decodedMessage InputMessage
-	err = json.Unmarshal(messageJSON, &decodedMessage)
+	err = json.UnmarshalFromString(messageJSON, &decodedMessage)
 	require.NoError(t, err, "Unmarshal InputMessage JSON 不应返回错误")
 
 	assert.Equal(t, message.Role, decodedMessage.Role, "解码后的 Role 应匹配")
@@ -141,15 +141,15 @@ func TestChatInputJSON(t *testing.T) {
 		ConversationID: "test-conversation",
 	}
 
-	chatInputJSON, err := json.Marshal(chatInput)
+	chatInputJSON, err := json.MarshalToString(chatInput)
 	require.NoError(t, err, "Marshal ChatInput 不应返回错误")
 
 	// ConversationID 应被省略，因为其 JSON 标签为 "-"
-	assert.NotContains(t, string(chatInputJSON), "conversation_id", "ConversationID 不应出现在 JSON 中")
-	assert.NotContains(t, string(chatInputJSON), "test-conversation", "ConversationID 的值不应出现在 JSON 中")
+	assert.NotContains(t, chatInputJSON, "conversation_id", "ConversationID 不应出现在 JSON 中")
+	assert.NotContains(t, chatInputJSON, "test-conversation", "ConversationID 的值不应出现在 JSON 中")
 
 	var decodedChatInput ChatInput
-	err = json.Unmarshal(chatInputJSON, &decodedChatInput)
+	err = json.UnmarshalFromString(chatInputJSON, &decodedChatInput)
 	require.NoError(t, err, "Unmarshal ChatInput JSON 不应返回错误")
 
 	assert.Equal(t, len(chatInput.Messages), len(decodedChatInput.Messages), "解码后的 Messages 长度应匹配")
@@ -168,11 +168,11 @@ func TestChatOutputChunkJSON(t *testing.T) {
 		},
 	}
 
-	normalJSON, err := json.Marshal(normalChunk)
+	normalJSON, err := json.MarshalToString(normalChunk)
 	require.NoError(t, err, "Marshal 正常的 ChatOutputChunk 不应返回错误")
 
 	expectedNormalJSON := `{"content_parts":[{"type":"text","text":"Hello, "}]}`
-	assert.JSONEq(t, expectedNormalJSON, string(normalJSON), "正常的 ChatOutputChunk 应正确编码为 JSON")
+	assert.JSONEq(t, expectedNormalJSON, normalJSON, "正常的 ChatOutputChunk 应正确编码为 JSON")
 
 	// 测试带有结束原因的最终块
 	finishReason := "stop"
@@ -186,11 +186,11 @@ func TestChatOutputChunkJSON(t *testing.T) {
 		FinishReason: Some(finishReason),
 	}
 
-	finalJSON, err := json.Marshal(finalChunk)
+	finalJSON, err := json.MarshalToString(finalChunk)
 	require.NoError(t, err, "Marshal 带有结束原因的 ChatOutputChunk 不应返回错误")
 
 	expectedFinalJSON := `{"content_parts":[{"type":"text","text":"world!"}],"finish_reason":"stop"}`
-	assert.JSONEq(t, expectedFinalJSON, string(finalJSON), "带有结束原因的 ChatOutputChunk 应正确编码为 JSON")
+	assert.JSONEq(t, expectedFinalJSON, finalJSON, "带有结束原因的 ChatOutputChunk 应正确编码为 JSON")
 
 	// 测试带有错误的块
 	errorChunk := ChatOutputChunk{
@@ -203,14 +203,14 @@ func TestChatOutputChunkJSON(t *testing.T) {
 		Error: assert.AnError,
 	}
 
-	errorJSON, err := json.Marshal(errorChunk)
+	errorJSON, err := json.MarshalToString(errorChunk)
 	require.NoError(t, err, "Marshal 带有错误的 ChatOutputChunk 不应返回错误")
 
 	// Error 应被省略，因为其 JSON 标签为 "-"
-	assert.NotContains(t, string(errorJSON), "error", "Error 不应出现在 JSON 中")
+	assert.NotContains(t, errorJSON, "error", "Error 不应出现在 JSON 中")
 
 	var decodedErrorChunk ChatOutputChunk
-	err = json.Unmarshal(errorJSON, &decodedErrorChunk)
+	err = json.UnmarshalFromString(errorJSON, &decodedErrorChunk)
 	require.NoError(t, err, "Unmarshal 带有错误的 ChatOutputChunk JSON 不应返回错误")
 	assert.Nil(t, decodedErrorChunk.Error, "解码后的 Error 应为 nil")
 }

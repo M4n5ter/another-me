@@ -48,7 +48,7 @@ func (t *ListTickerPricesTool) Schema(ctx context.Context) (toolcore.ToolSchema,
 	for _, lang := range langs {
 		langCtx := i18n.ContextWithLanguage(ctx, lang)
 		descriptions[lang] = t.i18nMgr.T(langCtx, "tool.cryptoexchange.binance.list_ticker_prices.description", nil)
-		localizedNames[lang] = "List Ticker Prices"
+		localizedNames[lang] = t.i18nMgr.T(langCtx, "tool.cryptoexchange.binance.list_ticker_prices.name", nil)
 	}
 
 	inputParameters := []toolcore.ParameterDefinition{

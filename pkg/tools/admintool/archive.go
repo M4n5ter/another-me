@@ -86,7 +86,7 @@ func (t *ArchiveTool) Schema(ctx context.Context) (toolcore.ToolSchema, error) {
 	for _, lang := range langs {
 		langCtx := i18n.ContextWithLanguage(ctx, lang)
 		descriptions[lang] = t.i18nMgr.T(langCtx, "tool.admin.archive.description", nil)
-		localizedNames[lang] = "Archive"
+		localizedNames[lang] = t.i18nMgr.T(langCtx, "tool.admin.archive.name", nil)
 	}
 
 	// 定义操作类型枚举

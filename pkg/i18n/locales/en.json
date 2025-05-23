@@ -9,6 +9,8 @@
 
     "browser.prompt.default": "You are a powerful browser automation assistant capable of performing various web interactions and debugging tasks. Your capabilities include:\\n\\n1. **Navigation**: Navigate to any specified URL to load web pages.\\n\\n2. **Screenshots**: Capture screenshots of the entire page or specific elements using CSS selectors, with a default size of 1700x1100 pixels.\\n\\n3. **Element Interactions**:\\n   - Click on elements identified by CSS selectors\\n   - Hover over specified elements\\n   - Fill input fields with specified values\\n   - Select options from dropdown menus\\n\\n4. **JavaScript Execution**:\\n   - Run arbitrary JavaScript code in the browser context\\n   - Evaluate scripts and return results\\n\\n5. **Debugging Tools**:\\n   - Enable/disable JavaScript debugging mode\\n   - Set breakpoints at specific script locations (URL+line+optional column/condition)\\n   - Remove existing breakpoints by ID\\n   - Pause and resume script execution\\n   - Get the current call stack when paused\\n\\nFor all operations requiring element selection, you must use precise CSS selectors. When capturing screenshots, you can specify the entire page or specific elements. For debugging operations, you have precise control over execution flow and can inspect runtime behavior.\\n\\nPlease provide clear instructions, including:\\n- The specific operation you want to perform\\n- Required parameters (URL, selectors, values, etc.)\\n- Any optional parameters (dimensions, conditions, etc.)\\n- Related expected results\\n\\nYou should confirm sensitive or destructive commands before execution. Report with clear status updates, success/failure indications, and any relevant output or captured data.",
     
+    "tool.registry.prompt": "When you need to call tools multiple times, just give multiple call requests in the correct format. You have the following tools available to you:\\n{toolRegistry}",
+
     "tool.browser.description": "A powerful browser automation tool that allows you to control web browsers through a programmatic interface.",
     "tool.browser.arg.operation": "The operation to perform",
     "tool.browser.arg.url": "The URL to navigate to",
@@ -113,6 +115,7 @@
     "tool.admin.time.description": "Gets the current system time, optionally formatted.",
     "tool.admin.time.arg.format": "Optional. The layout string for formatting the time (e.g., '2006-01-02 15:04:05'). If not provided, RFC3339 format is used.",
 
+    "tool.admin.archive.name": "Archive and Extract Files",
     "tool.admin.archive.description": "Compress and extract files in various formats including zip, tar, tar.gz, and more.",
     "tool.admin.archive.arg.operation": "Operation to perform: compress or extract.",
     "tool.admin.archive.arg.source_path": "Path to the source file or directory.",
@@ -121,6 +124,7 @@
     "tool.admin.archive.arg.source_paths": "Multiple source paths to compress (when compressing multiple files/directories).",
     "tool.admin.archive.arg.verbose": "Whether to display detailed information during operation.",
 
+    "tool.cryptoexchange.binance.list_ticker_prices.name": "List Ticker Prices",
     "tool.cryptoexchange.binance.list_ticker_prices.description": "List ticker prices from Binance.",
     "tool.cryptoexchange.binance.list_ticker_prices.arg.symbols": "Symbols to list prices for. (e.g., [\"BTCUSDT\", \"ETHUSDT\", \"SOLUSDT\", \"XRPUSDT\", \"DOGEUSDT\"])"
 } 

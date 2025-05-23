@@ -555,11 +555,11 @@ func (t *BrowserTool) evaluate(args BrowserArgs) (BrowserResult, error) {
 	// 将结果转换为字符串
 	var resultStr string
 	if result != nil {
-		resultBytes, err := json.Marshal(result)
+		resultBytes, err := json.MarshalToString(result)
 		if err != nil {
 			resultStr = fmt.Sprintf("%v", result)
 		} else {
-			resultStr = string(resultBytes)
+			resultStr = resultBytes
 		}
 	}
 

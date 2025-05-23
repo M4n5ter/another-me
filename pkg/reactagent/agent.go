@@ -561,12 +561,12 @@ func mergeJSONArgs(existing, new string) (string, error) {
 			maps.Copy(existingMap, newMap)
 
 			// 将合并后的映射转换回JSON字符串
-			merged, err := json.Marshal(existingMap)
+			merged, err := json.MarshalToString(existingMap)
 			if err != nil {
 				return "", fmt.Errorf("合并JSON后无法序列化: %w", err)
 			}
 
-			return string(merged), nil
+			return merged, nil
 		}
 	}
 

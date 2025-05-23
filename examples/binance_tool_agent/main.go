@@ -63,7 +63,7 @@ func main() {
 		return
 	}
 
-	llmAdapter, err := eino.NewChatAdapter(ctx, chatModel, registry, "zh")
+	llmAdapter, err := eino.NewChatAdapter(ctx, chatModel, registry)
 	if err != nil {
 		logger.Error("Failed to create no-tool LLM adapter", "error", err)
 		return
