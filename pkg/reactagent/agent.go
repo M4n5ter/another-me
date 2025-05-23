@@ -296,7 +296,7 @@ func (a *ToolCallingAgent) handleReactLoop(
 			outputChan <- createThoughtChunk(currentIterationThinks)
 		}
 
-		messages = append(messages, composeMessage(messages, currentIterationThinks, toolCallsToExecute)...)
+		messages = composeMessage(messages, currentIterationThinks, toolCallsToExecute)
 
 		// 根据当前迭代的LLM输出和工具调用情况，确定本次迭代的思考内容
 		thoughtForThisIteration := ""
