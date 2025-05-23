@@ -48,7 +48,7 @@
         - `RetrieveMemories(ctx context.Context, queryContext any) ([]MemoryItem, error)`: 根据 `DecisionMaker` 或 `Agent` 提供的查询上下文（例如，当前任务描述、用户意图关键词、时间范围等）从 `Mindscape` 检索相关记忆。`Mindscape` 负责实现高级检索逻辑（如联想、图谱、向量相似度）。
     - **监控任务委派:**
         - `DelegateMonitoringTask(ctx context.Context, taskDetails MonitoringTask)`: 接收 `DecisionMaker` 定义的监控任务，将其转换为 `Mindscape` 可理解的格式，并注册到 `Mindscape` 服务。这包括监控条件、触发频率、回调配置等。
-        - `ClearOrUpdateMonitoringTasks(ctx context.Context, taskIDs []string)`: 根据需要清除或更新已在 `Mindscape` 注册的监控任务。
+        - `ClearOrUpdateMonitoringTasks(ctx context.Context, taskUpdate TaskUpdate)`: 根据需要清除或更新已在 `Mindscape` 注册的监控任务。
     - **唤醒机制接口:**
         - `SetupWakeUpListener(handler func(wakeupData WakeupEvent) error)`: 初始化并管理用于接收 `Mindscape` 唤醒信号的机制（例如，启动一个轻量级HTTP服务器监听Webhook回调，或订阅指定的消息队列主题）。当收到唤醒信号时，调用注册的 `handler`（通常由 `MainLoop` 提供）。
         - 对唤醒信号进行初步验证和解析，确保数据完整性，但不负责具体业务逻辑处理。
@@ -90,6 +90,84 @@
       }
       ```
     - 其他如 `Task`, `ExecutionResult`, `MonitoringTask`, `WakeupEvent`, `MemoryItem` 等数据结构也在此定义。
+
+### 2.7. 关键数据结构释义 (Key Data Structures Explained)
+- **`Task`**: 描述一个需要 `Agent` 执行的具体任务。
+  ```go
+  type Task struct {
+      ID          string // 任务唯一标识
+      Type        string // 任务类型 (例如 "gui_click", "react_plan_and_execute")
+      Description string // 任务的自然语言描述
+      AgentType   AgentType // 指定执行此任务的Agent类型
+      Parameters  map[string]any // 任务执行所需的具体参数 (例如，点击坐标，ReAct Agent的目标)
+      Priority    int    // 任务优先级
+      // ... 其他元数据
+  }
+  ```
+- **`ExecutionResult`**: `Agent` 执行任务后的结果。
+  ```go
+  type ExecutionResult struct {
+      TaskID      string // 对应的任务ID
+      Status      string // 执行状态 ("success", "failure", "in_progress")
+      Output      any    // Agent执行的主要产出物 (例如，GUI Agent的截图路径，ReAct Agent的最终答案)
+      Observations []string // Agent在执行过程中的重要观察或中间步骤的文本描述
+      Error       string // 如果执行失败，记录错误信息
+      // ... 其他性能指标或元数据
+  }
+  ```
+- **`MonitoringTask`**: 定义一个需要委托给 `Mindscape` 的监控任务。这是 "Another Me" 内部的数据结构，`MindscapeConnector` 会将其转换为 `Mindscape` API 所需的格式。
+  ```go
+  type MonitoringTask struct {
+      ID                  Option[string]   // 监控任务的唯一ID (由Mindscape生成并返回，对应Mindscape的UUID)
+      Description         string           // 监控任务的自然语言描述 (Another Me 内部使用)
+      MindscapeTaskType   string           // 期望在Mindscape中使用的任务类型 (例如 "generic_condition_monitor")
+                                        // MindscapeConnector 将基于此类型和以下Conditions/TargetData构造发送给Mindscape的Parameters
+      Conditions          []MonitorCondition // 触发唤醒的一组条件
+      TargetData          []string         // 满足条件时，Mindscape需要采集并返回的数据点 (用于填充WakeupEvent.ObservedData)
+      NotificationMethods []string         // 通知方式，如 ["webhook", "mq"]
+      WebhookURL          Option[string]   // 如果 NotificationMethods 含 "webhook", 此为回调URL
+      MQTopic             Option[string]   // 如果 NotificationMethods 含 "mq", 此为消息队列主题
+      MaxRetries          Option[int]      // 通知传递的最大重试次数 (可选, Mindscape有默认值)
+      IsEnabled           bool             // Another Me 内部标记，是否希望此任务在Mindscape中实际处于活动状态
+      // ... 其他配置，如频率限制、持续时间等
+  }
+  type MonitorCondition struct {
+      Type     string // e.g., "application_start", "text_on_screen", "user_idle_then_active"
+      Property string // e.g., "application_name", "text_pattern", "idle_duration_seconds"
+      Operator string // e.g., "equals", "contains", "greater_than"
+      Value    any    // The value to compare against
+  }
+  ```
+- **`TaskUpdate`**: 用于更新或清除 `Mindscape` 中的监控任务。
+  ```go
+  type TaskUpdate struct {
+      TasksToUpdate []MonitoringTask // 需要更新的监控任务详情
+      TaskIDsToDelete []string     // 需要删除的监控任务ID
+  }
+  ```
+- **`WakeupEvent`**: `Mindscape` 唤醒 "Another Me" 时传递的数据。
+  ```go
+  type WakeupEvent struct {
+      MonitoringTaskID string         // 触发唤醒的监控任务ID
+      TriggerTime      time.Time      // 唤醒条件满足的时间
+      ObservedData     map[string]any // Mindscape观测到的数据 (根据MonitoringTask.TargetData定义)
+      Reason           string         // 简述唤醒原因
+      // ... 其他元数据
+  }
+  ```
+- **`MemoryItem`**: 表示存储在 `Mindscape` 中的一条记忆。
+  ```go
+  type MemoryItem struct {
+      ID          string         // 记忆唯一标识
+      Timestamp   time.Time      // 记忆产生的时间
+      Type        string         // 记忆类型 (例如 "observation", "user_preference", "task_summary", "error_log")
+      Content     any            // 记忆的具体内容 (可以是文本、结构化数据、指向其他资源的指针等)
+      Keywords    []string       // 用于检索的关键词
+      Importance  float64        // 记忆的重要性评分 (0.0 - 1.0)
+      RelatedIDs  []string       // 与此记忆相关的其他记忆ID (用于构建记忆图谱)
+      // ... 其他元数据，如来源、置信度等
+  }
+  ```
 
 ## 3. 工作流程 (Workflow)
 
@@ -158,7 +236,7 @@
 - `MindscapeConnector` 与 `Mindscape` 的所有网络通信应包含超时控制、重试逻辑（针对可恢复错误）和熔断机制。
 - `MainLoop` 需要能够从其子组件（如 `DecisionMaker`, `AgentDispatcher`）的临时故障中优雅恢复，或在关键组件失败时记录详细错误并尝试安全重启或进入受限模式。
 - 鉴于系统的持续运行特性，必须高度关注资源管理，防止内存泄漏、句柄泄漏等问题。
-- `Mindscape` 不可用时的降级策略：`DecisionMaker` 应能感知到 `Mindscape` 的不可用状态，并采取备用逻辑（例如，基于短期记忆运行，或进入更长时间的本地化等待，定期尝试重连）。
+- `Mindscape` 不可用时的降级策略：`DecisionMaker` 应能感知到 `Mindscape` 的不可用状态，并采取备用逻辑（例如，基于短期记忆运行，或进入更长时间的本地化等待，定期尝试重连）。**此外，对于计划发送给 `Mindscape` 的数据（如新的记忆条目、监控任务更新），应实现一个本地持久化队列。当 `MindscapeConnector` 检测到 `Mindscape` 服务恢复时，会自动处理队列中的数据，确保信息最终一致性。**
 
 ## 7. 扩展性 (Extensibility)
 
