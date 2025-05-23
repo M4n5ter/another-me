@@ -260,6 +260,14 @@ func (a *TextBasedAgent) handleReactLoop(
 					currentIterationThinks += part.Text
 				}
 			}
+
+			switch {
+			case ctx.Err() != nil:
+				a.logger.Info("Context canceled, exiting loop", "conversationID", conversationID)
+				return
+			default:
+				continue
+			}
 		}
 
 		// 将LLM的完整回复添加到消息历史

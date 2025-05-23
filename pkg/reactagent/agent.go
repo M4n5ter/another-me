@@ -269,6 +269,14 @@ func (a *ToolCallingAgent) handleReactLoop(
 					}
 				}
 			}
+
+			switch {
+			case ctx.Err() != nil:
+				a.logger.Info("Context canceled, exiting loop", "conversationID", conversationID)
+				return
+			default:
+				continue
+			}
 		}
 
 		// 按照原始顺序重建工具调用列表

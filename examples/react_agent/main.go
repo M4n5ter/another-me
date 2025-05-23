@@ -6,6 +6,7 @@ import (
 	"log"
 	"log/slog"
 	"os"
+	"time"
 
 	"github.com/cloudwego/eino-ext/components/model/deepseek"
 
@@ -68,8 +69,15 @@ func main() {
 	userInput := "通过网络抓取去调查如何实现方便的为每个用户提供一个隔离的虚拟安卓 GUI 环境，并给出一份最终报告。"
 	conversationID := "test-react-hackernews-001"
 
+	ctx, cancel := context.WithCancel(context.Background())
+
+	go func() {
+		time.Sleep(10 * time.Second)
+		cancel()
+	}()
+
 	// 获取流式输出通道
-	outputChan, err := reactAgent.Run(context.Background(), userInput, conversationID)
+	outputChan, err := reactAgent.Run(ctx, userInput, conversationID)
 	if err != nil {
 		// 处理初始错误
 		logger.Error("Failed to run ReAct agent", "error", err)
