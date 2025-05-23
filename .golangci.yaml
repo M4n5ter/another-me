@@ -117,8 +117,8 @@ linters:
       rules:
         deny-log:
           deny:
-            # - pkg: "log$"
-            #   desc: "禁止使用标准库 log，请使用 log/slog"
+            - pkg: "log$"
+              desc: "禁止使用标准库 log，请使用 log/slog，如果需要 Fatal，请使用 slog.Error 并调用 os.Exit 或 return/panic"
             - pkg: "encoding/json"
               desc: '禁止使用标准库 encoding/json，请使用 json "github.com/json-iterator/go"'
     nestif:
