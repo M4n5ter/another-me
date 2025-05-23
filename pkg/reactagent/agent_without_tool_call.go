@@ -267,7 +267,7 @@ func (a *TextBasedAgent) handleReactLoop(
 				// 将LLM的完整回复添加到消息历史
 				assistantMessage := createAssistantMessage(currentIterationThinks)
 				messages = append(messages, assistantMessage)
-				a.logger.Info("\nContext canceled, exiting loop, messages", "messages", messages)
+				a.logger.Info("Context canceled, exiting loop, messages", "messages", messages)
 				return
 			default:
 				continue
