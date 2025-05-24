@@ -8,21 +8,23 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-// TOMLParser implements the Parser interface for TOML configuration files.
+// TOMLParser 实现 TOML 配置文件的解析器
 type TOMLParser struct{}
 
-// NewTOMLParser creates a new TOMLParser.
+// NewTOMLParser 创建新的 TOMLParser
 func NewTOMLParser() *TOMLParser {
 	return &TOMLParser{}
 }
 
-// Parse reads TOML configuration data from an io.Reader and unmarshals it.
+// Parse 从 io.Reader 读取 TOML 配置数据并反序列化到 'v' 接口
 func (p *TOMLParser) Parse(r io.Reader, v any) error {
-	_, err := toml.NewDecoder(r).Decode(v)
-	return fmt.Errorf("toml.Decode: %w", err)
+	if _, err := toml.NewDecoder(r).Decode(v); err != nil {
+		return fmt.Errorf("toml.Decode: %w", err)
+	}
+	return nil
 }
 
-// ParseFile reads TOML configuration data from a file and unmarshals it.
+// ParseFile 从文件路径读取 TOML 配置数据并反序列化到 'v' 接口
 func (p *TOMLParser) ParseFile(filePath string, v any) error {
 	file, err := os.Open(filePath)
 	if err != nil {
