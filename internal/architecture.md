@@ -227,7 +227,7 @@
 ## 5. 与 `mindscape` 的交互 (Interaction with `mindscape`)
 
 - **记忆的持久化与检索:** "Another Me" 依赖 `Mindscape` 作为其长期记忆库。所有重要的学习成果、用户画像、任务历史、关键事件等都通过 `MindscapeConnector` 存入 `Mindscape`。在决策和任务执行前，也通过 `MindscapeConnector` 从 `Mindscape` 获取相关的历史记忆、模式和知识，以提供上下文和指导。`Mindscape` 自身负责高级记忆管理功能，如联想推理、知识图谱构建、向量化检索和记忆衰减等。
-- **智能监控任务委托:** 当 "Another Me" 的 `DecisionMaker` 判断系统可以进入空闲或等待状态时，它会定义一系列具体的监控条件，并通过 `MindscapeConnector` 将这些监控任务委托给 `Mindscape`。例如："当用户打开VSCode并且活动窗口标题包含 'main.go' 时通知我"，或者"如果连续30分钟无任何键盘鼠标操作后，一旦检测到新的用户输入，立即唤醒"。
+- **智能监控任务委托:** 当 "Another Me" 的 `DecisionMaker` 判断系统可以进入空闲或等待状态时，它会定义一系列具体的监控条件，并通过 `MindscapeConnector` 将这些监控任务委托给 `Mindscape`。例如："当比特币价格达到120000美元时通知我"，或者"Elon Musk 发推文时通知我"。
 - **唤醒机制与数据传递:** `Mindscape` 在其监控的条件满足后，会通过预先配置好的通道（如Webhook URL或MQ主题）向 "Another Me" 的 `MindscapeConnector` 发送唤醒信号。这个信号必须包含触发唤醒的事件详情和相关的上下文数据（例如，哪个应用被打开、屏幕上出现的文本片段、用户输入的初步内容等）。`MindscapeConnector` 负责监听这些信号，验证其来源，解析数据，并通过回调机制激活 `MainLoop`，将数据传递给 `DecisionMaker`。
 
 ## 6. 错误处理与韧性 (Error Handling & Resilience)
