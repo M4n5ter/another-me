@@ -8,21 +8,24 @@ import (
 	json "github.com/json-iterator/go"
 )
 
-// JSONParser implements the Parser interface for JSON configuration files.
+// JSONParser 实现 JSON 配置文件的解析器
 type JSONParser struct{}
 
-// NewJSONParser creates a new JSONParser.
+// NewJSONParser 创建新的 JSONParser
 func NewJSONParser() *JSONParser {
 	return &JSONParser{}
 }
 
-// Parse reads JSON configuration data from an io.Reader and unmarshals it.
+// Parse 从 io.Reader 读取 JSON 配置数据并反序列化到 'v' 接口
 func (p *JSONParser) Parse(r io.Reader, v any) error {
 	decoder := json.NewDecoder(r)
-	return fmt.Errorf("json.Decode: %w", decoder.Decode(v))
+	if err := decoder.Decode(v); err != nil {
+		return fmt.Errorf("json.Decode: %w", err)
+	}
+	return nil
 }
 
-// ParseFile reads JSON configuration data from a file and unmarshals it.
+// ParseFile 从文件路径读取 JSON 配置数据并反序列化到 'v' 接口
 func (p *JSONParser) ParseFile(filePath string, v any) error {
 	file, err := os.Open(filePath)
 	if err != nil {

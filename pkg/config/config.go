@@ -7,15 +7,15 @@ import (
 	"strings"
 )
 
-// Parser defines the interface for a configuration parser.
+// Parser 定义配置解析器
 type Parser interface {
-	// Parse reads configuration data from an io.Reader and unmarshals it into the provided 'v' interface{}.
+	// Parse 从 io.Reader 读取配置数据并反序列化到 'v' 接口
 	Parse(r io.Reader, v any) error
-	// ParseFile reads configuration data from the given file path and unmarshals it into the provided 'v' interface{}.
+	// ParseFile 从文件路径读取配置数据并反序列化到 'v' 接口
 	ParseFile(filePath string, v any) error
 }
 
-// NewParser creates a new parser based on the file extension.
+// NewParser 根据文件扩展名创建新的解析器
 func NewParser(filePath string) (Parser, error) {
 	ext := strings.ToLower(filepath.Ext(filePath))
 	switch ext {
