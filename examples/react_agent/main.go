@@ -144,7 +144,7 @@ func registerTools(registry *toolcore.Registry, i18nMgr *i18n.Manager) {
 		}
 	}
 
-	// 注册 MCP 工具，同名工具会覆盖
+	// 注册 MCP 工具
 	// tools, err := toolcore.STDIOMCPTools("uvx", nil, "mcp-server-fetch")
 	// if err != nil {
 	// 	log.Fatalf("Failed to register mcp tool: %v", err)

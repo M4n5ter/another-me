@@ -1,0 +1,6 @@
+host = "localhost"
+port = 8080
+
+[mindscape]
+host = "localhost"
+port = 8081

@@ -1,0 +1,6 @@
+name: TestAppYAML
+version: 1.0.yaml
+settings:
+  host: localhost
+  port: 8082
+  enabled: true 
