@@ -1,0 +1,7 @@
+name = "TestAppTOML"
+version = "1.0.toml"
+
+[settings]
+host = "localhost"
+port = 8081
+enabled = false 
