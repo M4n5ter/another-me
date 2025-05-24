@@ -1,0 +1,9 @@
+{
+  "name": "TestAppJSON",
+  "version": "1.0.json",
+  "settings": {
+    "host": "localhost",
+    "port": 8080,
+    "enabled": true
+  }
+} 
