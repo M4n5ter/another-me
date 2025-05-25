@@ -1,6 +1,10 @@
 package llminterface
 
 import (
+	"encoding/base64"
+	"fmt"
+	"strings"
+
 	. "github.com/m4n5ter/another-me/pkg/option"
 )
 
@@ -67,6 +71,38 @@ const (
 	ImageDetailHigh ImageURLDetail = "high" // 高细节，处理更精细，但可能更慢或消耗更多资源
 	ImageDetailAuto ImageURLDetail = "auto" // 自动决定细节级别，通常是提供商的默认行为
 )
+
+// ToBase64 将 ImageURLContent 转换为 base64 字符串
+func (i *ImageURLContent) ToBase64() (string, error) {
+	if i.URL == "" {
+		return "", fmt.Errorf("url is empty")
+	}
+
+	base64Data := strings.Split(i.URL, ",")[1]
+	return base64Data, nil
+}
+
+// ToImageBytes 将 ImageURLContent 转换为 image 字节数组
+func (i *ImageURLContent) ToImageBytes() ([]byte, error) {
+	base64Data, err := i.ToBase64()
+	if err != nil {
+		return nil, err
+	}
+
+	img, err := base64.StdEncoding.DecodeString(base64Data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode base64 data: %w", err)
+	}
+	return img, nil
+}
+
+// MimeType 返回 ImageURLContent 的 MIME 类型
+func (i *ImageURLContent) MimeType() string {
+	if i.URL == "" {
+		return ""
+	}
+	return strings.Split(strings.Split(i.URL, ";")[0], ":")[1]
+}
 
 // ToolCallContent 代表一个或多个工具调用请求。
 type ToolCallContent struct {

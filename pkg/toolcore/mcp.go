@@ -3,13 +3,10 @@ package toolcore
 import (
 	"context"
 	"fmt"
-	"slices"
 
 	json "github.com/json-iterator/go"
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/mcp"
-
-	. "github.com/m4n5ter/another-me/pkg/option"
 )
 
 // STDIOMCPTools 从STDIO MCP服务器获取所有工具
@@ -126,10 +123,9 @@ func (a *mcpToolAdapter) Schema(ctx context.Context) (ToolSchema, error) {
 		if err := json.Unmarshal(a.mcpTool.RawInputSchema, &rawSchema); err != nil {
 			return schema, fmt.Errorf("failed to unmarshal input schema: %w", err)
 		}
-
-		schema.InputParameters = convertRawSchemaToParams(rawSchema)
+		schema.InputParameters = ConvertJSONSchemaToParams(rawSchema)
 	} else if a.mcpTool.InputSchema.Type != "" {
-		schema.InputParameters = convertInputSchemaToParams(a.mcpTool.InputSchema)
+		schema.InputParameters = ConvertMCPInputSchemaToParams(a.mcpTool.InputSchema)
 	}
 
 	return schema, nil
@@ -169,159 +165,4 @@ func (a *mcpToolAdapter) Call(ctx context.Context, inputJSON string) (outputJSON
 	}
 
 	return resultJSON, nil
-}
-
-// convertInputSchemaToParams 将MCP的ToolInputSchema转换为 []ParameterDefinition
-func convertInputSchemaToParams(schema mcp.ToolInputSchema) []ParameterDefinition {
-	params := make([]ParameterDefinition, 0, len(schema.Properties))
-
-	for name, propRaw := range schema.Properties {
-		prop, ok := propRaw.(map[string]any)
-		if !ok {
-			continue
-		}
-
-		param := ParameterDefinition{
-			Name: name,
-			Description: map[string]string{
-				"en": getStringProp(prop, "description", ""),
-				"zh": getStringProp(prop, "description", ""),
-			},
-			Required: isRequired(name, schema.Required),
-		}
-
-		// 设置参数类型
-		setParamType(&param, prop)
-
-		// 处理枚举值
-		if enumValues, ok := prop["enum"]; ok {
-			if enumArr, ok := enumValues.([]any); ok && len(enumArr) > 0 {
-				param.EnumValues = Some(enumArr)
-			}
-		}
-
-		params = append(params, param)
-	}
-
-	return params
-}
-
-// convertRawSchemaToParams 将原始JSON Schema转换为参数定义
-func convertRawSchemaToParams(rawSchema map[string]any) []ParameterDefinition {
-	params := []ParameterDefinition{}
-
-	// 获取属性对象
-	properties, ok := rawSchema["properties"].(map[string]any)
-	if !ok {
-		return params
-	}
-
-	// 获取必需属性列表
-	var required []string
-	if reqArray, ok := rawSchema["required"].([]any); ok {
-		for _, v := range reqArray {
-			if str, ok := v.(string); ok {
-				required = append(required, str)
-			}
-		}
-	}
-
-	// 解析每个属性
-	for name, propRaw := range properties {
-		prop, ok := propRaw.(map[string]any)
-		if !ok {
-			continue
-		}
-
-		// 创建基本参数定义
-		param := ParameterDefinition{
-			Name: name,
-			Description: map[string]string{
-				"en": getStringProp(prop, "description", ""),
-				"zh": getStringProp(prop, "description", ""),
-			},
-			Required: isRequired(name, required),
-		}
-
-		// 设置参数类型
-		setParamType(&param, prop)
-
-		// 处理枚举值
-		if enumValues, ok := prop["enum"]; ok {
-			if enumArr, ok := enumValues.([]any); ok && len(enumArr) > 0 {
-				param.EnumValues = Some(enumArr)
-			}
-		}
-
-		params = append(params, param)
-	}
-
-	return params
-}
-
-func setParamType(param *ParameterDefinition, prop map[string]any) {
-	typeStr := getStringProp(prop, "type", "")
-	switch typeStr {
-	case "string":
-		param.Type = ParamTypeString
-	case "number":
-		param.Type = ParamTypeNumber
-	case "integer":
-		param.Type = ParamTypeInteger
-	case "boolean":
-		param.Type = ParamTypeBoolean
-	case "object":
-		param.Type = ParamTypeObject
-	case "array":
-		param.Type = ParamTypeArray
-		// 处理数组项类型
-		if items, ok := prop["items"].(map[string]any); ok {
-			itemType := getStringProp(items, "type", "")
-			itemParam := ParameterDefinition{
-				Type: paramTypeFromString(itemType),
-			}
-			// 设置项描述
-			if desc, ok := items["description"].(string); ok {
-				itemParam.Description = map[string]string{"en": desc}
-			}
-			param.Items = Some(itemParam)
-		}
-	default:
-		param.Type = ParamTypeAny
-	}
-}
-
-// paramTypeFromString 将字符串类型转换为ParamType
-func paramTypeFromString(typeStr string) ParameterType {
-	switch typeStr {
-	case "string":
-		return ParamTypeString
-	case "number":
-		return ParamTypeNumber
-	case "integer":
-		return ParamTypeInteger
-	case "boolean":
-		return ParamTypeBoolean
-	case "object":
-		return ParamTypeObject
-	case "array":
-		return ParamTypeArray
-	default:
-		return ParamTypeAny
-	}
-}
-
-// getStringProp 获取属性中的字符串值
-func getStringProp(prop map[string]any, key, defaultValue string) string {
-	if val, ok := prop[key]; ok {
-		if str, ok := val.(string); ok {
-			return str
-		}
-	}
-	return defaultValue
-}
-
-// isRequired 检查参数是否是必需的
-func isRequired(name string, required []string) bool {
-	return slices.Contains(required, name)
 }
