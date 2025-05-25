@@ -34,13 +34,14 @@ type ToolSchema struct {
 // 名称建议使用 snake_case 以便与 LLM API 实践保持一致。
 // 描述字段 (Description) 是国际化的，键为语言代码 (例如 "en", "zh")。
 type ParameterDefinition struct {
-	Name        string                        `json:"name"`                  // 参数名称 (snake_case)
-	Type        ParameterType                 `json:"type"`                  // 参数类型
-	Description map[string]string             `json:"description"`           // 参数的国际化描述 (键: 语言代码)
-	Required    bool                          `json:"required"`              // 此参数是否必需
-	EnumValues  Option[[]any]                 `json:"enum_values,omitempty"` // 可选：枚举值列表，用于具有固定允许值的参数
-	Properties  Option[[]ParameterDefinition] `json:"properties,omitempty"`  // 当 Type = ParamTypeObject 时，定义对象的属性
-	Items       Option[ParameterDefinition]   `json:"items,omitempty"`       // 当 Type = ParamTypeArray 时，描述数组元素的类型
+	Name         string                        `json:"name"`                    // 参数名称 (snake_case)
+	Type         ParameterType                 `json:"type"`                    // 参数类型
+	Description  map[string]string             `json:"description"`             // 参数的国际化描述 (键: 语言代码)
+	Required     bool                          `json:"required"`                // 此参数是否必需
+	EnumValues   Option[[]any]                 `json:"enum_values,omitempty"`   // 可选：枚举值列表，用于具有固定允许值的参数
+	Properties   Option[[]ParameterDefinition] `json:"properties,omitempty"`    // 当 Type = ParamTypeObject 时，定义对象的属性
+	Items        Option[ParameterDefinition]   `json:"items,omitempty"`         // 当 Type = ParamTypeArray 时，描述数组元素的类型
+	DefaultValue Option[any]                   `json:"default_value,omitempty"` // 可选: 参数的默认值
 }
 
 // ParameterType 定义了工具参数的类型。
