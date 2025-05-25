@@ -11,12 +11,13 @@ import (
 
 	"github.com/m4n5ter/another-me/pkg/i18n"
 	"github.com/m4n5ter/another-me/pkg/llminterface/google"
+	. "github.com/m4n5ter/another-me/pkg/option"
 	"github.com/m4n5ter/another-me/pkg/reactagent"
 	"github.com/m4n5ter/another-me/pkg/toolcore"
 	"github.com/m4n5ter/another-me/pkg/tools/fetchtool"
 )
 
-const reactSystemPrompt = `You are a meticulous and precise AI assistant. Your goal is to answer the user's request by thinking step-by-step. `
+const reactSystemPrompt = `你是一个精通各种技术的 AI 助手。你的目标是通过逐步思考来回答用户的问题。`
 
 func main() {
 	ctx := context.Background()
@@ -48,7 +49,14 @@ func main() {
 	}
 
 	// 设置 google genai 适配器
-	chatAdapter, err := google.NewGeminiAdapter(ctx, client, "gemini-2.5-flash-preview-05-20", registry)
+	chatAdapter, err := google.NewGeminiAdapter(ctx, client, registry, &google.GeminiAdapterConfig{
+		Model:       "gemini-2.5-flash-preview-05-20",
+		Temperature: Some(float32(0.1)),
+		ThinkingConfig: Some(google.GeminiThinkingConfig{
+			IncludeThoughts: true,
+			ThinkingBudget:  Some(int32(1000)),
+		}),
+	})
 	if err != nil {
 		logger.Error("Failed to create google genai adapter", "error", err)
 		return

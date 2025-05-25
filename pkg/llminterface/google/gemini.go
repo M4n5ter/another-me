@@ -14,16 +14,42 @@ import (
 // GeminiAdapter 是 google genai 的适配器
 type GeminiAdapter struct {
 	client *genai.Client
-	model  string
-	tools  Option[[]*genai.Tool]
+	config *GeminiAdapterConfig
+}
+
+// GeminiAdapterConfig 是 google genai 的适配器配置
+type GeminiAdapterConfig struct {
+	Model           string
+	Tools           Option[[]*genai.Tool]
+	Temperature     Option[float32]
+	TopP            Option[float32]
+	TopK            Option[float32]
+	MaxOutputTokens Option[int32]
+	StopSequences   Option[[]string]
+	ThinkingConfig  Option[GeminiThinkingConfig]
+}
+
+// GeminiThinkingConfig 是 google genai 的思考配置
+type GeminiThinkingConfig struct {
+	// 是否包含思考
+	IncludeThoughts bool
+	// 思考预算，单位是 token
+	ThinkingBudget Option[int32]
+}
+
+// ToGenaiThinkingConfig 将 GeminiThinkingConfig 转换为 genai.ThinkingConfig
+func (c *GeminiThinkingConfig) ToGenaiThinkingConfig() *genai.ThinkingConfig {
+	return &genai.ThinkingConfig{
+		IncludeThoughts: c.IncludeThoughts,
+		ThinkingBudget:  c.ThinkingBudget.UnwrapAsPtr(),
+	}
 }
 
 // NewGeminiAdapter 创建 google genai 的适配器
-func NewGeminiAdapter(ctx context.Context, client *genai.Client, model string, registry *toolcore.Registry) (*GeminiAdapter, error) {
+func NewGeminiAdapter(ctx context.Context, client *genai.Client, registry *toolcore.Registry, config *GeminiAdapterConfig) (*GeminiAdapter, error) {
 	adapter := &GeminiAdapter{
 		client: client,
-		model:  model,
-		tools:  None[[]*genai.Tool](),
+		config: config,
 	}
 
 	err := adapter.RegisterTools(ctx, registry)
@@ -41,9 +67,15 @@ func (g *GeminiAdapter) Chat(ctx context.Context, input llminterface.ChatInput) 
 	go func() {
 		defer close(outputChan)
 
-		for response, err := range g.client.Models.GenerateContentStream(ctx, g.model, genaiMsgs, &genai.GenerateContentConfig{
+		for response, err := range g.client.Models.GenerateContentStream(ctx, g.config.Model, genaiMsgs, &genai.GenerateContentConfig{
 			SystemInstruction: ExtractSystemPromptAsGenaiContent(input),
-			Tools:             *g.tools.UnwrapAsPtr(),
+			Tools:             *g.config.Tools.UnwrapAsPtr(),
+			Temperature:       g.config.Temperature.UnwrapAsPtr(),
+			TopP:              g.config.TopP.UnwrapAsPtr(),
+			TopK:              g.config.TopK.UnwrapAsPtr(),
+			MaxOutputTokens:   g.config.MaxOutputTokens.Unwrap(),
+			StopSequences:     g.config.StopSequences.Unwrap(),
+			ThinkingConfig:    g.config.ThinkingConfig.UnwrapAsPtr().ToGenaiThinkingConfig(),
 		}) {
 			if err != nil {
 				outputChan <- llminterface.ChatOutputChunk{
@@ -72,8 +104,8 @@ func (g *GeminiAdapter) RegisterTools(ctx context.Context, registry *toolcore.Re
 		return nil
 	}
 
-	if g.tools.IsNone() || len(*g.tools.UnwrapAsPtr()) == 0 {
-		g.tools = Some(make([]*genai.Tool, 0, len(tools)))
+	if g.config.Tools.IsNone() || len(*g.config.Tools.UnwrapAsPtr()) == 0 {
+		g.config.Tools = Some(make([]*genai.Tool, 0, len(tools)))
 	}
 
 	for _, tool := range tools {
@@ -82,7 +114,7 @@ func (g *GeminiAdapter) RegisterTools(ctx context.Context, registry *toolcore.Re
 			return fmt.Errorf("failed to get tool schema: %w", err)
 		}
 		googleTool := ToolCoreSchemaToGoogleFunctionDeclaration(&toolSchema)
-		g.tools = Some(append(*g.tools.UnwrapAsPtr(), &genai.Tool{
+		g.config.Tools = Some(append(*g.config.Tools.UnwrapAsPtr(), &genai.Tool{
 			FunctionDeclarations: []*genai.FunctionDeclaration{googleTool},
 		}))
 	}
