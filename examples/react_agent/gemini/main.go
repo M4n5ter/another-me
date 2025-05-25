@@ -21,6 +21,8 @@ const reactSystemPrompt = `你是一个精通各种技术的 AI 助手。你的�
 
 func main() {
 	ctx := context.Background()
+	i18n.GlobalManager.SetDefaultLanguage("zh")
+	ctx = i18n.ContextWithLanguage(ctx, i18n.GlobalManager.GetDefaultLanguage())
 
 	// 设置日志
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
@@ -137,6 +139,7 @@ func main() {
 // registerTools 注册所有可用的工具
 func registerTools(registry *toolcore.Registry, i18nMgr *i18n.Manager) {
 	ctx := context.Background()
+	ctx = i18n.ContextWithLanguage(ctx, i18nMgr.GetDefaultLanguage())
 	// 注册 Fetch 工具
 	fetchTool := fetchtool.NewFetchTool(i18nMgr)
 	err := registry.Register(ctx, fetchTool)
@@ -148,12 +151,13 @@ func registerTools(registry *toolcore.Registry, i18nMgr *i18n.Manager) {
 	// 注册 MCP 工具
 	// tools, err := toolcore.STDIOMCPTools("uvx", nil, "mcp-server-fetch")
 	// if err != nil {
-	// 	log.Fatalf("Failed to register mcp tool: %v", err)
+	// 	slog.Error("Failed to register mcp tool", "error", err)
+	// 	return
 	// }
 	// for _, tool := range tools {
 	// 	err := registry.Register(ctx, tool)
 	// 	if err != nil {
-	// 		log.Fatalf("Failed to register mcp tool: %v", err)
+	// 		slog.Error("Failed to register mcp tool", "error", err)
 	// 	}
 	// }
 }
