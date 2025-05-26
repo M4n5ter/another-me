@@ -44,6 +44,10 @@ func (s *Sentinel) CreateTask(ctx context.Context, createReq sentinelDTO.CreateT
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to create task: %s", resp.Status)
+	}
+
 	var taskResp sentinelDTO.TaskResponse
 	if err := json.NewDecoder(resp.Body).Decode(&taskResp); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
@@ -68,6 +72,10 @@ func (s *Sentinel) GetTask(ctx context.Context, taskID uuid.UUID) (*sentinelDTO.
 		return nil, fmt.Errorf("failed to do request: %w", err)
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to get task: %s", resp.Status)
+	}
 
 	var taskResp sentinelDTO.TaskResponse
 	if err := json.NewDecoder(resp.Body).Decode(&taskResp); err != nil {
