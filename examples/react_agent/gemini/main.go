@@ -17,7 +17,7 @@ import (
 	"github.com/m4n5ter/another-me/pkg/tools/fetchtool"
 )
 
-const reactSystemPrompt = `你是一个精通各种技术的 AI 助手。你的目标是通过逐步思考来回答用户的问题。`
+const reactSystemPrompt = `我是资深的加密货币投资者，擅长从大量角度分析加密货币的走势，擅长利用工具获取信息和攥写金融报告。`
 
 func main() {
 	ctx := context.Background()
@@ -78,8 +78,8 @@ func main() {
 		return
 	}
 
-	userInput := "通过网络抓取去调查如何实现方便的为每个用户提供一个隔离的虚拟安卓 GUI 环境，并给出一份最终报告。"
-	conversationID := "test-react-hackernews-001"
+	userInput := "从尽可能多的角度分析一下接下来短期、中期、长期Solana的走势，并给出一份详尽最终报告，需要给出精确的价格点位和时间点来支撑你的观点。"
+	conversationID := "test-react-gemini-001"
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
@@ -149,15 +149,15 @@ func registerTools(registry *toolcore.Registry, i18nMgr *i18n.Manager) {
 	}
 
 	// 注册 MCP 工具
-	// tools, err := toolcore.STDIOMCPTools("uvx", nil, "mcp-server-fetch")
-	// if err != nil {
-	// 	slog.Error("Failed to register mcp tool", "error", err)
-	// 	return
-	// }
-	// for _, tool := range tools {
-	// 	err := registry.Register(ctx, tool)
-	// 	if err != nil {
-	// 		slog.Error("Failed to register mcp tool", "error", err)
-	// 	}
-	// }
+	tools, err := toolcore.STDIOMCPTools("bunx", nil, "-y", "@mcpfun/mcp-server-ccxt")
+	if err != nil {
+		slog.Error("Failed to register mcp tool", "error", err)
+		return
+	}
+	for _, tool := range tools {
+		err := registry.Register(ctx, tool)
+		if err != nil {
+			slog.Error("Failed to register mcp tool", "error", err)
+		}
+	}
 }

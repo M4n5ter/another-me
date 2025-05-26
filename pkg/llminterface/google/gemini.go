@@ -108,15 +108,17 @@ func (g *GeminiAdapter) RegisterTools(ctx context.Context, registry *toolcore.Re
 		g.config.Tools = Some(make([]*genai.Tool, 0, len(tools)))
 	}
 
+	functions := make([]*genai.FunctionDeclaration, 0, len(tools))
 	for _, tool := range tools {
 		toolSchema, err := tool.Schema(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to get tool schema: %w", err)
 		}
-		googleTool := ToolCoreSchemaToGoogleFunctionDeclaration(&toolSchema)
-		g.config.Tools = Some(append(*g.config.Tools.UnwrapAsPtr(), &genai.Tool{
-			FunctionDeclarations: []*genai.FunctionDeclaration{googleTool},
-		}))
+		functions = append(functions, ToolCoreSchemaToGoogleFunctionDeclaration(&toolSchema))
 	}
+	g.config.Tools = Some(append(*g.config.Tools.UnwrapAsPtr(), &genai.Tool{
+		FunctionDeclarations: functions,
+	}))
+
 	return nil
 }
