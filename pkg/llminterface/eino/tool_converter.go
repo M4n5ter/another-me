@@ -41,16 +41,13 @@ func ToolCoreSchemaToEinoToolInfo(tcSchema *toolcore.ToolSchema, lang string) (*
 
 	parameterProperties := make(map[string]*schema.ParameterInfo)
 
-	if len(tcSchema.InputParameters) > 0 {
-		for i := range tcSchema.InputParameters {
-			paramDef := tcSchema.InputParameters[i]
-			einoParamInfo, err := convertToolCoreParamDefToEinoParamInfo(&paramDef, lang)
-			if err != nil {
-				slog.Error("Failed to convert parameter definition for Eino", "tool", tcSchema.Name, "param", paramDef.Name, "error", err)
-				continue
-			}
-			parameterProperties[paramDef.Name] = einoParamInfo
+	for _, paramDef := range tcSchema.InputParameters {
+		einoParamInfo, err := convertToolCoreParamDefToEinoParamInfo(&paramDef, lang)
+		if err != nil {
+			slog.Error("Failed to convert parameter definition for Eino", "tool", tcSchema.Name, "param", paramDef.Name, "error", err)
+			continue
 		}
+		parameterProperties[paramDef.Name] = einoParamInfo
 	}
 
 	paramsOneOf := schema.NewParamsOneOfByParams(parameterProperties)
@@ -135,8 +132,7 @@ func convertToolCoreParamDefToEinoParamInfo(paramDef *toolcore.ParameterDefiniti
 		if paramDef.Properties.IsSome() {
 			properties := paramDef.Properties.Unwrap()
 			einoParamInfo.SubParams = make(map[string]*schema.ParameterInfo, len(properties))
-			for i := range properties { // 迭代属性
-				subParamDef := properties[i]                                                    // 获取单个属性定义
+			for _, subParamDef := range properties { // 迭代属性
 				einoSubParam, err := convertToolCoreParamDefToEinoParamInfo(&subParamDef, lang) // 传递 lang
 				if err != nil {
 					return nil, fmt.Errorf("error converting sub-parameter '%s' for object '%s': %w", subParamDef.Name, paramDef.Name, err)

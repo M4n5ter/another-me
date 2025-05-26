@@ -69,7 +69,7 @@ func (g *GeminiAdapter) Chat(ctx context.Context, input llminterface.ChatInput) 
 
 		for response, err := range g.client.Models.GenerateContentStream(ctx, g.config.Model, genaiMsgs, &genai.GenerateContentConfig{
 			SystemInstruction: ExtractSystemPromptAsGenaiContent(input),
-			Tools:             *g.config.Tools.UnwrapAsPtr(),
+			Tools:             g.config.Tools.Unwrap(),
 			Temperature:       g.config.Temperature.UnwrapAsPtr(),
 			TopP:              g.config.TopP.UnwrapAsPtr(),
 			TopK:              g.config.TopK.UnwrapAsPtr(),

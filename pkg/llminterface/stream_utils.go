@@ -180,19 +180,15 @@ func AggregateTextFromChunks(ctx context.Context, chunkChan <-chan ChatOutputChu
 			if chunk.Error != nil && firstError == nil && !errors.Is(chunk.Error, io.EOF) {
 				firstError = chunk.Error
 				// 对于严重错误，立即返回已收集的文本
-				if !errors.Is(chunk.Error, io.EOF) {
-					flushBuffer()
-					result := fullTextBuilder.String()
-					mutex.Unlock()
-					return result, firstError
-				}
+				flushBuffer()
+				result := fullTextBuilder.String()
+				mutex.Unlock()
+				return result, firstError
 			}
 
 			// 处理流结束信号
-			finishReason := chunk.FinishReason
-			if finishReason.IsSome() || errors.Is(chunk.Error, io.EOF) {
+			if chunk.FinishReason.IsSome() || errors.Is(chunk.Error, io.EOF) {
 				// 对于自然结束，尝试处理可能的剩余数据
-				drainDone := false
 
 				// 释放锁以避免死锁，因为我们要从通道读取
 				mutex.Unlock()
@@ -234,7 +230,6 @@ func AggregateTextFromChunks(ctx context.Context, chunkChan <-chan ChatOutputChu
 				// 等待排空完成或超时
 				select {
 				case <-drainChan:
-					drainDone = true
 				case <-drainCtx.Done():
 					// 排空超时，这是正常的
 				}
@@ -245,12 +240,7 @@ func AggregateTextFromChunks(ctx context.Context, chunkChan <-chan ChatOutputChu
 				mutex.Unlock()
 
 				// 如果成功排空或者触发了超时，返回当前结果
-				if drainDone || drainCtx.Err() != nil {
-					return result, firstError
-				}
-
-				// 如果没有排空完成也没有超时，继续常规处理
-				mutex.Lock()
+				return result, firstError
 			}
 			mutex.Unlock()
 		}
