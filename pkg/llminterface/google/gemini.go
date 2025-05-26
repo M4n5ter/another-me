@@ -69,7 +69,7 @@ func (g *GeminiAdapter) Chat(ctx context.Context, input llminterface.ChatInput) 
 
 		for response, err := range g.client.Models.GenerateContentStream(ctx, g.config.Model, genaiMsgs, &genai.GenerateContentConfig{
 			SystemInstruction: ExtractSystemPromptAsGenaiContent(input),
-			Tools:             *g.config.Tools.UnwrapAsPtr(),
+			Tools:             g.config.Tools.Unwrap(),
 			Temperature:       g.config.Temperature.UnwrapAsPtr(),
 			TopP:              g.config.TopP.UnwrapAsPtr(),
 			TopK:              g.config.TopK.UnwrapAsPtr(),
@@ -84,8 +84,7 @@ func (g *GeminiAdapter) Chat(ctx context.Context, input llminterface.ChatInput) 
 				return
 			}
 
-			chunk := ProcessGoogleResponseToChatOutputChunk(response)
-			outputChan <- chunk
+			outputChan <- ProcessGoogleResponseToChatOutputChunk(response)
 		}
 	}()
 
@@ -104,7 +103,7 @@ func (g *GeminiAdapter) RegisterTools(ctx context.Context, registry *toolcore.Re
 		return nil
 	}
 
-	if g.config.Tools.IsNone() || len(*g.config.Tools.UnwrapAsPtr()) == 0 {
+	if g.config.Tools.IsNone() || len(g.config.Tools.Unwrap()) == 0 {
 		g.config.Tools = Some(make([]*genai.Tool, 0, len(tools)))
 	}
 
@@ -116,7 +115,7 @@ func (g *GeminiAdapter) RegisterTools(ctx context.Context, registry *toolcore.Re
 		}
 		functions = append(functions, ToolCoreSchemaToGoogleFunctionDeclaration(&toolSchema))
 	}
-	g.config.Tools = Some(append(*g.config.Tools.UnwrapAsPtr(), &genai.Tool{
+	g.config.Tools = Some(append(g.config.Tools.Unwrap(), &genai.Tool{
 		FunctionDeclarations: functions,
 	}))
 
