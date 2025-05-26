@@ -149,7 +149,7 @@ func registerTools(registry *toolcore.Registry, i18nMgr *i18n.Manager) {
 	}
 
 	// 注册 MCP 工具
-	tools, err := toolcore.STDIOMCPTools("bunx", []string{"DEFAULT_EXCHANGE=binance", "DEFAULT_MARKET_TYPE=spot", "PROXY_URL=http://127.0.0.1:55535"}, "-y", "@mcpfun/mcp-server-ccxt")
+	tools, err := toolcore.STDIOMCPTools("bunx", nil, "-y", "@mcpfun/mcp-server-ccxt")
 	if err != nil {
 		slog.Error("Failed to register mcp tool", "error", err)
 		return
