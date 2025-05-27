@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/gorilla/schema"
 	memoryDTO "github.com/m4n5ter/mindscape/memory/api/dto"
 
 	"github.com/m4n5ter/another-me/pkg/common"
@@ -49,7 +50,7 @@ func (m *Memory) GetMemoryFragment(ctx context.Context, fragmentID string) (*mem
 	headers.Set("Content-Type", "application/json")
 
 	var fragmentResp memoryDTO.MemoryFragmentResponse
-	if err := m.client.HTTPGet(ctx, fmt.Sprintf("%s%s/fragments/%s", m.baseURL, m.pathPrefix, fragmentID), Some(headers), None[url.Values](), &fragmentResp, "get memory fragment"); err != nil {
+	if err := m.client.HTTPGet(ctx, fmt.Sprintf("%s%s/fragments/%s", m.baseURL, m.pathPrefix, url.PathEscape(fragmentID)), Some(headers), None[url.Values](), &fragmentResp, "get memory fragment"); err != nil {
 		return nil, fmt.Errorf("failed to get memory fragment: %w", err)
 	}
 	return &fragmentResp, nil
@@ -60,10 +61,25 @@ func (m *Memory) ListMemoryFragments(ctx context.Context, listReq memoryDTO.List
 	headers := http.Header{}
 	headers.Set("Content-Type", "application/json")
 
-	var listResp memoryDTO.ListMemoryFragmentsResponse
-	if err := m.client.HTTPGet(ctx, fmt.Sprintf("%s%s/fragments", m.baseURL, m.pathPrefix), Some(headers), None[url.Values](), &listResp, "list memory fragments"); err != nil {
-		return nil, fmt.Errorf("failed to list memory fragments: %w", err)
+	encoder := schema.NewEncoder()
+	encoder.SetAliasTag("form")
+
+	queryParams := url.Values{}
+	if err := encoder.Encode(listReq, queryParams); err != nil {
+		return nil, fmt.Errorf("failed to encode list request: %w", err)
 	}
+
+	var listResp memoryDTO.ListMemoryFragmentsResponse
+	if len(queryParams) > 0 {
+		if err := m.client.HTTPGet(ctx, fmt.Sprintf("%s%s/fragments", m.baseURL, m.pathPrefix), Some(headers), Some(queryParams), &listResp, "list memory fragments"); err != nil {
+			return nil, fmt.Errorf("failed to list memory fragments: %w", err)
+		}
+	} else {
+		if err := m.client.HTTPGet(ctx, fmt.Sprintf("%s%s/fragments", m.baseURL, m.pathPrefix), Some(headers), None[url.Values](), &listResp, "list memory fragments"); err != nil {
+			return nil, fmt.Errorf("failed to list memory fragments: %w", err)
+		}
+	}
+
 	return &listResp, nil
 }
 
@@ -85,7 +101,7 @@ func (m *Memory) GetUserProfile(ctx context.Context, userID string) (*memoryDTO.
 	headers.Set("Content-Type", "application/json")
 
 	var userProfileResp memoryDTO.UserProfileResponse
-	if err := m.client.HTTPGet(ctx, fmt.Sprintf("%s%s/users/%s/profile", m.baseURL, m.pathPrefix, userID), Some(headers), None[url.Values](), &userProfileResp, "get user profile"); err != nil {
+	if err := m.client.HTTPGet(ctx, fmt.Sprintf("%s%s/users/%s/profile", m.baseURL, m.pathPrefix, url.PathEscape(userID)), Some(headers), None[url.Values](), &userProfileResp, "get user profile"); err != nil {
 		return nil, fmt.Errorf("failed to get user profile: %w", err)
 	}
 	return &userProfileResp, nil
@@ -97,7 +113,7 @@ func (m *Memory) UpdateUserProfile(ctx context.Context, userID string, updateReq
 	headers.Set("Content-Type", "application/json")
 
 	var userProfileResp memoryDTO.UserProfileResponse
-	if err := m.client.HTTPPut(ctx, fmt.Sprintf("%s%s/users/%s/profile", m.baseURL, m.pathPrefix, userID), Some(headers), updateReq, &userProfileResp, "update user profile"); err != nil {
+	if err := m.client.HTTPPut(ctx, fmt.Sprintf("%s%s/users/%s/profile", m.baseURL, m.pathPrefix, url.PathEscape(userID)), Some(headers), updateReq, &userProfileResp, "update user profile"); err != nil {
 		return nil, fmt.Errorf("failed to update user profile: %w", err)
 	}
 	return &userProfileResp, nil
