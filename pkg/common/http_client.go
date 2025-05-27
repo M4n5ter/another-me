@@ -3,7 +3,9 @@ package common
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -12,6 +14,18 @@ import (
 
 	. "github.com/m4n5ter/another-me/pkg/option"
 )
+
+// HTTPClient 是 HTTP 客户端
+type HTTPClient struct {
+	client *http.Client
+}
+
+// NewHTTPClient 创建一个 HTTP 客户端
+func NewHTTPClient(client *http.Client) *HTTPClient {
+	return &HTTPClient{
+		client: client,
+	}
+}
 
 // HTTPPost 发送 POST 请求
 //
@@ -24,7 +38,7 @@ import (
 // 返回错误信息
 //
 //nolint:dupl // 与 HTTPPut 的实现类似
-func HTTPPost(ctx context.Context, endpoint string, headers Option[http.Header], requestBody, responseBody any, operation string) error {
+func (h *HTTPClient) HTTPPost(ctx context.Context, endpoint string, headers Option[http.Header], requestBody, responseBody any, operation string) error {
 	jsonBody, err := json.Marshal(requestBody)
 	if err != nil {
 		return fmt.Errorf("failed to marshal %s request: %w", operation, err)
@@ -43,7 +57,7 @@ func HTTPPost(ctx context.Context, endpoint string, headers Option[http.Header],
 		}
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := h.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to do request: %w", err)
 	}
@@ -53,8 +67,10 @@ func HTTPPost(ctx context.Context, endpoint string, headers Option[http.Header],
 		return fmt.Errorf("failed to %s: %s", operation, resp.Status)
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(responseBody); err != nil {
-		return fmt.Errorf("failed to decode response: %w", err)
+	if responseBody != nil {
+		if err := json.NewDecoder(resp.Body).Decode(responseBody); err != nil && !errors.Is(err, io.EOF) {
+			return fmt.Errorf("failed to decode response: %w", err)
+		}
 	}
 
 	return nil
@@ -69,7 +85,7 @@ func HTTPPost(ctx context.Context, endpoint string, headers Option[http.Header],
 //	operation: 操作的名称
 //
 // 返回错误信息
-func HTTPPostWithForm(ctx context.Context, endpoint string, headers Option[http.Header], requestForm url.Values, responseBody any, operation string) error {
+func (h *HTTPClient) HTTPPostWithForm(ctx context.Context, endpoint string, headers Option[http.Header], requestForm url.Values, responseBody any, operation string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(requestForm.Encode()))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
@@ -85,7 +101,7 @@ func HTTPPostWithForm(ctx context.Context, endpoint string, headers Option[http.
 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := h.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to do request: %w", err)
 	}
@@ -95,8 +111,10 @@ func HTTPPostWithForm(ctx context.Context, endpoint string, headers Option[http.
 		return fmt.Errorf("failed to %s: %s", operation, resp.Status)
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(responseBody); err != nil {
-		return fmt.Errorf("failed to decode response: %w", err)
+	if responseBody != nil {
+		if err := json.NewDecoder(resp.Body).Decode(responseBody); err != nil && !errors.Is(err, io.EOF) {
+			return fmt.Errorf("failed to decode response: %w", err)
+		}
 	}
 
 	return nil
@@ -111,7 +129,7 @@ func HTTPPostWithForm(ctx context.Context, endpoint string, headers Option[http.
 //	operation: 操作的名称
 //
 // 返回错误信息
-func HTTPGet(ctx context.Context, endpoint string, headers Option[http.Header], queryParams Option[url.Values], responseBody any, operation string) error {
+func (h *HTTPClient) HTTPGet(ctx context.Context, endpoint string, headers Option[http.Header], queryParams Option[url.Values], responseBody any, operation string) error {
 	fullURL := endpoint
 	if queryParams.IsSome() {
 		fullURL += "?" + queryParams.Unwrap().Encode()
@@ -130,7 +148,7 @@ func HTTPGet(ctx context.Context, endpoint string, headers Option[http.Header], 
 		}
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := h.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to do request: %w", err)
 	}
@@ -140,8 +158,10 @@ func HTTPGet(ctx context.Context, endpoint string, headers Option[http.Header], 
 		return fmt.Errorf("failed to %s: %s", operation, resp.Status)
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(responseBody); err != nil {
-		return fmt.Errorf("failed to decode response: %w", err)
+	if responseBody != nil {
+		if err := json.NewDecoder(resp.Body).Decode(responseBody); err != nil && !errors.Is(err, io.EOF) {
+			return fmt.Errorf("failed to decode response: %w", err)
+		}
 	}
 
 	return nil
@@ -157,7 +177,7 @@ func HTTPGet(ctx context.Context, endpoint string, headers Option[http.Header], 
 // 返回错误信息
 //
 //nolint:dupl // 与 HTTPGet 的实现类似
-func HTTPDelete(ctx context.Context, endpoint string, headers Option[http.Header], responseBody any, operation string) error {
+func (h *HTTPClient) HTTPDelete(ctx context.Context, endpoint string, headers Option[http.Header], responseBody any, operation string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, endpoint, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
@@ -171,7 +191,7 @@ func HTTPDelete(ctx context.Context, endpoint string, headers Option[http.Header
 		}
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := h.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to do request: %w", err)
 	}
@@ -181,8 +201,10 @@ func HTTPDelete(ctx context.Context, endpoint string, headers Option[http.Header
 		return fmt.Errorf("failed to %s: %s", operation, resp.Status)
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(responseBody); err != nil {
-		return fmt.Errorf("failed to decode response: %w", err)
+	if responseBody != nil {
+		if err := json.NewDecoder(resp.Body).Decode(responseBody); err != nil && !errors.Is(err, io.EOF) {
+			return fmt.Errorf("failed to decode response: %w", err)
+		}
 	}
 
 	return nil
@@ -199,7 +221,7 @@ func HTTPDelete(ctx context.Context, endpoint string, headers Option[http.Header
 // 返回错误信息
 //
 //nolint:dupl // 与 HTTPPost 的实现类似
-func HTTPPut(ctx context.Context, endpoint string, headers Option[http.Header], requestBody, responseBody any, operation string) error {
+func (h *HTTPClient) HTTPPut(ctx context.Context, endpoint string, headers Option[http.Header], requestBody, responseBody any, operation string) error {
 	jsonBody, err := json.Marshal(requestBody)
 	if err != nil {
 		return fmt.Errorf("failed to marshal %s request: %w", operation, err)
@@ -218,7 +240,7 @@ func HTTPPut(ctx context.Context, endpoint string, headers Option[http.Header], 
 		}
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := h.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to do request: %w", err)
 	}
@@ -228,8 +250,10 @@ func HTTPPut(ctx context.Context, endpoint string, headers Option[http.Header], 
 		return fmt.Errorf("failed to %s: %s", operation, resp.Status)
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(responseBody); err != nil {
-		return fmt.Errorf("failed to decode response: %w", err)
+	if responseBody != nil {
+		if err := json.NewDecoder(resp.Body).Decode(responseBody); err != nil && !errors.Is(err, io.EOF) {
+			return fmt.Errorf("failed to decode response: %w", err)
+		}
 	}
 
 	return nil
@@ -246,7 +270,7 @@ func HTTPPut(ctx context.Context, endpoint string, headers Option[http.Header], 
 // 返回错误信息
 //
 //nolint:dupl // 与 HTTPPut 的实现类似
-func HTTPPatch(ctx context.Context, endpoint string, headers Option[http.Header], requestBody, responseBody any, operation string) error {
+func (h *HTTPClient) HTTPPatch(ctx context.Context, endpoint string, headers Option[http.Header], requestBody, responseBody any, operation string) error {
 	jsonBody, err := json.Marshal(requestBody)
 	if err != nil {
 		return fmt.Errorf("failed to marshal %s request: %w", operation, err)
@@ -265,7 +289,7 @@ func HTTPPatch(ctx context.Context, endpoint string, headers Option[http.Header]
 		}
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := h.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to do request: %w", err)
 	}
@@ -275,8 +299,10 @@ func HTTPPatch(ctx context.Context, endpoint string, headers Option[http.Header]
 		return fmt.Errorf("failed to %s: %s", operation, resp.Status)
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(responseBody); err != nil {
-		return fmt.Errorf("failed to decode response: %w", err)
+	if responseBody != nil {
+		if err := json.NewDecoder(resp.Body).Decode(responseBody); err != nil && !errors.Is(err, io.EOF) {
+			return fmt.Errorf("failed to decode response: %w", err)
+		}
 	}
 
 	return nil
@@ -292,7 +318,7 @@ func HTTPPatch(ctx context.Context, endpoint string, headers Option[http.Header]
 // 返回错误信息
 //
 //nolint:dupl // 与 HTTPGet 的实现类似
-func HTTPOptions(ctx context.Context, endpoint string, headers Option[http.Header], responseBody any, operation string) error {
+func (h *HTTPClient) HTTPOptions(ctx context.Context, endpoint string, headers Option[http.Header], responseBody any, operation string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodOptions, endpoint, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
@@ -306,7 +332,7 @@ func HTTPOptions(ctx context.Context, endpoint string, headers Option[http.Heade
 		}
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := h.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to do request: %w", err)
 	}
@@ -316,8 +342,10 @@ func HTTPOptions(ctx context.Context, endpoint string, headers Option[http.Heade
 		return fmt.Errorf("failed to %s: %s", operation, resp.Status)
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(responseBody); err != nil {
-		return fmt.Errorf("failed to decode response: %w", err)
+	if responseBody != nil {
+		if err := json.NewDecoder(resp.Body).Decode(responseBody); err != nil && !errors.Is(err, io.EOF) {
+			return fmt.Errorf("failed to decode response: %w", err)
+		}
 	}
 
 	return nil

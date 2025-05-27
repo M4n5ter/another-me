@@ -16,7 +16,7 @@ import (
 
 // Sentinel 客户端
 type Sentinel struct {
-	client     *http.Client
+	client     *common.HTTPClient
 	baseURL    string
 	pathPrefix string
 }
@@ -29,7 +29,7 @@ func NewSentinel(client Option[http.Client], baseURL string) *Sentinel {
 		})
 	}
 
-	return &Sentinel{client: client.UnwrapAsPtr(), baseURL: baseURL, pathPrefix: "/api/v1/sentinel"}
+	return &Sentinel{client: common.NewHTTPClient(client.UnwrapAsPtr()), baseURL: baseURL, pathPrefix: "/api/v1/sentinel"}
 }
 
 // CreateTask 创建一个任务
@@ -38,7 +38,7 @@ func (s *Sentinel) CreateTask(ctx context.Context, createReq sentinelDTO.CreateT
 	headers.Set("Content-Type", "application/json")
 
 	var taskResp sentinelDTO.TaskResponse
-	if err := common.HTTPPost(ctx, fmt.Sprintf("%s%s/tasks", s.baseURL, s.pathPrefix), Some(headers), createReq, &taskResp, "create task"); err != nil {
+	if err := s.client.HTTPPost(ctx, fmt.Sprintf("%s%s/tasks", s.baseURL, s.pathPrefix), Some(headers), createReq, &taskResp, "create task"); err != nil {
 		return nil, fmt.Errorf("failed to create task: %w", err)
 	}
 
@@ -51,7 +51,7 @@ func (s *Sentinel) GetTask(ctx context.Context, taskID uuid.UUID) (*sentinelDTO.
 	headers.Set("Content-Type", "application/json")
 
 	var taskResp sentinelDTO.TaskResponse
-	if err := common.HTTPGet(ctx, fmt.Sprintf("%s%s/tasks/%s", s.baseURL, s.pathPrefix, taskID), Some(headers), None[url.Values](), &taskResp, "get task"); err != nil {
+	if err := s.client.HTTPGet(ctx, fmt.Sprintf("%s%s/tasks/%s", s.baseURL, s.pathPrefix, taskID), Some(headers), None[url.Values](), &taskResp, "get task"); err != nil {
 		return nil, fmt.Errorf("failed to get task: %w", err)
 	}
 
@@ -63,7 +63,7 @@ func (s *Sentinel) DeleteTask(ctx context.Context, taskID uuid.UUID) error {
 	headers := http.Header{}
 	headers.Set("Content-Type", "application/json")
 
-	if err := common.HTTPDelete(ctx, fmt.Sprintf("%s%s/tasks/%s", s.baseURL, s.pathPrefix, taskID), Some(headers), nil, "delete task"); err != nil {
+	if err := s.client.HTTPDelete(ctx, fmt.Sprintf("%s%s/tasks/%s", s.baseURL, s.pathPrefix, taskID), Some(headers), nil, "delete task"); err != nil {
 		return fmt.Errorf("failed to delete task: %w", err)
 	}
 
@@ -75,7 +75,7 @@ func (s *Sentinel) HealthCheck(ctx context.Context) error {
 	headers := http.Header{}
 	headers.Set("Content-Type", "application/json")
 
-	if err := common.HTTPGet(ctx, fmt.Sprintf("%s%s/health", s.baseURL, s.pathPrefix), Some(headers), None[url.Values](), nil, "health check"); err != nil {
+	if err := s.client.HTTPGet(ctx, fmt.Sprintf("%s%s/health", s.baseURL, s.pathPrefix), Some(headers), None[url.Values](), nil, "health check"); err != nil {
 		return fmt.Errorf("failed to health check: %w", err)
 	}
 
