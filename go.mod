@@ -17,7 +17,7 @@ require (
 	github.com/go-vgo/robotgo v0.110.8
 	github.com/google/uuid v1.6.0
 	github.com/json-iterator/go v1.1.12
-	github.com/m4n5ter/mindscape v0.0.0-20250527053046-ddae081fdbcb
+	github.com/m4n5ter/mindscape v0.0.0-20250527133605-6f38f093f7bb
 	github.com/mark3labs/mcp-go v0.30.0
 	github.com/stretchr/testify v1.10.0
 	github.com/temoto/robotstxt v1.1.2
