@@ -1,11 +1,9 @@
 package option
 
 import (
-	"bytes"
 	"errors"
-	"fmt"
 
-	json "github.com/json-iterator/go"
+	"github.com/m4n5ter/mindscape/pkg/option"
 )
 
 // ErrNoneValueTaken 当获取 None 值时引发的错误。
@@ -13,7 +11,7 @@ var ErrNoneValueTaken = errors.New("none value taken")
 
 // Option 是一个数据类型，它必须是 Some (即有值) 或 None (即没有值)。
 // 此类型实现了 database/sql/driver.Valuer 和 database/sql.Scanner 接口。
-type Option[T any] []T
+type Option[T any] = option.Option[T]
 
 const (
 	value = iota
@@ -50,139 +48,6 @@ func PtrFromNillable[T any](v *T) Option[*T] {
 		return None[*T]()
 	}
 	return Some(v)
-}
-
-// IsNone 返回 Option 是否 *不* 包含值。
-func (o Option[T]) IsNone() bool {
-	return o == nil
-}
-
-// IsSome 返回 Option 是否包含值。
-func (o Option[T]) IsSome() bool {
-	return o != nil
-}
-
-// Unwrap 返回值，无论 Option 的状态是 Some 还是 None。
-// 如果 Option 的值是 Some，此方法返回实际值。
-// 反之，如果 Option 的值是 None，此方法返回该类型的 *默认* 值。
-func (o Option[T]) Unwrap() T {
-	if o.IsNone() {
-		var defaultValue T
-		return defaultValue
-	}
-	return o[value]
-}
-
-// UnwrapAsPtr 以指针形式返回接收者 Option 中包含的值。
-// 这类似于 `Unwrap()` 方法，但区别在于此方法返回指针值而不是实际值。
-// 如果接收者 Option 的值是 None，此方法返回 nil。
-func (o Option[T]) UnwrapAsPtr() *T {
-	if o.IsNone() {
-		return nil
-	}
-	return &o[value]
-}
-
-// Take 获取 Option 中包含的值。
-// 如果 Option 的值是 Some，则返回 Option 中包含的值。
-// 反之，则返回 ErrNoneValueTaken 作为第二个返回值。
-func (o Option[T]) Take() (T, error) {
-	if o.IsNone() {
-		var defaultValue T
-		return defaultValue, ErrNoneValueTaken
-	}
-	return o[value], nil
-}
-
-// TakeOr 如果 Option 有值，则返回实际值。
-// 反之，返回 fallbackValue。
-func (o Option[T]) TakeOr(fallbackValue T) T {
-	if o.IsNone() {
-		return fallbackValue
-	}
-	return o[value]
-}
-
-// TakeOrElse 如果 Option 有值，则返回实际值。
-// 反之，执行 fallbackFunc 并返回该函数的结果值。
-func (o Option[T]) TakeOrElse(fallbackFunc func() T) T {
-	if o.IsNone() {
-		return fallbackFunc()
-	}
-	return o[value]
-}
-
-// Or 根据实际值是否存在返回 Option 值。
-// 如果接收者的 Option 值是 Some，此函数将其直接返回。否则，此函数返回 `fallbackOptionValue`。
-func (o Option[T]) Or(fallbackOptionValue Option[T]) Option[T] {
-	if o.IsNone() {
-		return fallbackOptionValue
-	}
-	return o
-}
-
-// OrElse 根据实际值是否存在返回 Option 值。
-// 如果接收者的 Option 值是 Some，此函数将其直接返回。否则，此函数执行 `fallbackOptionFunc` 并返回该函数的结果值。
-func (o Option[T]) OrElse(fallbackOptionFunc func() Option[T]) Option[T] {
-	if o.IsNone() {
-		return fallbackOptionFunc()
-	}
-	return o
-}
-
-// Filter 如果 Option 有值并且该值满足断言函数的条件，则返回自身。
-// 在其他情况下 (即，它与断言不匹配或 Option 为 None)，则返回 None 值。
-func (o Option[T]) Filter(predicate func(v T) bool) Option[T] {
-	if o.IsNone() || !predicate(o[value]) {
-		return None[T]()
-	}
-	return o
-}
-
-// IfSome 如果接收者值为 Some，则使用 Option 的值调用给定函数。
-func (o Option[T]) IfSome(f func(v T)) {
-	if o.IsNone() {
-		return
-	}
-	f(o[value])
-}
-
-// IfSomeWithError 如果接收者值为 Some，则使用 Option 的值调用给定函数。
-// 此方法传播给定函数的错误，如果接收者值为 None，则返回 nil 错误。
-func (o Option[T]) IfSomeWithError(f func(v T) error) error {
-	if o.IsNone() {
-		return nil
-	}
-	return f(o[value])
-}
-
-// IfNone 如果接收者值为 None，则调用给定函数。
-func (o Option[T]) IfNone(f func()) {
-	if o.IsSome() {
-		return
-	}
-	f()
-}
-
-// IfNoneWithError 如果接收者值为 None，则调用给定函数。
-// 此方法传播给定函数的错误，如果接收者值为 Some，则返回 nil 错误。
-func (o Option[T]) IfNoneWithError(f func() error) error {
-	if o.IsSome() {
-		return nil
-	}
-	return f()
-}
-
-func (o Option[T]) String() string {
-	if o.IsNone() {
-		return "None[]"
-	}
-
-	v := o.Unwrap()
-	if stringer, ok := any(v).(fmt.Stringer); ok {
-		return fmt.Sprintf("Some[%s]", stringer)
-	}
-	return fmt.Sprintf("Some[%v]", v)
 }
 
 // Map 根据映射函数将给定的 Option 值转换为另一个 Option 值。
@@ -333,36 +198,4 @@ func UnzipWith[T, U, V any](zipped Option[V], unzipper func(zipped V) (T, U)) (O
 
 	v1, v2 := unzipper(zipped[value])
 	return Some(v1), Some(v2)
-}
-
-var jsonNull = []byte("null")
-
-// MarshalJSON 将 Option 值序列化为 JSON 字节切片。
-func (o Option[T]) MarshalJSON() ([]byte, error) {
-	if o.IsNone() {
-		return jsonNull, nil
-	}
-
-	marshal, err := json.Marshal(o.Unwrap())
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal option: %w", err)
-	}
-	return marshal, nil
-}
-
-// UnmarshalJSON 将 JSON 字节切片反序列化为 Option 值。
-func (o *Option[T]) UnmarshalJSON(data []byte) error {
-	if len(data) == 0 || bytes.Equal(data, jsonNull) {
-		*o = None[T]()
-		return nil
-	}
-
-	var v T
-	err := json.Unmarshal(data, &v)
-	if err != nil {
-		return fmt.Errorf("failed to unmarshal option: %w", err)
-	}
-	*o = Some(v)
-
-	return nil
 }
