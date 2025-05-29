@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"maps"
+	"slices"
 	"sync"
 	"time"
 )
@@ -164,7 +166,7 @@ func (d *SmartAgentDispatcher) UnregisterAgent(agentID string) error {
 	agentsByType := d.agentsByType[agentType]
 	for i, id := range agentsByType {
 		if id == agentID {
-			d.agentsByType[agentType] = append(agentsByType[:i], agentsByType[i+1:]...)
+			d.agentsByType[agentType] = slices.Delete(agentsByType, i, i+1)
 			break
 		}
 	}
@@ -210,7 +212,7 @@ func (d *SmartAgentDispatcher) DispatchTask(ctx context.Context, task Task) (Exe
 	case d.taskQueue <- request:
 		d.logger.Debug("任务已加入队列", "request_id", requestID, "agent_id", agentID)
 	case <-ctx.Done():
-		return ExecutionResult{}, ctx.Err()
+		return ExecutionResult{}, fmt.Errorf("分发任务失败: %w", ctx.Err())
 	case <-time.After(5 * time.Second):
 		return ExecutionResult{}, fmt.Errorf("任务队列已满，无法分发任务")
 	}
@@ -224,7 +226,7 @@ func (d *SmartAgentDispatcher) DispatchTask(ctx context.Context, task Task) (Exe
 		d.logger.Error("任务执行失败", "task_id", task.ID, "error", err, "agent_id", agentID)
 		return ExecutionResult{}, err
 	case <-ctx.Done():
-		return ExecutionResult{}, ctx.Err()
+		return ExecutionResult{}, fmt.Errorf("任务执行失败: %w", ctx.Err())
 	case <-time.After(d.config.TaskTimeout):
 		return ExecutionResult{}, fmt.Errorf("任务执行超时")
 	}
@@ -320,12 +322,7 @@ func (d *SmartAgentDispatcher) GetAvailableAgentTypes() []AgentType {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
-	var available []AgentType
-	for agentType := range d.agentsByType {
-		available = append(available, agentType)
-	}
-
-	return available
+	return slices.Collect(maps.Keys(d.agentsByType))
 }
 
 // GetAgentByType 根据类型获取Agent
@@ -390,9 +387,7 @@ func (d *SmartAgentDispatcher) GetAllAgentStatus() map[string]AgentStatus {
 	defer d.mu.RUnlock()
 
 	result := make(map[string]AgentStatus)
-	for agentID, status := range d.agentStatus {
-		result[agentID] = status
-	}
+	maps.Copy(result, d.agentStatus)
 
 	return result
 }
@@ -417,7 +412,7 @@ func (d *SmartAgentDispatcher) Shutdown(ctx context.Context) error {
 		return nil
 	case <-ctx.Done():
 		d.logger.Warn("Agent调度器关闭超时")
-		return ctx.Err()
+		return fmt.Errorf("agent调度器关闭超时: %w", ctx.Err())
 	}
 }
 
@@ -425,7 +420,7 @@ func (d *SmartAgentDispatcher) Shutdown(ctx context.Context) error {
 
 // startWorkers 启动工作协程
 func (d *SmartAgentDispatcher) startWorkers() {
-	for i := 0; i < d.config.MaxConcurrentTasks; i++ {
+	for i := range d.config.MaxConcurrentTasks {
 		d.wg.Add(1)
 		go d.worker(i)
 	}

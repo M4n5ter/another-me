@@ -254,7 +254,12 @@ func (dm *SmartDecisionMaker) retrieveRelevantMemories(ctx context.Context, deci
 		queryContext["user_id"] = userID
 	}
 
-	return dm.mindscapeService.RetrieveMemories(ctx, queryContext)
+	result, err := dm.mindscapeService.RetrieveMemories(ctx, queryContext)
+	if err != nil {
+		return nil, fmt.Errorf("检索相关记忆失败: %w", err)
+	}
+
+	return result, nil
 }
 
 // analyzeIntent 分析用户意图
@@ -376,7 +381,7 @@ func (dm *SmartDecisionMaker) shouldSetupMonitoring(userInput string, intent map
 	if dm.containsMonitoringKeywords(userInput) {
 		return true
 	}
-	
+
 	// 额外检查监控分数
 	monitoringScore := intent["monitoring_score"].(float64)
 	return monitoringScore > 0.2 // 降低监控分数阈值
@@ -558,11 +563,12 @@ func (dm *SmartDecisionMaker) extractKeywords(input string) []string {
 }
 
 func (dm *SmartDecisionMaker) determineActionType(input string) string {
-	if strings.Contains(strings.ToLower(input), "点击") {
+	switch {
+	case strings.Contains(strings.ToLower(input), "点击"):
 		return "click"
-	} else if strings.Contains(strings.ToLower(input), "输入") {
+	case strings.Contains(strings.ToLower(input), "输入"):
 		return "input"
-	} else if strings.Contains(strings.ToLower(input), "搜索") {
+	case strings.Contains(strings.ToLower(input), "搜索"):
 		return "search"
 	}
 	return "general"
@@ -615,9 +621,10 @@ func (dm *SmartDecisionMaker) getHistoricalAgentPreference(memories []MemoryItem
 
 	for _, memory := range memories {
 		if agentType, ok := memory.Metadata["agent_type"].(string); ok {
-			if agentType == "gui" {
+			switch agentType {
+			case "gui":
 				preference["gui"] += 0.1
-			} else if agentType == "react" {
+			case "react":
 				preference["react"] += 0.1
 			}
 		}
@@ -629,9 +636,10 @@ func (dm *SmartDecisionMaker) getHistoricalAgentPreference(memories []MemoryItem
 func (dm *SmartDecisionMaker) calculateAgentScore(task Task, intent map[string]any, agentType AgentType) float64 {
 	score := 0.0
 
-	if agentType == AgentTypeGUI {
+	switch agentType {
+	case AgentTypeGUI:
 		score = intent["gui_score"].(float64)
-	} else if agentType == AgentTypeReAct {
+	case AgentTypeReAct:
 		score = intent["react_score"].(float64)
 	}
 
@@ -697,13 +705,14 @@ func (dm *SmartDecisionMaker) enhanceContextWithMemory(ctx DecisionContext, patt
 func (dm *SmartDecisionMaker) determineGUITaskType(input string) string {
 	input = strings.ToLower(input)
 
-	if strings.Contains(input, "点击") {
+	switch {
+	case strings.Contains(input, "点击"):
 		return "gui_click"
-	} else if strings.Contains(input, "输入") {
+	case strings.Contains(input, "输入"):
 		return "gui_input"
-	} else if strings.Contains(input, "拖拽") {
+	case strings.Contains(input, "拖拽"):
 		return "gui_drag"
-	} else if strings.Contains(input, "截图") {
+	case strings.Contains(input, "截图"):
 		return "gui_screenshot"
 	}
 
@@ -713,13 +722,14 @@ func (dm *SmartDecisionMaker) determineGUITaskType(input string) string {
 func (dm *SmartDecisionMaker) determineReActTaskType(input string) string {
 	input = strings.ToLower(input)
 
-	if strings.Contains(input, "搜索") {
+	switch {
+	case strings.Contains(input, "搜索"):
 		return "react_search"
-	} else if strings.Contains(input, "分析") {
+	case strings.Contains(input, "分析"):
 		return "react_analysis"
-	} else if strings.Contains(input, "计算") {
+	case strings.Contains(input, "计算"):
 		return "react_calculate"
-	} else if strings.Contains(input, "工具") {
+	case strings.Contains(input, "工具"):
 		return "react_tool_call"
 	}
 

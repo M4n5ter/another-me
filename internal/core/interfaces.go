@@ -239,3 +239,114 @@ type Logger interface {
 	// WithFields 添加字段
 	WithFields(fields map[string]any) Logger
 }
+
+// SmartTaskOrchestrator 智能任务编排器接口
+// 支持并行、串行、混合执行模式的复杂任务编排
+type SmartTaskOrchestrator interface {
+	// ExecutePlan 执行任务计划
+	// 支持复杂的并行/串行/混合执行流程
+	ExecutePlan(ctx context.Context, plan ExecutionPlan) (ExecutionState, error)
+
+	// CreateExecutionPlan 创建执行计划
+	// 根据任务列表和策略创建优化的执行计划
+	CreateExecutionPlan(ctx context.Context, tasks []Task, strategy ExecutionMode) (ExecutionPlan, error)
+
+	// MonitorExecution 监控执行状态
+	// 返回当前执行状态和进度信息
+	MonitorExecution(ctx context.Context, planID string) (ExecutionState, error)
+
+	// CancelExecution 取消执行
+	CancelExecution(ctx context.Context, planID string) error
+
+	// GetExecutionHistory 获取执行历史
+	GetExecutionHistory(ctx context.Context, limit int) ([]ExecutionState, error)
+
+	// OptimizeExecutionPlan 优化执行计划
+	// 基于历史性能数据优化任务调度
+	OptimizeExecutionPlan(ctx context.Context, plan ExecutionPlan) (ExecutionPlan, error)
+
+	// EstimateExecutionTime 估算执行时间
+	EstimateExecutionTime(ctx context.Context, plan ExecutionPlan) (time.Duration, error)
+
+	// GetResourceUsage 获取资源使用情况
+	GetResourceUsage(ctx context.Context) (SystemMetrics, error)
+}
+
+// ContinuousDecisionEngine 持续决策引擎接口
+// 基于Agent输出反馈进行持续决策，支持多轮智能决策
+type ContinuousDecisionEngine interface {
+	// MakeContinuousDecision 进行持续决策
+	// 基于当前执行状态和Agent输出分析决定下一步行动
+	MakeContinuousDecision(ctx context.Context, decisionContext ContinuousDecisionContext) (ContinuousDecisionResult, error)
+
+	// AnalyzeAgentOutput 分析Agent输出
+	// 对Agent的执行结果进行深度分析，提取关键信息
+	AnalyzeAgentOutput(ctx context.Context, results []ExecutionResult) (AgentOutputAnalysis, error)
+
+	// EvaluateContinuationStrategy 评估持续策略
+	// 判断是否应该继续执行、休眠或等待用户输入
+	EvaluateContinuationStrategy(ctx context.Context, executionState ExecutionState, outputAnalysis AgentOutputAnalysis) (ContinuousDecisionResult, error)
+
+	// GenerateNextActions 生成下一步行动
+	// 基于分析结果生成具体的下一步行动计划
+	GenerateNextActions(ctx context.Context, analysis AgentOutputAnalysis, systemContext map[string]any) ([]Task, error)
+
+	// UpdateDecisionHistory 更新决策历史
+	UpdateDecisionHistory(ctx context.Context, decisionResult ContinuousDecisionResult) error
+
+	// GetDecisionInsights 获取决策洞察
+	// 提供决策质量分析和改进建议
+	GetDecisionInsights(ctx context.Context, timeRange time.Duration) (map[string]any, error)
+
+	// ConfigureStrategy 配置决策策略
+	// 动态配置决策引擎的行为策略
+	ConfigureStrategy(ctx context.Context, strategy ContinuationStrategy) error
+}
+
+// FeedbackAnalyzer 反馈分析器接口
+// 专门用于分析Agent执行结果的深度反馈
+type FeedbackAnalyzer interface {
+	// AnalyzeExecutionResults 分析执行结果
+	// 深度分析多个Agent的执行结果，提取模式和洞察
+	AnalyzeExecutionResults(ctx context.Context, results []ExecutionResult) (AgentOutputAnalysis, error)
+
+	// DetectPatterns 检测执行模式
+	// 识别任务执行中的成功模式和失败模式
+	DetectPatterns(ctx context.Context, history []ExecutionResult) ([]string, error)
+
+	// PredictNextSteps 预测下一步操作
+	// 基于历史数据和当前结果预测最优的下一步操作
+	PredictNextSteps(ctx context.Context, currentResults []ExecutionResult, systemState SystemState) ([]string, error)
+
+	// AssessRisk 评估风险
+	// 分析当前操作可能的风险和影响
+	AssessRisk(ctx context.Context, proposedActions []Task, systemState SystemState) (RiskAssessment, error)
+
+	// GenerateInsights 生成洞察
+	// 从执行结果中生成可执行的洞察和建议
+	GenerateInsights(ctx context.Context, analysis AgentOutputAnalysis) ([]string, error)
+}
+
+// TaskFlowManager 任务流管理器接口
+// 管理复杂的任务依赖关系和执行流程
+type TaskFlowManager interface {
+	// CreateTaskFlow 创建任务流
+	// 基于任务依赖关系创建优化的执行流程
+	CreateTaskFlow(ctx context.Context, tasks []Task, dependencies map[string][]string) (ExecutionPlan, error)
+
+	// ValidateTaskFlow 验证任务流
+	// 检查任务流的合理性和可执行性
+	ValidateTaskFlow(ctx context.Context, plan ExecutionPlan) (bool, []string, error)
+
+	// OptimizeTaskFlow 优化任务流
+	// 基于历史性能和资源情况优化任务执行顺序
+	OptimizeTaskFlow(ctx context.Context, plan ExecutionPlan, systemMetrics SystemMetrics) (ExecutionPlan, error)
+
+	// ResolveTaskDependencies 解析任务依赖
+	// 解析和优化任务间的依赖关系
+	ResolveTaskDependencies(ctx context.Context, tasks []Task) (map[string][]string, error)
+
+	// TrackTaskFlow 跟踪任务流执行
+	// 实时跟踪任务流的执行状态和进度
+	TrackTaskFlow(ctx context.Context, planID string) (ExecutionState, error)
+}

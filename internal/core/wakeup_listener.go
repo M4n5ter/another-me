@@ -2,12 +2,13 @@ package core
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
 	"sync"
+
+	json "github.com/json-iterator/go"
 )
 
 // webhookWakeupListener 实现WakeupListener接口，通过HTTP Webhook接收唤醒信号
@@ -125,4 +126,4 @@ func (w *webhookWakeupListener) handleWebhook(rw http.ResponseWriter, req *http.
 	// 返回成功响应
 	rw.WriteHeader(http.StatusOK)
 	rw.Write([]byte(`{"status":"ok"}`))
-} 
+}

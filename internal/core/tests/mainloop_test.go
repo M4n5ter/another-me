@@ -58,19 +58,22 @@ func TestSmartMainLoop_BasicCreation(t *testing.T) {
 	// 创建MainLoop
 	config := core.DefaultMainLoopConfig()
 	logger := slog.Default()
-	
+
 	mainLoop := core.NewSmartMainLoop(
-		nil, // 使用nil进行基础测试
-		nil,
-		nil,
-		mockWakeup,
+		nil,        // mindscapeService
+		nil,        // decisionMaker
+		nil,        // agentDispatcher
+		mockWakeup, // wakeupListener
+		nil,        // taskOrchestrator
+		nil,        // continuousDecision
+		nil,        // feedbackAnalyzer
 		config,
 		logger,
 	)
 
 	// 测试初始状态
 	assert.False(t, mainLoop.IsRunning())
-	
+
 	state := mainLoop.GetSystemState()
 	assert.False(t, state.IsActive)
 	assert.False(t, state.IsWaitingMode)
@@ -80,7 +83,7 @@ func TestSmartMainLoop_BasicCreation(t *testing.T) {
 // TestSmartMainLoop_ConfigDefaults 测试默认配置
 func TestSmartMainLoop_ConfigDefaults(t *testing.T) {
 	config := core.DefaultMainLoopConfig()
-	
+
 	assert.Equal(t, 5*time.Second, config.MainLoopInterval)
 	assert.Equal(t, 30*time.Second, config.WaitModeInterval)
 	assert.Equal(t, 100, config.MaxExecutionHistory)
@@ -95,15 +98,18 @@ func TestSmartMainLoop_ConfigDefaults(t *testing.T) {
 // TestSmartMainLoop_SystemStateManagement 测试系统状态管理
 func TestSmartMainLoop_SystemStateManagement(t *testing.T) {
 	mockWakeup := &MockWakeupListener{}
-	
+
 	config := core.DefaultMainLoopConfig()
 	logger := slog.Default()
-	
+
 	mainLoop := core.NewSmartMainLoop(
-		nil,
-		nil,
-		nil,
-		mockWakeup,
+		nil,        // mindscapeService
+		nil,        // decisionMaker
+		nil,        // agentDispatcher
+		mockWakeup, // wakeupListener
+		nil,        // taskOrchestrator
+		nil,        // continuousDecision
+		nil,        // feedbackAnalyzer
 		config,
 		logger,
 	)
@@ -118,14 +124,14 @@ func TestSmartMainLoop_SystemStateManagement(t *testing.T) {
 
 	// 测试等待模式进入和退出（即使组件为nil也应该能正常切换状态）
 	ctx := context.Background()
-	
+
 	_ = mainLoop.EnterWaitMode(ctx, []core.MonitoringTask{})
 	// 这可能会失败因为mindscapeService为nil，但我们可以测试状态变化
 	state = mainLoop.GetSystemState()
-	
+
 	err := mainLoop.ExitWaitMode(ctx)
 	assert.NoError(t, err) // 退出等待模式应该成功
-	
+
 	state = mainLoop.GetSystemState()
 	assert.False(t, state.IsWaitingMode)
 }
@@ -133,16 +139,19 @@ func TestSmartMainLoop_SystemStateManagement(t *testing.T) {
 // TestSmartMainLoop_ExecutionHistory 测试执行历史管理
 func TestSmartMainLoop_ExecutionHistory(t *testing.T) {
 	mockWakeup := &MockWakeupListener{}
-	
+
 	config := core.DefaultMainLoopConfig()
 	config.MaxExecutionHistory = 5 // 设置较小的历史记录限制
 	logger := slog.Default()
-	
+
 	mainLoop := core.NewSmartMainLoop(
-		nil,
-		nil,
-		nil,
-		mockWakeup,
+		nil,        // mindscapeService
+		nil,        // decisionMaker
+		nil,        // agentDispatcher
+		mockWakeup, // wakeupListener
+		nil,        // taskOrchestrator
+		nil,        // continuousDecision
+		nil,        // feedbackAnalyzer
 		config,
 		logger,
 	)
@@ -162,16 +171,19 @@ func TestSmartMainLoop_ExecutionHistory(t *testing.T) {
 // TestSmartMainLoop_UserInputAPI 测试用户输入API
 func TestSmartMainLoop_UserInputAPI(t *testing.T) {
 	mockWakeup := &MockWakeupListener{}
-	
+
 	config := core.DefaultMainLoopConfig()
 	config.UserInputTimeout = 100 * time.Millisecond // 设置较短的超时时间
 	logger := slog.Default()
-	
+
 	mainLoop := core.NewSmartMainLoop(
-		nil,
-		nil,
-		nil,
-		mockWakeup,
+		nil,        // mindscapeService
+		nil,        // decisionMaker
+		nil,        // agentDispatcher
+		mockWakeup, // wakeupListener
+		nil,        // taskOrchestrator
+		nil,        // continuousDecision
+		nil,        // feedbackAnalyzer
 		config,
 		logger,
 	)
@@ -179,7 +191,7 @@ func TestSmartMainLoop_UserInputAPI(t *testing.T) {
 	// 测试用户输入API（不启动主循环）
 	userContext := map[string]any{"source": "test"}
 	_ = mainLoop.ProcessUserInput("测试输入", "test_user", userContext)
-	
+
 	// 由于主循环未启动，通道应该能接收输入但可能超时，这取决于实现
 	// 这里主要测试API不会panic
 	assert.NotPanics(t, func() {
@@ -190,15 +202,18 @@ func TestSmartMainLoop_UserInputAPI(t *testing.T) {
 // TestSmartMainLoop_WakeupEventAPI 测试唤醒事件API
 func TestSmartMainLoop_WakeupEventAPI(t *testing.T) {
 	mockWakeup := &MockWakeupListener{}
-	
+
 	config := core.DefaultMainLoopConfig()
 	logger := slog.Default()
-	
+
 	_ = core.NewSmartMainLoop(
-		nil,
-		nil,
-		nil,
-		mockWakeup,
+		nil,        // mindscapeService
+		nil,        // decisionMaker
+		nil,        // agentDispatcher
+		mockWakeup, // wakeupListener
+		nil,        // taskOrchestrator
+		nil,        // continuousDecision
+		nil,        // feedbackAnalyzer
 		config,
 		logger,
 	)
@@ -221,20 +236,23 @@ func TestSmartMainLoop_WakeupEventAPI(t *testing.T) {
 // TestSmartMainLoop_MockWakeupListener 测试MockWakeupListener功能
 func TestSmartMainLoop_MockWakeupListener(t *testing.T) {
 	mockWakeup := &MockWakeupListener{}
-	
+
 	// 设置期望
 	mockWakeup.On("SetHandler", mock.Anything).Return()
 	mockWakeup.On("GetListenAddress").Return("http://localhost:8080/webhook")
-	
+
 	config := core.DefaultMainLoopConfig()
 	logger := slog.Default()
-	
+
 	// 创建主循环但不使用，主要测试Mock
 	_ = core.NewSmartMainLoop(
-		nil,
-		nil,
-		nil,
-		mockWakeup,
+		nil,        // mindscapeService
+		nil,        // decisionMaker
+		nil,        // agentDispatcher
+		mockWakeup, // wakeupListener
+		nil,        // taskOrchestrator
+		nil,        // continuousDecision
+		nil,        // feedbackAnalyzer
 		config,
 		logger,
 	)
@@ -248,4 +266,4 @@ func TestSmartMainLoop_MockWakeupListener(t *testing.T) {
 
 	// 验证Mock调用
 	mockWakeup.AssertExpectations(t)
-} 
+}
