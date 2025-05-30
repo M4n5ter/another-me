@@ -6,23 +6,23 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/m4n5ter/another-me/internal/core"
+	"github.com/m4n5ter/another-me/internal/core/types"
 	. "github.com/m4n5ter/another-me/pkg/option"
 )
 
 func TestAgentType(t *testing.T) {
-	assert.Equal(t, core.AgentType("gui"), core.AgentTypeGUI)
-	assert.Equal(t, core.AgentType("react"), core.AgentTypeReAct)
-	assert.Equal(t, core.AgentType("unknown"), core.AgentTypeUnknown)
+	assert.Equal(t, types.AgentType("gui"), types.AgentTypeGUI)
+	assert.Equal(t, types.AgentType("react"), types.AgentTypeReAct)
+	assert.Equal(t, types.AgentType("unknown"), types.AgentTypeUnknown)
 }
 
 func TestTask(t *testing.T) {
 	now := time.Now()
-	task := core.Task{
+	task := types.Task{
 		ID:          "test-task-001",
 		Type:        "gui_click",
 		Description: "点击指定按钮",
-		AgentType:   core.AgentTypeGUI,
+		AgentType:   types.AgentTypeGUI,
 		Parameters: map[string]any{
 			"coordinates": []int{100, 200},
 			"button":      "left",
@@ -36,7 +36,7 @@ func TestTask(t *testing.T) {
 
 	assert.Equal(t, "test-task-001", task.ID)
 	assert.Equal(t, "gui_click", task.Type)
-	assert.Equal(t, core.AgentTypeGUI, task.AgentType)
+	assert.Equal(t, types.AgentTypeGUI, task.AgentType)
 	assert.Equal(t, 1, task.Priority)
 	assert.Equal(t, now, task.CreatedAt)
 	assert.Contains(t, task.Parameters, "coordinates")
@@ -46,10 +46,10 @@ func TestTask(t *testing.T) {
 func TestExecutionResult(t *testing.T) {
 	startTime := time.Now()
 	endTime := startTime.Add(5 * time.Second)
-	
-	result := core.ExecutionResult{
+
+	result := types.ExecutionResult{
 		TaskID:       "test-task-001",
-		Status:       core.ExecutionStatusSuccess,
+		Status:       types.ExecutionStatusSuccess,
 		Output:       "操作已成功完成",
 		Observations: []string{"检测到按钮", "执行点击操作", "确认操作成功"},
 		Error:        "",
@@ -62,7 +62,7 @@ func TestExecutionResult(t *testing.T) {
 	}
 
 	assert.Equal(t, "test-task-001", result.TaskID)
-	assert.Equal(t, core.ExecutionStatusSuccess, result.Status)
+	assert.Equal(t, types.ExecutionStatusSuccess, result.Status)
 	assert.Equal(t, "操作已成功完成", result.Output)
 	assert.Len(t, result.Observations, 3)
 	assert.Empty(t, result.Error)
@@ -72,19 +72,19 @@ func TestExecutionResult(t *testing.T) {
 }
 
 func TestExecutionStatus(t *testing.T) {
-	assert.Equal(t, core.ExecutionStatus("success"), core.ExecutionStatusSuccess)
-	assert.Equal(t, core.ExecutionStatus("failure"), core.ExecutionStatusFailure)
-	assert.Equal(t, core.ExecutionStatus("in_progress"), core.ExecutionStatusInProgress)
-	assert.Equal(t, core.ExecutionStatus("cancelled"), core.ExecutionStatusCancelled)
+	assert.Equal(t, types.ExecutionStatus("success"), types.ExecutionStatusSuccess)
+	assert.Equal(t, types.ExecutionStatus("failure"), types.ExecutionStatusFailure)
+	assert.Equal(t, types.ExecutionStatus("in_progress"), types.ExecutionStatusInProgress)
+	assert.Equal(t, types.ExecutionStatus("cancelled"), types.ExecutionStatusCancelled)
 }
 
 func TestMonitoringTask(t *testing.T) {
 	now := time.Now()
-	monitoringTask := core.MonitoringTask{
+	monitoringTask := types.MonitoringTask{
 		ID:                None[string](), // 初始创建时为None，由Mindscape分配
 		Description:       "监控VSCode启动",
 		MindscapeTaskType: "application_monitor",
-		Conditions: []core.MonitorCondition{
+		Conditions: []types.MonitorCondition{
 			{
 				Type:     "application_start",
 				Property: "application_name",
@@ -114,7 +114,7 @@ func TestMonitoringTask(t *testing.T) {
 }
 
 func TestMonitorCondition(t *testing.T) {
-	condition := core.MonitorCondition{
+	condition := types.MonitorCondition{
 		Type:     "text_on_screen",
 		Property: "text_pattern",
 		Operator: "contains",
@@ -128,8 +128,8 @@ func TestMonitorCondition(t *testing.T) {
 }
 
 func TestTaskUpdate(t *testing.T) {
-	taskUpdate := core.TaskUpdate{
-		TasksToUpdate: []core.MonitoringTask{
+	taskUpdate := types.TaskUpdate{
+		TasksToUpdate: []types.MonitoringTask{
 			{
 				ID:          Some("task-001"),
 				Description: "更新的监控任务",
@@ -148,7 +148,7 @@ func TestTaskUpdate(t *testing.T) {
 
 func TestWakeupEvent(t *testing.T) {
 	triggerTime := time.Now()
-	wakeupEvent := core.WakeupEvent{
+	wakeupEvent := types.WakeupEvent{
 		MonitoringTaskID: "task-001",
 		TriggerTime:      triggerTime,
 		ObservedData: map[string]any{
@@ -172,12 +172,12 @@ func TestWakeupEvent(t *testing.T) {
 
 func TestMemoryItem(t *testing.T) {
 	timestamp := time.Now()
-	memoryItem := core.MemoryItem{
-		ID:        "memory-001",
-		Timestamp: timestamp,
-		Type:      core.MemoryTypeObservation,
-		Content:   "用户打开了VSCode，开始编程工作",
-		Keywords:  []string{"vscode", "编程", "工作"},
+	memoryItem := types.MemoryItem{
+		ID:         "memory-001",
+		Timestamp:  timestamp,
+		Type:       types.MemoryTypeObservation,
+		Content:    "用户打开了VSCode，开始编程工作",
+		Keywords:   []string{"vscode", "编程", "工作"},
 		Importance: 0.8,
 		RelatedIDs: []string{"memory-002", "memory-003"},
 		UserID:     "user-001",
@@ -189,7 +189,7 @@ func TestMemoryItem(t *testing.T) {
 
 	assert.Equal(t, "memory-001", memoryItem.ID)
 	assert.Equal(t, timestamp, memoryItem.Timestamp)
-	assert.Equal(t, core.MemoryTypeObservation, memoryItem.Type)
+	assert.Equal(t, types.MemoryTypeObservation, memoryItem.Type)
 	assert.Contains(t, memoryItem.Keywords, "vscode")
 	assert.Equal(t, 0.8, memoryItem.Importance)
 	assert.Len(t, memoryItem.RelatedIDs, 2)
@@ -197,28 +197,28 @@ func TestMemoryItem(t *testing.T) {
 }
 
 func TestMemoryTypeConstants(t *testing.T) {
-	assert.Equal(t, "observation", core.MemoryTypeObservation)
-	assert.Equal(t, "user_preference", core.MemoryTypeUserPref)
-	assert.Equal(t, "task_summary", core.MemoryTypeTaskSummary)
-	assert.Equal(t, "error_log", core.MemoryTypeErrorLog)
-	assert.Equal(t, "user_profile", core.MemoryTypeUserProfile)
-	assert.Equal(t, "system_event", core.MemoryTypeSystemEvent)
+	assert.Equal(t, "observation", types.MemoryTypeObservation)
+	assert.Equal(t, "user_preference", types.MemoryTypeUserPref)
+	assert.Equal(t, "task_summary", types.MemoryTypeTaskSummary)
+	assert.Equal(t, "error_log", types.MemoryTypeErrorLog)
+	assert.Equal(t, "user_profile", types.MemoryTypeUserProfile)
+	assert.Equal(t, "system_event", types.MemoryTypeSystemEvent)
 }
 
 func TestDecisionContext(t *testing.T) {
 	timestamp := time.Now()
-	wakeupEvent := core.WakeupEvent{
+	wakeupEvent := types.WakeupEvent{
 		MonitoringTaskID: "task-001",
 		TriggerTime:      timestamp,
 		Reason:           "测试唤醒",
 	}
-	
-	decisionContext := core.DecisionContext{
-		WakeupEvent:       Some(wakeupEvent),
-		RetrievedMemories: []core.MemoryItem{},
-		SystemState:       map[string]any{"active": true},
-		LastExecutionResult: None[core.ExecutionResult](),
-		Timestamp:         timestamp,
+
+	decisionContext := types.DecisionContext{
+		WakeupEvent:         Some(wakeupEvent),
+		RetrievedMemories:   []types.MemoryItem{},
+		SystemState:         map[string]any{"active": true},
+		LastExecutionResult: None[types.ExecutionResult](),
+		Timestamp:           timestamp,
 	}
 
 	assert.True(t, decisionContext.WakeupEvent.IsSome())
@@ -229,16 +229,16 @@ func TestDecisionContext(t *testing.T) {
 }
 
 func TestDecisionResult(t *testing.T) {
-	task := core.Task{
+	task := types.Task{
 		ID:          "task-001",
 		Description: "测试任务",
-		AgentType:   core.AgentTypeGUI,
+		AgentType:   types.AgentTypeGUI,
 	}
-	
-	decisionResult := core.DecisionResult{
+
+	decisionResult := types.DecisionResult{
 		ShouldExecuteTask:   true,
 		Task:                Some(task),
-		MonitoringTasks:     []core.MonitoringTask{},
+		MonitoringTasks:     []types.MonitoringTask{},
 		ShouldEnterWaitMode: false,
 		ReasoningSteps:      []string{"分析唤醒事件", "确定需要执行任务", "选择GUI Agent"},
 		Confidence:          0.85,
@@ -257,15 +257,15 @@ func TestDecisionResult(t *testing.T) {
 func TestSystemState(t *testing.T) {
 	startTime := time.Now()
 	lastActivity := startTime.Add(10 * time.Minute)
-	
-	systemState := core.SystemState{
+
+	systemState := types.SystemState{
 		IsActive:            true,
 		IsWaitingMode:       false,
-		CurrentTask:         None[core.Task](),
+		CurrentTask:         None[types.Task](),
 		ActiveMonitoringIDs: []string{"monitor-001", "monitor-002"},
 		LastActivity:        lastActivity,
 		StartTime:           startTime,
-		ExecutionHistory:    []core.ExecutionResult{},
+		ExecutionHistory:    []types.ExecutionResult{},
 		ErrorCount:          0,
 		Metadata: map[string]any{
 			"version": "1.0.0",
@@ -280,4 +280,4 @@ func TestSystemState(t *testing.T) {
 	assert.Equal(t, lastActivity, systemState.LastActivity)
 	assert.Equal(t, 0, systemState.ErrorCount)
 	assert.Equal(t, "1.0.0", systemState.Metadata["version"])
-} 
+}

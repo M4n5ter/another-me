@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/m4n5ter/another-me/internal/core/types"
 	. "github.com/m4n5ter/another-me/pkg/option"
 )
 
@@ -24,14 +25,14 @@ type SmartMainLoop struct {
 	feedbackAnalyzer   FeedbackAnalyzer
 
 	// 状态管理
-	systemState      SystemState
+	systemState      types.SystemState
 	isRunning        bool
 	isWaitMode       bool
-	executionHistory []ExecutionResult
+	executionHistory []types.ExecutionResult
 
 	// 当前执行状态
-	currentExecutionPlan  Option[ExecutionPlan]
-	currentExecutionState Option[ExecutionState]
+	currentExecutionPlan  Option[types.ExecutionPlan]
+	currentExecutionState Option[types.ExecutionState]
 
 	// 配置
 	config MainLoopConfig
@@ -45,7 +46,7 @@ type SmartMainLoop struct {
 
 	// 通道
 	userInputChan   chan UserInputEvent
-	wakeupEventChan chan WakeupEvent
+	wakeupEventChan chan types.WakeupEvent
 	stopChan        chan struct{}
 }
 
@@ -128,31 +129,33 @@ func NewSmartMainLoop(
 		taskOrchestrator:   taskOrchestrator,
 		continuousDecision: continuousDecision,
 		feedbackAnalyzer:   feedbackAnalyzer,
-		systemState: SystemState{
+		systemState: types.SystemState{
 			IsActive:            false,
 			IsWaitingMode:       false,
-			CurrentTask:         None[Task](),
+			CurrentTask:         None[types.Task](),
 			ActiveMonitoringIDs: []string{},
 			LastActivity:        time.Now(),
 			StartTime:           time.Now(),
-			ExecutionHistory:    []ExecutionResult{},
+			ExecutionHistory:    []types.ExecutionResult{},
 			ErrorCount:          0,
 			Metadata:            map[string]any{},
 		},
 		isRunning:             false,
 		isWaitMode:            false,
-		executionHistory:      make([]ExecutionResult, 0, config.MaxExecutionHistory),
-		currentExecutionPlan:  None[ExecutionPlan](),
-		currentExecutionState: None[ExecutionState](),
+		executionHistory:      make([]types.ExecutionResult, 0, config.MaxExecutionHistory),
+		currentExecutionPlan:  None[types.ExecutionPlan](),
+		currentExecutionState: None[types.ExecutionState](),
 		config:                config,
 		logger:                logger,
 		ctx:                   ctx,
 		cancel:                cancel,
 		userInputChan:         make(chan UserInputEvent, 10),
-		wakeupEventChan:       make(chan WakeupEvent, 10),
+		wakeupEventChan:       make(chan types.WakeupEvent, 10),
 		stopChan:              make(chan struct{}),
 	}
 }
+
+var _ MainLoop = (*SmartMainLoop)(nil)
 
 // Start 启动主循环
 func (ml *SmartMainLoop) Start(ctx context.Context) error {
@@ -252,14 +255,14 @@ func (ml *SmartMainLoop) IsRunning() bool {
 }
 
 // GetSystemState 获取当前系统状态
-func (ml *SmartMainLoop) GetSystemState() SystemState {
+func (ml *SmartMainLoop) GetSystemState() types.SystemState {
 	ml.mu.RLock()
 	defer ml.mu.RUnlock()
 	return ml.systemState
 }
 
 // OnWakeupEvent 处理唤醒事件
-func (ml *SmartMainLoop) OnWakeupEvent(wakeupEvent WakeupEvent) error {
+func (ml *SmartMainLoop) OnWakeupEvent(wakeupEvent types.WakeupEvent) error {
 	ml.logger.Info("收到唤醒事件",
 		"task_id", wakeupEvent.MonitoringTaskID,
 		"reason", wakeupEvent.Reason)
@@ -273,7 +276,7 @@ func (ml *SmartMainLoop) OnWakeupEvent(wakeupEvent WakeupEvent) error {
 }
 
 // EnterWaitMode 进入等待模式
-func (ml *SmartMainLoop) EnterWaitMode(ctx context.Context, monitoringTasks []MonitoringTask) error {
+func (ml *SmartMainLoop) EnterWaitMode(ctx context.Context, monitoringTasks []types.MonitoringTask) error {
 	ml.mu.Lock()
 	defer ml.mu.Unlock()
 
@@ -317,7 +320,7 @@ func (ml *SmartMainLoop) ExitWaitMode(ctx context.Context) error {
 }
 
 // GetExecutionHistory 获取执行历史
-func (ml *SmartMainLoop) GetExecutionHistory(limit int) []ExecutionResult {
+func (ml *SmartMainLoop) GetExecutionHistory(limit int) []types.ExecutionResult {
 	ml.mu.RLock()
 	defer ml.mu.RUnlock()
 
@@ -327,7 +330,7 @@ func (ml *SmartMainLoop) GetExecutionHistory(limit int) []ExecutionResult {
 
 	// 返回最近的执行记录
 	start := len(ml.executionHistory) - limit
-	result := make([]ExecutionResult, limit)
+	result := make([]types.ExecutionResult, limit)
 	copy(result, ml.executionHistory[start:])
 
 	return result
@@ -439,15 +442,15 @@ func (ml *SmartMainLoop) handleUserInput(userInput UserInputEvent) {
 	}
 
 	// 使用智能编排系统处理用户输入
-	ml.executeSmartWorkflow(ctx, userInput, None[WakeupEvent]())
+	ml.executeSmartWorkflow(ctx, userInput, None[types.WakeupEvent]())
 }
 
 // executeSmartWorkflow 执行智能工作流
-func (ml *SmartMainLoop) executeSmartWorkflow(ctx context.Context, userInput UserInputEvent, wakeupEvent Option[WakeupEvent]) {
+func (ml *SmartMainLoop) executeSmartWorkflow(ctx context.Context, userInput UserInputEvent, wakeupEvent Option[types.WakeupEvent]) {
 	// 构建初始决策上下文
-	decisionCtx := DecisionContext{
+	decisionCtx := types.DecisionContext{
 		WakeupEvent:       wakeupEvent,
-		RetrievedMemories: []MemoryItem{}, // 将由DecisionMaker填充
+		RetrievedMemories: []types.MemoryItem{}, // 将由DecisionMaker填充
 		SystemState: map[string]any{
 			"user_input": userInput.Input,
 			"user_id":    userInput.UserID,
@@ -476,7 +479,7 @@ func (ml *SmartMainLoop) executeSmartWorkflow(ctx context.Context, userInput Use
 	}
 
 	// 将单个任务转换为任务列表
-	tasks := []Task{initialDecision.Task.Unwrap()}
+	tasks := []types.Task{initialDecision.Task.Unwrap()}
 
 	// 开始智能任务编排和持续执行循环
 	err = ml.startContinuousExecution(ctx, tasks, userInput)
@@ -486,7 +489,7 @@ func (ml *SmartMainLoop) executeSmartWorkflow(ctx context.Context, userInput Use
 }
 
 // startContinuousExecution 开始持续执行循环
-func (ml *SmartMainLoop) startContinuousExecution(ctx context.Context, initialTasks []Task, userInput UserInputEvent) error {
+func (ml *SmartMainLoop) startContinuousExecution(ctx context.Context, initialTasks []types.Task, userInput UserInputEvent) error {
 	iterationCount := 0
 	maxIterations := 10 // 防止无限循环
 
@@ -551,8 +554,8 @@ func (ml *SmartMainLoop) startContinuousExecution(ctx context.Context, initialTa
 
 	// 清理当前执行状态
 	ml.mu.Lock()
-	ml.currentExecutionPlan = None[ExecutionPlan]()
-	ml.currentExecutionState = None[ExecutionState]()
+	ml.currentExecutionPlan = None[types.ExecutionPlan]()
+	ml.currentExecutionState = None[types.ExecutionState]()
 	ml.mu.Unlock()
 
 	ml.logger.Info("持续执行循环完成",
@@ -562,7 +565,7 @@ func (ml *SmartMainLoop) startContinuousExecution(ctx context.Context, initialTa
 }
 
 // createOptimalExecutionPlan 创建最优执行计划
-func (ml *SmartMainLoop) createOptimalExecutionPlan(ctx context.Context, tasks []Task) (ExecutionPlan, error) {
+func (ml *SmartMainLoop) createOptimalExecutionPlan(ctx context.Context, tasks []types.Task) (types.ExecutionPlan, error) {
 	if ml.taskOrchestrator == nil {
 		// 如果没有智能编排器，创建简单的串行计划
 		return ml.createSimpleExecutionPlan(tasks), nil
@@ -574,7 +577,7 @@ func (ml *SmartMainLoop) createOptimalExecutionPlan(ctx context.Context, tasks [
 	// 使用智能编排器创建计划
 	plan, err := ml.taskOrchestrator.CreateExecutionPlan(ctx, tasks, executionMode)
 	if err != nil {
-		return ExecutionPlan{}, err
+		return types.ExecutionPlan{}, err
 	}
 
 	// 优化执行计划
@@ -591,9 +594,9 @@ func (ml *SmartMainLoop) createOptimalExecutionPlan(ctx context.Context, tasks [
 }
 
 // determineExecutionMode 确定执行模式
-func (ml *SmartMainLoop) determineExecutionMode(tasks []Task) ExecutionMode {
+func (ml *SmartMainLoop) determineExecutionMode(tasks []types.Task) types.ExecutionMode {
 	if len(tasks) == 1 {
-		return ExecutionModeSerial
+		return types.ExecutionModeSerial
 	}
 
 	// 检查是否有依赖关系
@@ -602,67 +605,67 @@ func (ml *SmartMainLoop) determineExecutionMode(tasks []Task) ExecutionMode {
 
 	for _, task := range tasks {
 		switch task.AgentType {
-		case AgentTypeGUI:
+		case types.AgentTypeGUI:
 			hasGUITasks = true
-		case AgentTypeReAct:
+		case types.AgentTypeReAct:
 			hasReActTasks = true
 		}
 	}
 
 	// GUI任务通常需要串行执行，ReAct任务可以并行
 	if hasGUITasks && hasReActTasks {
-		return ExecutionModeMixed
+		return types.ExecutionModeMixed
 	} else if hasGUITasks {
-		return ExecutionModeSerial
+		return types.ExecutionModeSerial
 	} else {
-		return ExecutionModeParallel
+		return types.ExecutionModeParallel
 	}
 }
 
 // createSimpleExecutionPlan 创建简单的执行计划
-func (ml *SmartMainLoop) createSimpleExecutionPlan(tasks []Task) ExecutionPlan {
+func (ml *SmartMainLoop) createSimpleExecutionPlan(tasks []types.Task) types.ExecutionPlan {
 	planID := fmt.Sprintf("simple_plan_%d", time.Now().Unix())
 
-	var steps []ExecutionStep
+	var steps []types.ExecutionStep
 	for i, task := range tasks {
-		step := ExecutionStep{
+		step := types.ExecutionStep{
 			ID:                fmt.Sprintf("step_%d", i),
-			Mode:              ExecutionModeSerial,
-			Tasks:             []Task{task},
+			Mode:              types.ExecutionModeSerial,
+			Tasks:             []types.Task{task},
 			MaxRetries:        2,
 			ContinueOnFailure: false,
 		}
 		steps = append(steps, step)
 	}
 
-	return ExecutionPlan{
+	return types.ExecutionPlan{
 		ID:        planID,
 		Steps:     steps,
 		CreatedAt: time.Now(),
 		Context:   map[string]any{"mode": "simple"},
-		ContinuationStrategy: ContinuationStrategy{
+		ContinuationStrategy: types.ContinuationStrategy{
 			MaxIterations:        3,
 			IdleThreshold:        30 * time.Second,
-			FeedbackAnalysisType: FeedbackAnalysisSimple,
+			FeedbackAnalysisType: types.FeedbackAnalysisSimple,
 		},
 	}
 }
 
 // performContinuousDecision 执行持续决策
-func (ml *SmartMainLoop) performContinuousDecision(ctx context.Context, executionState ExecutionState, userInput UserInputEvent) (bool, []Task, error) {
+func (ml *SmartMainLoop) performContinuousDecision(ctx context.Context, executionState types.ExecutionState, userInput UserInputEvent) (bool, []types.Task, error) {
 	if ml.continuousDecision == nil && ml.feedbackAnalyzer == nil {
 		// 如果没有持续决策引擎，使用简单逻辑
 		return ml.performSimpleContinuousDecision(executionState)
 	}
 
 	// 收集所有执行结果
-	var allResults []ExecutionResult
+	var allResults []types.ExecutionResult
 	for _, stepResult := range executionState.StepResults {
 		allResults = append(allResults, stepResult.TaskResults...)
 	}
 
 	// 分析Agent输出
-	var outputAnalysis AgentOutputAnalysis
+	var outputAnalysis types.AgentOutputAnalysis
 	if ml.feedbackAnalyzer != nil {
 		analysis, err := ml.feedbackAnalyzer.AnalyzeExecutionResults(ctx, allResults)
 		if err != nil {
@@ -673,7 +676,7 @@ func (ml *SmartMainLoop) performContinuousDecision(ctx context.Context, executio
 	}
 
 	// 获取系统指标
-	var systemMetrics SystemMetrics
+	var systemMetrics types.SystemMetrics
 	if ml.taskOrchestrator != nil {
 		metrics, err := ml.taskOrchestrator.GetResourceUsage(ctx)
 		if err != nil {
@@ -684,8 +687,8 @@ func (ml *SmartMainLoop) performContinuousDecision(ctx context.Context, executio
 	}
 
 	// 构建持续决策上下文
-	decisionContext := ContinuousDecisionContext{
-		InitialContext: DecisionContext{
+	decisionContext := types.ContinuousDecisionContext{
+		InitialContext: types.DecisionContext{
 			SystemState: map[string]any{
 				"user_input": userInput.Input,
 				"user_id":    userInput.UserID,
@@ -707,7 +710,7 @@ func (ml *SmartMainLoop) performContinuousDecision(ctx context.Context, executio
 		}
 
 		// 处理持续决策结果
-		var nextTasks []Task
+		var nextTasks []types.Task
 		if result.NextExecutionPlan.IsSome() {
 			nextPlan := result.NextExecutionPlan.Unwrap()
 			// 从执行计划中提取任务
@@ -732,7 +735,7 @@ func (ml *SmartMainLoop) performContinuousDecision(ctx context.Context, executio
 }
 
 // performSimpleContinuousDecision 执行简单的持续决策
-func (ml *SmartMainLoop) performSimpleContinuousDecision(executionState ExecutionState) (bool, []Task, error) {
+func (ml *SmartMainLoop) performSimpleContinuousDecision(executionState types.ExecutionState) (bool, []types.Task, error) {
 	// 简单逻辑：如果有失败的任务，不继续执行
 	if executionState.FailedTaskCount > 0 {
 		ml.logger.Info("检测到失败任务，停止持续执行",
@@ -741,7 +744,7 @@ func (ml *SmartMainLoop) performSimpleContinuousDecision(executionState Executio
 	}
 
 	// 简单逻辑：如果所有任务都成功完成，也停止执行
-	if executionState.Status == ExecutionStatusSuccess {
+	if executionState.Status == types.ExecutionStatusSuccess {
 		ml.logger.Info("所有任务成功完成，停止持续执行")
 		return false, nil, nil
 	}
@@ -750,7 +753,7 @@ func (ml *SmartMainLoop) performSimpleContinuousDecision(executionState Executio
 }
 
 // updateSystemExecutionHistory 更新系统执行历史
-func (ml *SmartMainLoop) updateSystemExecutionHistory(executionState ExecutionState) {
+func (ml *SmartMainLoop) updateSystemExecutionHistory(executionState types.ExecutionState) {
 	ml.mu.Lock()
 	defer ml.mu.Unlock()
 
@@ -764,12 +767,12 @@ func (ml *SmartMainLoop) updateSystemExecutionHistory(executionState ExecutionSt
 
 			// 存储到Mindscape（异步）
 			if result.TaskID != "" {
-				go func(r ExecutionResult) {
+				go func(r types.ExecutionResult) {
 					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 					defer cancel()
 
 					// 需要重构Task对象，这里创建一个最小Task
-					task := Task{
+					task := types.Task{
 						ID:          r.TaskID,
 						Type:        "unknown",
 						Description: "从执行结果推断的任务",
@@ -794,13 +797,13 @@ func (ml *SmartMainLoop) updateSystemExecutionHistory(executionState ExecutionSt
 }
 
 // handleNonExecutionDecision 处理非执行决策
-func (ml *SmartMainLoop) handleNonExecutionDecision(ctx context.Context, decision DecisionResult) {
+func (ml *SmartMainLoop) handleNonExecutionDecision(ctx context.Context, decision types.DecisionResult) {
 	if len(decision.MonitoringTasks) > 0 {
 		// 设置监控任务
 		ml.EnterWaitMode(ctx, decision.MonitoringTasks)
 	} else if decision.ShouldEnterWaitMode {
 		// 进入等待模式但没有具体监控任务
-		ml.EnterWaitMode(ctx, []MonitoringTask{})
+		ml.EnterWaitMode(ctx, []types.MonitoringTask{})
 	}
 
 	ml.logger.Info("处理非执行决策",
@@ -809,7 +812,7 @@ func (ml *SmartMainLoop) handleNonExecutionDecision(ctx context.Context, decisio
 }
 
 // handleWakeupEvent 处理唤醒事件
-func (ml *SmartMainLoop) handleWakeupEvent(wakeupEvent WakeupEvent) {
+func (ml *SmartMainLoop) handleWakeupEvent(wakeupEvent types.WakeupEvent) {
 	ml.logger.Info("处理唤醒事件", "task_id", wakeupEvent.MonitoringTaskID)
 
 	ctx, cancel := context.WithTimeout(ml.ctx, ml.config.UserInputTimeout)
@@ -914,7 +917,7 @@ func (ml *SmartMainLoop) performHealthCheck() {
 }
 
 // addExecutionHistory 添加执行历史
-func (ml *SmartMainLoop) addExecutionHistory(result ExecutionResult) {
+func (ml *SmartMainLoop) addExecutionHistory(result types.ExecutionResult) {
 	ml.mu.Lock()
 	defer ml.mu.Unlock()
 
@@ -928,11 +931,11 @@ func (ml *SmartMainLoop) addExecutionHistory(result ExecutionResult) {
 }
 
 // storeExecutionMemory 存储执行记忆
-func (ml *SmartMainLoop) storeExecutionMemory(ctx context.Context, task Task, result ExecutionResult) {
-	memoryItem := MemoryItem{
+func (ml *SmartMainLoop) storeExecutionMemory(ctx context.Context, task types.Task, result types.ExecutionResult) {
+	memoryItem := types.MemoryItem{
 		ID:         fmt.Sprintf("execution_%s_%d", task.ID, time.Now().UnixNano()),
 		Timestamp:  time.Now(),
-		Type:       MemoryTypeTaskSummary,
+		Type:       types.MemoryTypeTaskSummary,
 		Content:    fmt.Sprintf("执行任务: %s, 结果: %s", task.Description, result.Status),
 		Keywords:   []string{task.Type, string(task.AgentType), string(result.Status)},
 		Importance: ml.calculateMemoryImportance(result),
@@ -943,7 +946,7 @@ func (ml *SmartMainLoop) storeExecutionMemory(ctx context.Context, task Task, re
 			"agent_type": task.AgentType,
 			"status":     result.Status,
 			"duration":   result.EndTime.Sub(result.StartTime).Seconds(),
-			"success":    result.Status == ExecutionStatusSuccess,
+			"success":    result.Status == types.ExecutionStatusSuccess,
 		},
 	}
 
@@ -953,16 +956,16 @@ func (ml *SmartMainLoop) storeExecutionMemory(ctx context.Context, task Task, re
 }
 
 // calculateMemoryImportance 计算记忆重要性
-func (ml *SmartMainLoop) calculateMemoryImportance(result ExecutionResult) float64 {
+func (ml *SmartMainLoop) calculateMemoryImportance(result types.ExecutionResult) float64 {
 	importance := 0.5 // 基础重要性
 
 	// 根据执行状态调整重要性
 	switch result.Status {
-	case ExecutionStatusSuccess:
+	case types.ExecutionStatusSuccess:
 		importance += 0.2
-	case ExecutionStatusFailure:
+	case types.ExecutionStatusFailure:
 		importance += 0.3 // 失败的记忆可能更重要，用于学习
-	case ExecutionStatusCancelled:
+	case types.ExecutionStatusCancelled:
 		importance -= 0.1
 	}
 
@@ -977,7 +980,7 @@ func (ml *SmartMainLoop) calculateMemoryImportance(result ExecutionResult) float
 }
 
 // extractUserIDFromTask 从任务中提取用户ID
-func (ml *SmartMainLoop) extractUserIDFromTask(task Task) string {
+func (ml *SmartMainLoop) extractUserIDFromTask(task types.Task) string {
 	if userID, exists := task.Context["user_id"]; exists {
 		if str, ok := userID.(string); ok {
 			return str

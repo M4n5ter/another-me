@@ -14,6 +14,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/m4n5ter/another-me/internal/core/types"
 	"github.com/m4n5ter/another-me/internal/mindscape"
 	. "github.com/m4n5ter/another-me/pkg/option"
 )
@@ -96,18 +97,20 @@ func NewMindscapeConnector(config MindscapeConnectorConfig, logger *slog.Logger)
 	return connector
 }
 
+var _ MindscapeService = (*MindscapeConnector)(nil)
+
 // StoreMemory 存储记忆到Mindscape
-func (mc *MindscapeConnector) StoreMemory(ctx context.Context, memoryData MemoryItem) error {
+func (mc *MindscapeConnector) StoreMemory(ctx context.Context, memoryData types.MemoryItem) error {
 	mc.logger.Debug("存储记忆", "memory_id", memoryData.ID, "type", memoryData.Type)
 
 	// 转换记忆类型
 	var memoryType memoryCore.MemoryType
 	switch memoryData.Type {
-	case MemoryTypeObservation:
+	case types.MemoryTypeObservation:
 		memoryType = memoryCore.EpisodicInteraction
-	case MemoryTypeUserPref:
+	case types.MemoryTypeUserPref:
 		memoryType = memoryCore.UserPreference
-	case MemoryTypeUserProfile:
+	case types.MemoryTypeUserProfile:
 		memoryType = memoryCore.UserTrait
 	default:
 		memoryType = memoryCore.SemanticFact
@@ -148,13 +151,13 @@ func (mc *MindscapeConnector) StoreMemory(ctx context.Context, memoryData Memory
 }
 
 // RetrieveMemories 从Mindscape检索相关记忆
-func (mc *MindscapeConnector) RetrieveMemories(ctx context.Context, queryContext map[string]any) ([]MemoryItem, error) {
+func (mc *MindscapeConnector) RetrieveMemories(ctx context.Context, queryContext map[string]any) ([]types.MemoryItem, error) {
 	mc.logger.Debug("检索记忆", "query_context", queryContext)
 
 	// 检查连接健康状态
 	if !mc.isHealthy {
 		mc.logger.Warn("Mindscape不可用，返回空结果")
-		return []MemoryItem{}, nil
+		return []types.MemoryItem{}, nil
 	}
 
 	// 构建检索请求
@@ -173,9 +176,9 @@ func (mc *MindscapeConnector) RetrieveMemories(ctx context.Context, queryContext
 	}
 
 	// 转换结果
-	memories := make([]MemoryItem, 0, len(resp.Fragments))
+	memories := make([]types.MemoryItem, 0, len(resp.Fragments))
 	for _, fragment := range resp.Fragments {
-		memory := MemoryItem{
+		memory := types.MemoryItem{
 			ID:         fragment.ID.String(),
 			Timestamp:  fragment.TimestampCreated,
 			Type:       mc.convertMemoryType(fragment.Type),
@@ -194,7 +197,7 @@ func (mc *MindscapeConnector) RetrieveMemories(ctx context.Context, queryContext
 }
 
 // DelegateMonitoringTask 委托监控任务给Mindscape
-func (mc *MindscapeConnector) DelegateMonitoringTask(ctx context.Context, taskDetails MonitoringTask) (string, error) {
+func (mc *MindscapeConnector) DelegateMonitoringTask(ctx context.Context, taskDetails types.MonitoringTask) (string, error) {
 	mc.logger.Debug("委托监控任务", "description", taskDetails.Description)
 
 	// 转换为Mindscape API格式
@@ -223,7 +226,7 @@ func (mc *MindscapeConnector) DelegateMonitoringTask(ctx context.Context, taskDe
 }
 
 // ClearOrUpdateMonitoringTasks 清除或更新监控任务
-func (mc *MindscapeConnector) ClearOrUpdateMonitoringTasks(ctx context.Context, taskUpdate TaskUpdate) error {
+func (mc *MindscapeConnector) ClearOrUpdateMonitoringTasks(ctx context.Context, taskUpdate types.TaskUpdate) error {
 	mc.logger.Debug("更新监控任务", "tasks_to_update", len(taskUpdate.TasksToUpdate), "tasks_to_delete", len(taskUpdate.TaskIDsToDelete))
 
 	// 检查连接健康状态
@@ -283,7 +286,7 @@ func (mc *MindscapeConnector) ClearOrUpdateMonitoringTasks(ctx context.Context, 
 }
 
 // SetupWakeUpListener 设置唤醒监听器
-func (mc *MindscapeConnector) SetupWakeUpListener(handler func(wakeupData WakeupEvent) error) error {
+func (mc *MindscapeConnector) SetupWakeUpListener(handler func(wakeupData types.WakeupEvent) error) error {
 	mc.logger.Info("设置唤醒监听器", "port", mc.config.WebhookListenPort)
 
 	// 创建HTTP监听器作为唤醒监听器
@@ -324,7 +327,7 @@ func (mc *MindscapeConnector) IsHealthy(ctx context.Context) bool {
 }
 
 // GetUserProfile 获取用户画像
-func (mc *MindscapeConnector) GetUserProfile(ctx context.Context, userID string) (*MemoryItem, error) {
+func (mc *MindscapeConnector) GetUserProfile(ctx context.Context, userID string) (*types.MemoryItem, error) {
 	mc.logger.Debug("获取用户画像", "user_id", userID)
 
 	if !mc.isHealthy {
@@ -336,10 +339,10 @@ func (mc *MindscapeConnector) GetUserProfile(ctx context.Context, userID string)
 		return nil, fmt.Errorf("获取用户画像失败: %w", err)
 	}
 
-	profile := &MemoryItem{
+	profile := &types.MemoryItem{
 		ID:         resp.ID,
 		Timestamp:  resp.LastInteraction,
-		Type:       MemoryTypeUserProfile,
+		Type:       types.MemoryTypeUserProfile,
 		Content:    resp.Preferences,
 		Keywords:   []string{"用户画像", "profile"},
 		Importance: 1.0,
@@ -453,7 +456,7 @@ func (mc *MindscapeConnector) processQueuedOperation(ctx context.Context, op Que
 			return err
 		}
 	case "clear_tasks":
-		if req, ok := op.Data.(TaskUpdate); ok {
+		if req, ok := op.Data.(types.TaskUpdate); ok {
 			return mc.ClearOrUpdateMonitoringTasks(ctx, req)
 		}
 	case "update_profile":
@@ -533,7 +536,7 @@ func extractStringSliceFromContext(ctx map[string]any, key string) Option[[]stri
 	return None[[]string]()
 }
 
-func (mc *MindscapeConnector) convertToSentinelCreateRequest(task MonitoringTask) sentinelDTO.CreateTaskRequest {
+func (mc *MindscapeConnector) convertToSentinelCreateRequest(task types.MonitoringTask) sentinelDTO.CreateTaskRequest {
 	// 将MonitoringTask转换为Mindscape Sentinel API格式
 	// 这里需要根据实际的Mindscape API来实现转换逻辑
 	parameters := map[string]any{
@@ -601,13 +604,13 @@ func generateOperationID() string {
 func (mc *MindscapeConnector) convertMemoryType(memoryType memoryCore.MemoryType) string {
 	switch memoryType {
 	case memoryCore.EpisodicInteraction:
-		return MemoryTypeObservation
+		return types.MemoryTypeObservation
 	case memoryCore.UserPreference:
-		return MemoryTypeUserPref
+		return types.MemoryTypeUserPref
 	case memoryCore.UserTrait:
-		return MemoryTypeUserProfile
+		return types.MemoryTypeUserProfile
 	default:
-		return MemoryTypeTaskSummary // 使用已存在的常量替代SemanticFact
+		return types.MemoryTypeTaskSummary // 使用已存在的常量替代SemanticFact
 	}
 }
 

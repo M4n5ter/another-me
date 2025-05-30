@@ -1,4 +1,4 @@
-package core
+package types
 
 import (
 	"time"
@@ -155,13 +155,13 @@ const (
 
 // ExecutionStep 执行步骤，支持串行和并行的混合执行
 type ExecutionStep struct {
-	ID           string             `json:"id"`            // 步骤唯一标识
-	Mode         ExecutionMode      `json:"mode"`          // 执行模式
-	Tasks        []Task             `json:"tasks"`         // 此步骤包含的任务列表
-	Dependencies []string           `json:"dependencies"`  // 依赖的步骤ID
-	MaxRetries   int                `json:"max_retries"`   // 最大重试次数
-	Timeout      Option[time.Duration] `json:"timeout"`   // 步骤超时时间
-	ContinueOnFailure bool          `json:"continue_on_failure"` // 失败时是否继续
+	ID                string                `json:"id"`                  // 步骤唯一标识
+	Mode              ExecutionMode         `json:"mode"`                // 执行模式
+	Tasks             []Task                `json:"tasks"`               // 此步骤包含的任务列表
+	Dependencies      []string              `json:"dependencies"`        // 依赖的步骤ID
+	MaxRetries        int                   `json:"max_retries"`         // 最大重试次数
+	Timeout           Option[time.Duration] `json:"timeout"`             // 步骤超时时间
+	ContinueOnFailure bool                  `json:"continue_on_failure"` // 失败时是否继续
 }
 
 // ExecutionPlan 执行计划，定义完整的任务执行流程
@@ -176,11 +176,11 @@ type ExecutionPlan struct {
 
 // ContinuationStrategy 持续执行策略
 type ContinuationStrategy struct {
-	MaxIterations        int                   `json:"max_iterations"`         // 最大迭代次数
-	ContinueConditions   []ContinueCondition   `json:"continue_conditions"`    // 继续执行的条件
-	StopConditions       []StopCondition       `json:"stop_conditions"`        // 停止执行的条件
-	IdleThreshold        time.Duration         `json:"idle_threshold"`         // 空闲阈值
-	FeedbackAnalysisType FeedbackAnalysisType  `json:"feedback_analysis_type"` // 反馈分析类型
+	MaxIterations        int                  `json:"max_iterations"`         // 最大迭代次数
+	ContinueConditions   []ContinueCondition  `json:"continue_conditions"`    // 继续执行的条件
+	StopConditions       []StopCondition      `json:"stop_conditions"`        // 停止执行的条件
+	IdleThreshold        time.Duration        `json:"idle_threshold"`         // 空闲阈值
+	FeedbackAnalysisType FeedbackAnalysisType `json:"feedback_analysis_type"` // 反馈分析类型
 }
 
 // ContinueCondition 继续执行的条件
@@ -205,23 +205,23 @@ type StopCondition struct {
 type FeedbackAnalysisType string
 
 const (
-	FeedbackAnalysisSimple    FeedbackAnalysisType = "simple"    // 简单规则匹配
-	FeedbackAnalysisLLM       FeedbackAnalysisType = "llm"       // LLM分析
-	FeedbackAnalysisHybrid    FeedbackAnalysisType = "hybrid"    // 混合分析
+	FeedbackAnalysisSimple FeedbackAnalysisType = "simple" // 简单规则匹配
+	FeedbackAnalysisLLM    FeedbackAnalysisType = "llm"    // LLM分析
+	FeedbackAnalysisHybrid FeedbackAnalysisType = "hybrid" // 混合分析
 )
 
 // ExecutionState 执行状态跟踪
 type ExecutionState struct {
-	PlanID           string              `json:"plan_id"`            // 执行计划ID
-	CurrentStepIndex int                 `json:"current_step_index"` // 当前执行步骤索引
-	StepResults      []StepResult        `json:"step_results"`       // 各步骤执行结果
-	StartTime        time.Time           `json:"start_time"`         // 开始执行时间
-	Status           ExecutionStatus     `json:"status"`             // 总体执行状态
-	IterationCount   int                 `json:"iteration_count"`    // 迭代次数
-	TotalTaskCount   int                 `json:"total_task_count"`   // 总任务数
-	CompletedTaskCount int               `json:"completed_task_count"` // 已完成任务数
-	FailedTaskCount  int                 `json:"failed_task_count"`  // 失败任务数
-	Metadata         map[string]any      `json:"metadata"`           // 执行元数据
+	PlanID             string          `json:"plan_id"`              // 执行计划ID
+	CurrentStepIndex   int             `json:"current_step_index"`   // 当前执行步骤索引
+	StepResults        []StepResult    `json:"step_results"`         // 各步骤执行结果
+	StartTime          time.Time       `json:"start_time"`           // 开始执行时间
+	Status             ExecutionStatus `json:"status"`               // 总体执行状态
+	IterationCount     int             `json:"iteration_count"`      // 迭代次数
+	TotalTaskCount     int             `json:"total_task_count"`     // 总任务数
+	CompletedTaskCount int             `json:"completed_task_count"` // 已完成任务数
+	FailedTaskCount    int             `json:"failed_task_count"`    // 失败任务数
+	Metadata           map[string]any  `json:"metadata"`             // 执行元数据
 }
 
 // StepResult 步骤执行结果
@@ -237,23 +237,23 @@ type StepResult struct {
 
 // ContinuousDecisionContext 持续决策上下文
 type ContinuousDecisionContext struct {
-	InitialContext      DecisionContext       `json:"initial_context"`       // 初始决策上下文
-	ExecutionState      ExecutionState        `json:"execution_state"`       // 当前执行状态
-	StepResults         []StepResult          `json:"step_results"`          // 步骤执行结果
-	AgentOutputAnalysis AgentOutputAnalysis   `json:"agent_output_analysis"` // Agent输出分析
-	SystemMetrics       SystemMetrics         `json:"system_metrics"`        // 系统指标
-	Timestamp           time.Time             `json:"timestamp"`             // 决策时间
+	InitialContext      DecisionContext     `json:"initial_context"`       // 初始决策上下文
+	ExecutionState      ExecutionState      `json:"execution_state"`       // 当前执行状态
+	StepResults         []StepResult        `json:"step_results"`          // 步骤执行结果
+	AgentOutputAnalysis AgentOutputAnalysis `json:"agent_output_analysis"` // Agent输出分析
+	SystemMetrics       SystemMetrics       `json:"system_metrics"`        // 系统指标
+	Timestamp           time.Time           `json:"timestamp"`             // 决策时间
 }
 
 // AgentOutputAnalysis Agent输出分析结果
 type AgentOutputAnalysis struct {
-	KeyFindings         []string        `json:"key_findings"`          // 关键发现
-	ActionableInsights  []string        `json:"actionable_insights"`   // 可执行洞察
-	RequiresUserInput   bool            `json:"requires_user_input"`   // 是否需要用户输入
-	ConfidenceLevel     float64         `json:"confidence_level"`      // 置信度
-	RecommendedActions  []string        `json:"recommended_actions"`   // 推荐行动
-	RiskAssessment      RiskAssessment  `json:"risk_assessment"`       // 风险评估
-	NextStepSuggestions []string        `json:"next_step_suggestions"` // 下一步建议
+	KeyFindings         []string       `json:"key_findings"`          // 关键发现
+	ActionableInsights  []string       `json:"actionable_insights"`   // 可执行洞察
+	RequiresUserInput   bool           `json:"requires_user_input"`   // 是否需要用户输入
+	ConfidenceLevel     float64        `json:"confidence_level"`      // 置信度
+	RecommendedActions  []string       `json:"recommended_actions"`   // 推荐行动
+	RiskAssessment      RiskAssessment `json:"risk_assessment"`       // 风险评估
+	NextStepSuggestions []string       `json:"next_step_suggestions"` // 下一步建议
 }
 
 // RiskAssessment 风险评估
@@ -266,12 +266,12 @@ type RiskAssessment struct {
 
 // SystemMetrics 系统指标
 type SystemMetrics struct {
-	CPUUsage         float64       `json:"cpu_usage"`         // CPU使用率
-	MemoryUsage      float64       `json:"memory_usage"`      // 内存使用率
-	ActiveAgentCount int           `json:"active_agent_count"` // 活跃Agent数量
+	CPUUsage            float64       `json:"cpu_usage"`             // CPU使用率
+	MemoryUsage         float64       `json:"memory_usage"`          // 内存使用率
+	ActiveAgentCount    int           `json:"active_agent_count"`    // 活跃Agent数量
 	AverageResponseTime time.Duration `json:"average_response_time"` // 平均响应时间
-	ErrorRate        float64       `json:"error_rate"`        // 错误率
-	ThroughputPerHour int          `json:"throughput_per_hour"` // 每小时处理量
+	ErrorRate           float64       `json:"error_rate"`            // 错误率
+	ThroughputPerHour   int           `json:"throughput_per_hour"`   // 每小时处理量
 }
 
 // ContinuousDecisionResult 持续决策结果

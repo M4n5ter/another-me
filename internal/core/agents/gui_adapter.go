@@ -9,6 +9,7 @@ import (
 	json "github.com/json-iterator/go"
 
 	"github.com/m4n5ter/another-me/internal/core"
+	"github.com/m4n5ter/another-me/internal/core/types"
 	guiagent "github.com/m4n5ter/another-me/internal/gui_agent"
 	"github.com/m4n5ter/another-me/pkg/llminterface"
 	"github.com/m4n5ter/another-me/pkg/tools/gui"
@@ -41,17 +42,19 @@ func NewGUIAgentAdapter(ctx context.Context, llmAdapter llminterface.ChatAdapter
 	}, nil
 }
 
+var _ core.Agent = (*GUIAgentAdapter)(nil)
+
 // Execute 实现Agent接口的Execute方法
-func (g *GUIAgentAdapter) Execute(ctx context.Context, task core.Task, initialContext map[string]any) (core.ExecutionResult, error) {
+func (g *GUIAgentAdapter) Execute(ctx context.Context, task types.Task, initialContext map[string]any) (types.ExecutionResult, error) {
 	startTime := time.Now()
 	g.logger.Info("开始执行GUI任务", "task_id", task.ID, "description", task.Description)
 
 	// 从任务参数中提取指令和截图URL
 	instruction, ok := task.Parameters["instruction"].(string)
 	if !ok || instruction == "" {
-		return core.ExecutionResult{
+		return types.ExecutionResult{
 			TaskID:    task.ID,
-			Status:    core.ExecutionStatusFailure,
+			Status:    types.ExecutionStatusFailure,
 			Error:     "任务参数中缺少instruction字段",
 			StartTime: startTime,
 			EndTime:   time.Now(),
@@ -66,9 +69,9 @@ func (g *GUIAgentAdapter) Execute(ctx context.Context, task core.Task, initialCo
 		// 自动截图
 		screenshot, err := g.guiTool.Screenshot()
 		if err != nil {
-			return core.ExecutionResult{
+			return types.ExecutionResult{
 				TaskID:    task.ID,
-				Status:    core.ExecutionStatusFailure,
+				Status:    types.ExecutionStatusFailure,
 				Error:     fmt.Sprintf("自动截图失败: %v", err),
 				StartTime: startTime,
 				EndTime:   time.Now(),
@@ -78,9 +81,9 @@ func (g *GUIAgentAdapter) Execute(ctx context.Context, task core.Task, initialCo
 		// 解析截图结果获取base64 URL
 		var screenshotResult map[string]any
 		if err := json.Unmarshal([]byte(screenshot), &screenshotResult); err != nil {
-			return core.ExecutionResult{
+			return types.ExecutionResult{
 				TaskID:    task.ID,
-				Status:    core.ExecutionStatusFailure,
+				Status:    types.ExecutionStatusFailure,
 				Error:     fmt.Sprintf("解析截图结果失败: %v", err),
 				StartTime: startTime,
 				EndTime:   time.Now(),
@@ -88,7 +91,7 @@ func (g *GUIAgentAdapter) Execute(ctx context.Context, task core.Task, initialCo
 		}
 
 		imageURL = screenshotResult["result"].(string)
-		g.logger.Debug("自动截图完成", "image_size", fmt.Sprintf("%.0fx%.0f", 
+		g.logger.Debug("自动截图完成", "image_size", fmt.Sprintf("%.0fx%.0f",
 			screenshotResult["width"], screenshotResult["height"]))
 	}
 
@@ -98,9 +101,9 @@ func (g *GUIAgentAdapter) Execute(ctx context.Context, task core.Task, initialCo
 
 	if err != nil {
 		g.logger.Error("GUI任务执行失败", "task_id", task.ID, "error", err)
-		return core.ExecutionResult{
+		return types.ExecutionResult{
 			TaskID:    task.ID,
-			Status:    core.ExecutionStatusFailure,
+			Status:    types.ExecutionStatusFailure,
 			Error:     err.Error(),
 			StartTime: startTime,
 			EndTime:   endTime,
@@ -122,19 +125,19 @@ func (g *GUIAgentAdapter) Execute(ctx context.Context, task core.Task, initialCo
 
 	g.logger.Info("GUI任务执行成功", "task_id", task.ID, "action", result.Action)
 
-	return core.ExecutionResult{
+	return types.ExecutionResult{
 		TaskID:       task.ID,
-		Status:       core.ExecutionStatusSuccess,
+		Status:       types.ExecutionStatusSuccess,
 		Output:       result,
 		Observations: observations,
 		StartTime:    startTime,
 		EndTime:      endTime,
 		Metadata: map[string]any{
 			"instruction":      instruction,
-			"action":          result.Action,
-			"thought":         result.Thought,
+			"action":           result.Action,
+			"thought":          result.Thought,
 			"execution_output": result.ExecutionOutput,
-			"duration":        endTime.Sub(startTime).String(),
+			"duration":         endTime.Sub(startTime).String(),
 		},
 	}, nil
 }
@@ -145,8 +148,8 @@ func (g *GUIAgentAdapter) Name() string {
 }
 
 // Type 返回Agent的类型
-func (g *GUIAgentAdapter) Type() core.AgentType {
-	return core.AgentTypeGUI
+func (g *GUIAgentAdapter) Type() types.AgentType {
+	return types.AgentTypeGUI
 }
 
 // IsAvailable 检查Agent是否可用
@@ -166,4 +169,4 @@ func (g *GUIAgentAdapter) GetCapabilities() []string {
 		"滚动和窗口操作",
 		"基于视觉的界面交互",
 	}
-} 
+}

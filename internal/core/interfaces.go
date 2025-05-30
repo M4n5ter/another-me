@@ -3,6 +3,8 @@ package core
 import (
 	"context"
 	"time"
+
+	"github.com/m4n5ter/another-me/internal/core/types"
 )
 
 // Agent 定义Agent的通用接口
@@ -12,13 +14,13 @@ type Agent interface {
 	// ctx: 上下文，用于取消和超时控制
 	// task: 要执行的任务
 	// initialContext: 任务执行的初始上下文
-	Execute(ctx context.Context, task Task, initialContext map[string]any) (ExecutionResult, error)
+	Execute(ctx context.Context, task types.Task, initialContext map[string]any) (types.ExecutionResult, error)
 
 	// Name 返回Agent的名称
 	Name() string
 
 	// Type 返回Agent的类型
-	Type() AgentType
+	Type() types.AgentType
 
 	// IsAvailable 检查Agent是否可用
 	IsAvailable(ctx context.Context) bool
@@ -31,28 +33,28 @@ type Agent interface {
 // MindscapeConnector实现此接口，供其他组件依赖注入和调用
 type MindscapeService interface {
 	// StoreMemory 存储记忆到Mindscape
-	StoreMemory(ctx context.Context, memoryData MemoryItem) error
+	StoreMemory(ctx context.Context, memoryData types.MemoryItem) error
 
 	// RetrieveMemories 从Mindscape检索相关记忆
 	// queryContext: 查询上下文，包含查询关键词、时间范围等
-	RetrieveMemories(ctx context.Context, queryContext map[string]any) ([]MemoryItem, error)
+	RetrieveMemories(ctx context.Context, queryContext map[string]any) ([]types.MemoryItem, error)
 
 	// DelegateMonitoringTask 委托监控任务给Mindscape
 	// 返回监控任务ID
-	DelegateMonitoringTask(ctx context.Context, taskDetails MonitoringTask) (string, error)
+	DelegateMonitoringTask(ctx context.Context, taskDetails types.MonitoringTask) (string, error)
 
 	// ClearOrUpdateMonitoringTasks 清除或更新监控任务
-	ClearOrUpdateMonitoringTasks(ctx context.Context, taskUpdate TaskUpdate) error
+	ClearOrUpdateMonitoringTasks(ctx context.Context, taskUpdate types.TaskUpdate) error
 
 	// SetupWakeUpListener 设置唤醒监听器
 	// handler: 处理唤醒事件的回调函数
-	SetupWakeUpListener(handler func(wakeupData WakeupEvent) error) error
+	SetupWakeUpListener(handler func(wakeupData types.WakeupEvent) error) error
 
 	// IsHealthy 检查Mindscape连接是否健康
 	IsHealthy(ctx context.Context) bool
 
 	// GetUserProfile 获取用户画像
-	GetUserProfile(ctx context.Context, userID string) (*MemoryItem, error)
+	GetUserProfile(ctx context.Context, userID string) (*types.MemoryItem, error)
 
 	// UpdateUserProfile 更新用户画像
 	UpdateUserProfile(ctx context.Context, userID string, profileData map[string]any) error
@@ -63,21 +65,21 @@ type MindscapeService interface {
 type DecisionMaker interface {
 	// MakeDecision 进行决策
 	// 整合当前上下文信息，决定是否执行任务或进入监控模式
-	MakeDecision(ctx context.Context, decisionContext DecisionContext) (DecisionResult, error)
+	MakeDecision(ctx context.Context, decisionContext types.DecisionContext) (types.DecisionResult, error)
 
 	// EvaluateTaskPriority 评估任务优先级
-	EvaluateTaskPriority(ctx context.Context, tasks []Task) ([]Task, error)
+	EvaluateTaskPriority(ctx context.Context, tasks []types.Task) ([]types.Task, error)
 
 	// DefineMonitoringConditions 定义监控条件
 	// 当无明确任务时，定义需要Mindscape监控的条件
-	DefineMonitoringConditions(ctx context.Context, systemState SystemState) ([]MonitoringTask, error)
+	DefineMonitoringConditions(ctx context.Context, systemState types.SystemState) ([]types.MonitoringTask, error)
 
 	// AnalyzeWakeupEvent 分析唤醒事件
 	// 根据唤醒事件决定后续行动
-	AnalyzeWakeupEvent(ctx context.Context, wakeupEvent WakeupEvent) (DecisionResult, error)
+	AnalyzeWakeupEvent(ctx context.Context, wakeupEvent types.WakeupEvent) (types.DecisionResult, error)
 
 	// GetDecisionHistory 获取决策历史
-	GetDecisionHistory(ctx context.Context, limit int) ([]DecisionResult, error)
+	GetDecisionHistory(ctx context.Context, limit int) ([]types.DecisionResult, error)
 }
 
 // AgentDispatcher 定义Agent调度器接口
@@ -86,23 +88,35 @@ type AgentDispatcher interface {
 	// RegisterAgent 注册Agent
 	RegisterAgent(agent Agent) error
 
+	// RegisterAgentWithID 注册Agent并返回Agent ID
+	RegisterAgentWithID(agent Agent) (string, error)
+
 	// UnregisterAgent 注销Agent
-	UnregisterAgent(agentType AgentType) error
+	UnregisterAgent(agentID string) error
 
 	// DispatchTask 分发任务给合适的Agent
-	DispatchTask(ctx context.Context, task Task) (ExecutionResult, error)
+	DispatchTask(ctx context.Context, task types.Task) (types.ExecutionResult, error)
 
 	// GetAvailableAgents 获取可用的Agent列表
 	GetAvailableAgents(ctx context.Context) ([]Agent, error)
 
-	// GetAgentByType 根据类型获取Agent
-	GetAgentByType(agentType AgentType) (Agent, error)
+	// GetAgentsByType 根据类型获取Agents
+	GetAgentsByType(agentType types.AgentType) ([]Agent, error)
 
-	// IsAgentAvailable 检查指定类型的Agent是否可用
-	IsAgentAvailable(ctx context.Context, agentType AgentType) bool
+	// GetAgentByID 根据ID获取Agent
+	GetAgentByID(agentID string) (Agent, error)
+
+	// IsAgentAvailable 检查指定的Agent是否可用
+	IsAgentAvailable(ctx context.Context, agentID string) bool
 
 	// GetAgentStatus 获取Agent状态
-	GetAgentStatus(ctx context.Context, agentType AgentType) (map[string]any, error)
+	GetAgentStatus(ctx context.Context, agentID string) (AgentStatus, error)
+
+	// GetAllAgentStatus 获取所有Agent状态
+	GetAllAgentStatus() map[string]AgentStatus
+
+	// Shutdown 关闭Agent调度器
+	Shutdown(ctx context.Context) error
 }
 
 // MainLoop 定义主循环接口
@@ -118,19 +132,19 @@ type MainLoop interface {
 	IsRunning() bool
 
 	// GetSystemState 获取当前系统状态
-	GetSystemState() SystemState
+	GetSystemState() types.SystemState
 
 	// OnWakeupEvent 处理唤醒事件的回调
-	OnWakeupEvent(wakeupEvent WakeupEvent) error
+	OnWakeupEvent(wakeupEvent types.WakeupEvent) error
 
 	// EnterWaitMode 进入等待模式
-	EnterWaitMode(ctx context.Context, monitoringTasks []MonitoringTask) error
+	EnterWaitMode(ctx context.Context, monitoringTasks []types.MonitoringTask) error
 
 	// ExitWaitMode 退出等待模式
 	ExitWaitMode(ctx context.Context) error
 
 	// GetExecutionHistory 获取执行历史
-	GetExecutionHistory(limit int) []ExecutionResult
+	GetExecutionHistory(limit int) []types.ExecutionResult
 }
 
 // WakeupListener 定义唤醒监听器接口
@@ -143,7 +157,7 @@ type WakeupListener interface {
 	Stop(ctx context.Context) error
 
 	// SetHandler 设置唤醒事件处理器
-	SetHandler(handler func(WakeupEvent) error)
+	SetHandler(handler func(types.WakeupEvent) error)
 
 	// IsListening 检查是否正在监听
 	IsListening() bool
@@ -152,27 +166,63 @@ type WakeupListener interface {
 	GetListenAddress() string
 }
 
+// SmartTaskOrchestrator 智能任务编排器接口
+// 支持并行、串行、混合执行模式的复杂任务编排
+type SmartTaskOrchestrator interface {
+	// ExecutePlan 执行任务计划
+	// 支持复杂的并行/串行/混合执行流程
+	ExecutePlan(ctx context.Context, plan types.ExecutionPlan) (types.ExecutionState, error)
+
+	// CreateExecutionPlan 创建执行计划
+	// 根据任务列表和策略创建优化的执行计划
+	CreateExecutionPlan(ctx context.Context, tasks []types.Task, strategy types.ExecutionMode) (types.ExecutionPlan, error)
+
+	// MonitorExecution 监控执行状态
+	// 返回当前执行状态和进度信息
+	MonitorExecution(ctx context.Context, planID string) (types.ExecutionState, error)
+
+	// CancelExecution 取消执行
+	CancelExecution(ctx context.Context, planID string) error
+
+	// GetExecutionHistory 获取执行历史
+	GetExecutionHistory(ctx context.Context, limit int) ([]types.ExecutionState, error)
+
+	// OptimizeExecutionPlan 优化执行计划
+	// 基于历史性能数据优化任务调度
+	OptimizeExecutionPlan(ctx context.Context, plan types.ExecutionPlan) (types.ExecutionPlan, error)
+
+	// EstimateExecutionTime 估算执行时间
+	EstimateExecutionTime(ctx context.Context, plan types.ExecutionPlan) (time.Duration, error)
+
+	// GetResourceUsage 获取资源使用情况
+	GetResourceUsage(ctx context.Context) (types.SystemMetrics, error)
+}
+
+// ------------------------------------------------------------------------------------------------
+// +                                      还未有具体实现的接口                                        +
+// ------------------------------------------------------------------------------------------------
+
 // TaskEvaluator 定义任务评估器接口
 // 用于评估任务的完成情况和结果质量
 type TaskEvaluator interface {
 	// EvaluateTaskCompletion 评估任务是否完成
-	EvaluateTaskCompletion(ctx context.Context, task Task, result ExecutionResult) (bool, float64, error)
+	EvaluateTaskCompletion(ctx context.Context, task types.Task, result types.ExecutionResult) (bool, float64, error)
 
 	// EvaluateResultQuality 评估执行结果的质量
-	EvaluateResultQuality(ctx context.Context, task Task, result ExecutionResult) (float64, string, error)
+	EvaluateResultQuality(ctx context.Context, task types.Task, result types.ExecutionResult) (float64, string, error)
 
 	// SuggestImprovements 建议改进措施
-	SuggestImprovements(ctx context.Context, task Task, result ExecutionResult) ([]string, error)
+	SuggestImprovements(ctx context.Context, task types.Task, result types.ExecutionResult) ([]string, error)
 }
 
 // MemoryManager 定义记忆管理器接口
 // 提供本地记忆缓存和管理功能
 type MemoryManager interface {
 	// CacheMemory 缓存记忆到本地
-	CacheMemory(ctx context.Context, memory MemoryItem) error
+	CacheMemory(ctx context.Context, memory types.MemoryItem) error
 
 	// GetCachedMemories 获取缓存的记忆
-	GetCachedMemories(ctx context.Context, query map[string]any) ([]MemoryItem, error)
+	GetCachedMemories(ctx context.Context, query map[string]any) ([]types.MemoryItem, error)
 
 	// ClearCache 清除缓存
 	ClearCache(ctx context.Context) error
@@ -219,80 +269,27 @@ type HealthStatus struct {
 	ErrorMessage string         `json:"error_message,omitempty"`
 }
 
-// Logger 定义日志接口
-type Logger interface {
-	// Debug 调试日志
-	Debug(msg string, args ...any)
-
-	// Info 信息日志
-	Info(msg string, args ...any)
-
-	// Warn 警告日志
-	Warn(msg string, args ...any)
-
-	// Error 错误日志
-	Error(msg string, args ...any)
-
-	// WithContext 添加上下文
-	WithContext(ctx context.Context) Logger
-
-	// WithFields 添加字段
-	WithFields(fields map[string]any) Logger
-}
-
-// SmartTaskOrchestrator 智能任务编排器接口
-// 支持并行、串行、混合执行模式的复杂任务编排
-type SmartTaskOrchestrator interface {
-	// ExecutePlan 执行任务计划
-	// 支持复杂的并行/串行/混合执行流程
-	ExecutePlan(ctx context.Context, plan ExecutionPlan) (ExecutionState, error)
-
-	// CreateExecutionPlan 创建执行计划
-	// 根据任务列表和策略创建优化的执行计划
-	CreateExecutionPlan(ctx context.Context, tasks []Task, strategy ExecutionMode) (ExecutionPlan, error)
-
-	// MonitorExecution 监控执行状态
-	// 返回当前执行状态和进度信息
-	MonitorExecution(ctx context.Context, planID string) (ExecutionState, error)
-
-	// CancelExecution 取消执行
-	CancelExecution(ctx context.Context, planID string) error
-
-	// GetExecutionHistory 获取执行历史
-	GetExecutionHistory(ctx context.Context, limit int) ([]ExecutionState, error)
-
-	// OptimizeExecutionPlan 优化执行计划
-	// 基于历史性能数据优化任务调度
-	OptimizeExecutionPlan(ctx context.Context, plan ExecutionPlan) (ExecutionPlan, error)
-
-	// EstimateExecutionTime 估算执行时间
-	EstimateExecutionTime(ctx context.Context, plan ExecutionPlan) (time.Duration, error)
-
-	// GetResourceUsage 获取资源使用情况
-	GetResourceUsage(ctx context.Context) (SystemMetrics, error)
-}
-
 // ContinuousDecisionEngine 持续决策引擎接口
 // 基于Agent输出反馈进行持续决策，支持多轮智能决策
 type ContinuousDecisionEngine interface {
 	// MakeContinuousDecision 进行持续决策
 	// 基于当前执行状态和Agent输出分析决定下一步行动
-	MakeContinuousDecision(ctx context.Context, decisionContext ContinuousDecisionContext) (ContinuousDecisionResult, error)
+	MakeContinuousDecision(ctx context.Context, decisionContext types.ContinuousDecisionContext) (types.ContinuousDecisionResult, error)
 
 	// AnalyzeAgentOutput 分析Agent输出
 	// 对Agent的执行结果进行深度分析，提取关键信息
-	AnalyzeAgentOutput(ctx context.Context, results []ExecutionResult) (AgentOutputAnalysis, error)
+	AnalyzeAgentOutput(ctx context.Context, results []types.ExecutionResult) (types.AgentOutputAnalysis, error)
 
 	// EvaluateContinuationStrategy 评估持续策略
 	// 判断是否应该继续执行、休眠或等待用户输入
-	EvaluateContinuationStrategy(ctx context.Context, executionState ExecutionState, outputAnalysis AgentOutputAnalysis) (ContinuousDecisionResult, error)
+	EvaluateContinuationStrategy(ctx context.Context, executionState types.ExecutionState, outputAnalysis types.AgentOutputAnalysis) (types.ContinuousDecisionResult, error)
 
 	// GenerateNextActions 生成下一步行动
 	// 基于分析结果生成具体的下一步行动计划
-	GenerateNextActions(ctx context.Context, analysis AgentOutputAnalysis, systemContext map[string]any) ([]Task, error)
+	GenerateNextActions(ctx context.Context, analysis types.AgentOutputAnalysis, systemContext map[string]any) ([]types.Task, error)
 
 	// UpdateDecisionHistory 更新决策历史
-	UpdateDecisionHistory(ctx context.Context, decisionResult ContinuousDecisionResult) error
+	UpdateDecisionHistory(ctx context.Context, decisionResult types.ContinuousDecisionResult) error
 
 	// GetDecisionInsights 获取决策洞察
 	// 提供决策质量分析和改进建议
@@ -300,7 +297,7 @@ type ContinuousDecisionEngine interface {
 
 	// ConfigureStrategy 配置决策策略
 	// 动态配置决策引擎的行为策略
-	ConfigureStrategy(ctx context.Context, strategy ContinuationStrategy) error
+	ConfigureStrategy(ctx context.Context, strategy types.ContinuationStrategy) error
 }
 
 // FeedbackAnalyzer 反馈分析器接口
@@ -308,23 +305,23 @@ type ContinuousDecisionEngine interface {
 type FeedbackAnalyzer interface {
 	// AnalyzeExecutionResults 分析执行结果
 	// 深度分析多个Agent的执行结果，提取模式和洞察
-	AnalyzeExecutionResults(ctx context.Context, results []ExecutionResult) (AgentOutputAnalysis, error)
+	AnalyzeExecutionResults(ctx context.Context, results []types.ExecutionResult) (types.AgentOutputAnalysis, error)
 
 	// DetectPatterns 检测执行模式
 	// 识别任务执行中的成功模式和失败模式
-	DetectPatterns(ctx context.Context, history []ExecutionResult) ([]string, error)
+	DetectPatterns(ctx context.Context, history []types.ExecutionResult) ([]string, error)
 
 	// PredictNextSteps 预测下一步操作
 	// 基于历史数据和当前结果预测最优的下一步操作
-	PredictNextSteps(ctx context.Context, currentResults []ExecutionResult, systemState SystemState) ([]string, error)
+	PredictNextSteps(ctx context.Context, currentResults []types.ExecutionResult, systemState types.SystemState) ([]string, error)
 
 	// AssessRisk 评估风险
 	// 分析当前操作可能的风险和影响
-	AssessRisk(ctx context.Context, proposedActions []Task, systemState SystemState) (RiskAssessment, error)
+	AssessRisk(ctx context.Context, proposedActions []types.Task, systemState types.SystemState) (types.RiskAssessment, error)
 
 	// GenerateInsights 生成洞察
 	// 从执行结果中生成可执行的洞察和建议
-	GenerateInsights(ctx context.Context, analysis AgentOutputAnalysis) ([]string, error)
+	GenerateInsights(ctx context.Context, analysis types.AgentOutputAnalysis) ([]string, error)
 }
 
 // TaskFlowManager 任务流管理器接口
@@ -332,21 +329,21 @@ type FeedbackAnalyzer interface {
 type TaskFlowManager interface {
 	// CreateTaskFlow 创建任务流
 	// 基于任务依赖关系创建优化的执行流程
-	CreateTaskFlow(ctx context.Context, tasks []Task, dependencies map[string][]string) (ExecutionPlan, error)
+	CreateTaskFlow(ctx context.Context, tasks []types.Task, dependencies map[string][]string) (types.ExecutionPlan, error)
 
 	// ValidateTaskFlow 验证任务流
 	// 检查任务流的合理性和可执行性
-	ValidateTaskFlow(ctx context.Context, plan ExecutionPlan) (bool, []string, error)
+	ValidateTaskFlow(ctx context.Context, plan types.ExecutionPlan) (bool, []string, error)
 
 	// OptimizeTaskFlow 优化任务流
 	// 基于历史性能和资源情况优化任务执行顺序
-	OptimizeTaskFlow(ctx context.Context, plan ExecutionPlan, systemMetrics SystemMetrics) (ExecutionPlan, error)
+	OptimizeTaskFlow(ctx context.Context, plan types.ExecutionPlan, systemMetrics types.SystemMetrics) (types.ExecutionPlan, error)
 
 	// ResolveTaskDependencies 解析任务依赖
 	// 解析和优化任务间的依赖关系
-	ResolveTaskDependencies(ctx context.Context, tasks []Task) (map[string][]string, error)
+	ResolveTaskDependencies(ctx context.Context, tasks []types.Task) (map[string][]string, error)
 
 	// TrackTaskFlow 跟踪任务流执行
 	// 实时跟踪任务流的执行状态和进度
-	TrackTaskFlow(ctx context.Context, planID string) (ExecutionState, error)
+	TrackTaskFlow(ctx context.Context, planID string) (types.ExecutionState, error)
 }

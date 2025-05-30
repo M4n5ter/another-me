@@ -9,6 +9,8 @@ import (
 	"sync"
 
 	json "github.com/json-iterator/go"
+
+	"github.com/m4n5ter/another-me/internal/core/types"
 )
 
 // webhookWakeupListener 实现WakeupListener接口，通过HTTP Webhook接收唤醒信号
@@ -16,11 +18,13 @@ type webhookWakeupListener struct {
 	port    int
 	path    string
 	logger  *slog.Logger
-	handler func(WakeupEvent) error
+	handler func(types.WakeupEvent) error
 	server  *http.Server
 	running bool
 	mutex   sync.RWMutex
 }
+
+var _ WakeupListener = (*webhookWakeupListener)(nil)
 
 // Start 启动监听器
 func (w *webhookWakeupListener) Start(ctx context.Context) error {
@@ -73,7 +77,7 @@ func (w *webhookWakeupListener) Stop(ctx context.Context) error {
 }
 
 // SetHandler 设置唤醒事件处理器
-func (w *webhookWakeupListener) SetHandler(handler func(WakeupEvent) error) {
+func (w *webhookWakeupListener) SetHandler(handler func(types.WakeupEvent) error) {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
 	w.handler = handler
@@ -99,7 +103,7 @@ func (w *webhookWakeupListener) handleWebhook(rw http.ResponseWriter, req *http.
 	}
 
 	// 解析请求体
-	var wakeupEvent WakeupEvent
+	var wakeupEvent types.WakeupEvent
 	err := json.NewDecoder(req.Body).Decode(&wakeupEvent)
 	if err != nil {
 		w.logger.Error("解析唤醒事件失败", "error", err)

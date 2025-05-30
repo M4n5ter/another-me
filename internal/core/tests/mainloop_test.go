@@ -10,12 +10,13 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	"github.com/m4n5ter/another-me/internal/core"
+	"github.com/m4n5ter/another-me/internal/core/types"
 )
 
 // MockWakeupListener Mock实现（新增的Mock）
 type MockWakeupListener struct {
 	mock.Mock
-	handler func(core.WakeupEvent) error
+	handler func(types.WakeupEvent) error
 }
 
 func (m *MockWakeupListener) Start(ctx context.Context) error {
@@ -28,7 +29,7 @@ func (m *MockWakeupListener) Stop(ctx context.Context) error {
 	return args.Error(0)
 }
 
-func (m *MockWakeupListener) SetHandler(handler func(core.WakeupEvent) error) {
+func (m *MockWakeupListener) SetHandler(handler func(types.WakeupEvent) error) {
 	m.handler = handler
 	m.Called(handler)
 }
@@ -44,7 +45,7 @@ func (m *MockWakeupListener) GetListenAddress() string {
 }
 
 // TriggerWakeup 触发唤醒事件（测试辅助方法）
-func (m *MockWakeupListener) TriggerWakeup(event core.WakeupEvent) error {
+func (m *MockWakeupListener) TriggerWakeup(event types.WakeupEvent) error {
 	if m.handler != nil {
 		return m.handler(event)
 	}
@@ -125,7 +126,7 @@ func TestSmartMainLoop_SystemStateManagement(t *testing.T) {
 	// 测试等待模式进入和退出（即使组件为nil也应该能正常切换状态）
 	ctx := context.Background()
 
-	_ = mainLoop.EnterWaitMode(ctx, []core.MonitoringTask{})
+	_ = mainLoop.EnterWaitMode(ctx, []types.MonitoringTask{})
 	// 这可能会失败因为mindscapeService为nil，但我们可以测试状态变化
 	state = mainLoop.GetSystemState()
 
@@ -219,7 +220,7 @@ func TestSmartMainLoop_WakeupEventAPI(t *testing.T) {
 	)
 
 	// 测试唤醒事件API
-	wakeupEvent := core.WakeupEvent{
+	wakeupEvent := types.WakeupEvent{
 		MonitoringTaskID: "test_task",
 		TriggerTime:      time.Now(),
 		ObservedData:     map[string]any{"test": "data"},
@@ -261,7 +262,7 @@ func TestSmartMainLoop_MockWakeupListener(t *testing.T) {
 	assert.Equal(t, "http://localhost:8080/webhook", mockWakeup.GetListenAddress())
 
 	// 测试Handler设置
-	var testHandler func(core.WakeupEvent) error
+	var testHandler func(types.WakeupEvent) error
 	mockWakeup.SetHandler(testHandler)
 
 	// 验证Mock调用

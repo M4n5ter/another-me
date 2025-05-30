@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/m4n5ter/another-me/internal/core"
+	"github.com/m4n5ter/another-me/internal/core/types"
 	"github.com/m4n5ter/another-me/pkg/llminterface"
 	"github.com/m4n5ter/another-me/pkg/reactagent"
 	"github.com/m4n5ter/another-me/pkg/toolcore"
@@ -43,7 +44,6 @@ func NewReActAgentAdapter(
 		WithMaxIterations(maxIterations).
 		WithSystemPrompt(systemPrompt).
 		Build()
-
 	if err != nil {
 		return nil, fmt.Errorf("创建ReActAgent失败: %w", err)
 	}
@@ -55,8 +55,10 @@ func NewReActAgentAdapter(
 	}, nil
 }
 
+var _ core.Agent = (*ReActAgentAdapter)(nil)
+
 // Execute 实现Agent接口的Execute方法
-func (r *ReActAgentAdapter) Execute(ctx context.Context, task core.Task, initialContext map[string]any) (core.ExecutionResult, error) {
+func (r *ReActAgentAdapter) Execute(ctx context.Context, task types.Task, initialContext map[string]any) (types.ExecutionResult, error) {
 	startTime := time.Now()
 	r.logger.Info("开始执行ReAct任务", "task_id", task.ID, "description", task.Description)
 
@@ -73,9 +75,9 @@ func (r *ReActAgentAdapter) Execute(ctx context.Context, task core.Task, initial
 	// 执行ReAct Agent
 	outputChan, err := r.reactAgent.Run(ctx, userInput, conversationID)
 	if err != nil {
-		return core.ExecutionResult{
+		return types.ExecutionResult{
 			TaskID:    task.ID,
-			Status:    core.ExecutionStatusFailure,
+			Status:    types.ExecutionStatusFailure,
 			Error:     err.Error(),
 			StartTime: startTime,
 			EndTime:   time.Now(),
@@ -140,9 +142,9 @@ func (r *ReActAgentAdapter) Execute(ctx context.Context, task core.Task, initial
 		// 检查上下文是否被取消
 		select {
 		case <-ctx.Done():
-			return core.ExecutionResult{
+			return types.ExecutionResult{
 				TaskID:       task.ID,
-				Status:       core.ExecutionStatusCancelled,
+				Status:       types.ExecutionStatusCancelled,
 				Error:        "任务被取消",
 				Observations: observations,
 				StartTime:    startTime,
@@ -155,12 +157,12 @@ func (r *ReActAgentAdapter) Execute(ctx context.Context, task core.Task, initial
 	endTime := time.Now()
 
 	// 确定执行状态
-	status := core.ExecutionStatusSuccess
+	status := types.ExecutionStatusSuccess
 	if hasError {
-		status = core.ExecutionStatusFailure
+		status = types.ExecutionStatusFailure
 	}
 
-	result := core.ExecutionResult{
+	result := types.ExecutionResult{
 		TaskID:       task.ID,
 		Status:       status,
 		Output:       finalOutput.String(),
@@ -191,8 +193,8 @@ func (r *ReActAgentAdapter) Name() string {
 }
 
 // Type 返回Agent的类型
-func (r *ReActAgentAdapter) Type() core.AgentType {
-	return core.AgentTypeReAct
+func (r *ReActAgentAdapter) Type() types.AgentType {
+	return types.AgentTypeReAct
 }
 
 // IsAvailable 检查Agent是否可用
@@ -224,4 +226,4 @@ func (r *ReActAgentAdapter) GetCapabilities() []string {
 	}
 
 	return capabilities
-} 
+}

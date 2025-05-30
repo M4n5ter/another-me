@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	"github.com/m4n5ter/another-me/internal/core"
+	"github.com/m4n5ter/another-me/internal/core/types"
 )
 
 // 重用MockAgent，但增加名称区分
@@ -21,18 +22,18 @@ func NewNamedMockAgent(name string) *NamedMockAgent {
 	return &NamedMockAgent{name: name}
 }
 
-func (m *NamedMockAgent) Execute(ctx context.Context, task core.Task, initialContext map[string]any) (core.ExecutionResult, error) {
+func (m *NamedMockAgent) Execute(ctx context.Context, task types.Task, initialContext map[string]any) (types.ExecutionResult, error) {
 	args := m.Called(ctx, task, initialContext)
-	return args.Get(0).(core.ExecutionResult), args.Error(1)
+	return args.Get(0).(types.ExecutionResult), args.Error(1)
 }
 
 func (m *NamedMockAgent) Name() string {
 	return m.name
 }
 
-func (m *NamedMockAgent) Type() core.AgentType {
+func (m *NamedMockAgent) Type() types.AgentType {
 	args := m.Called()
-	return args.Get(0).(core.AgentType)
+	return args.Get(0).(types.AgentType)
 }
 
 func (m *NamedMockAgent) IsAvailable(ctx context.Context) bool {
@@ -60,9 +61,9 @@ func TestMultipleAgentsOfSameType(t *testing.T) {
 	financeAgent := NewNamedMockAgent("Finance")
 
 	// 设置mock期望
-	sysOpsAgent.On("Type").Return(core.AgentTypeReAct)
-	socialAgent.On("Type").Return(core.AgentTypeReAct)
-	financeAgent.On("Type").Return(core.AgentTypeReAct)
+	sysOpsAgent.On("Type").Return(types.AgentTypeReAct)
+	socialAgent.On("Type").Return(types.AgentTypeReAct)
+	financeAgent.On("Type").Return(types.AgentTypeReAct)
 
 	// 注册所有Agent
 	err := dispatcher.RegisterAgent(sysOpsAgent)
@@ -75,7 +76,7 @@ func TestMultipleAgentsOfSameType(t *testing.T) {
 	assert.NoError(t, err)
 
 	// 验证可以获取同类型的多个Agent
-	reactAgents, err := dispatcher.GetAgentsByType(core.AgentTypeReAct)
+	reactAgents, err := dispatcher.GetAgentsByType(types.AgentTypeReAct)
 	assert.NoError(t, err)
 	assert.Len(t, reactAgents, 3)
 
@@ -107,8 +108,8 @@ func TestAgentLoadBalancing(t *testing.T) {
 	agent1 := NewNamedMockAgent("GUI-Agent-1")
 	agent2 := NewNamedMockAgent("GUI-Agent-2")
 
-	agent1.On("Type").Return(core.AgentTypeGUI)
-	agent2.On("Type").Return(core.AgentTypeGUI)
+	agent1.On("Type").Return(types.AgentTypeGUI)
+	agent2.On("Type").Return(types.AgentTypeGUI)
 
 	// 注册Agent
 	err := dispatcher.RegisterAgent(agent1)
@@ -118,8 +119,8 @@ func TestAgentLoadBalancing(t *testing.T) {
 	assert.NoError(t, err)
 
 	// 设置mock期望 - 每个Agent处理一个任务
-	expectedResult := core.ExecutionResult{
-		Status:    core.ExecutionStatusSuccess,
+	expectedResult := types.ExecutionResult{
+		Status:    types.ExecutionStatusSuccess,
 		Output:    "任务完成",
 		StartTime: time.Now(),
 		EndTime:   time.Now(),
@@ -132,18 +133,18 @@ func TestAgentLoadBalancing(t *testing.T) {
 		Return(expectedResult, nil).Once()
 
 	// 创建两个任务
-	task1 := core.Task{
+	task1 := types.Task{
 		ID:        "load-balance-task-1",
 		Type:      "gui_click",
-		AgentType: core.AgentTypeGUI,
+		AgentType: types.AgentTypeGUI,
 		CreatedAt: time.Now(),
 		Context:   map[string]any{},
 	}
 
-	task2 := core.Task{
+	task2 := types.Task{
 		ID:        "load-balance-task-2", 
 		Type:      "gui_click",
-		AgentType: core.AgentTypeGUI,
+		AgentType: types.AgentTypeGUI,
 		CreatedAt: time.Now(),
 		Context:   map[string]any{},
 	}
@@ -152,11 +153,11 @@ func TestAgentLoadBalancing(t *testing.T) {
 	ctx := context.Background()
 	result1, err1 := dispatcher.DispatchTask(ctx, task1)
 	assert.NoError(t, err1)
-	assert.Equal(t, core.ExecutionStatusSuccess, result1.Status)
+	assert.Equal(t, types.ExecutionStatusSuccess, result1.Status)
 
 	result2, err2 := dispatcher.DispatchTask(ctx, task2)
 	assert.NoError(t, err2)
-	assert.Equal(t, core.ExecutionStatusSuccess, result2.Status)
+	assert.Equal(t, types.ExecutionStatusSuccess, result2.Status)
 
 	// 验证两个Agent都被使用了
 	agent1.AssertExpectations(t)
@@ -173,7 +174,7 @@ func TestRegisterAgentWithID(t *testing.T) {
 	}()
 
 	agent := NewNamedMockAgent("TestAgent")
-	agent.On("Type").Return(core.AgentTypeReAct)
+	agent.On("Type").Return(types.AgentTypeReAct)
 
 	// 使用RegisterAgentWithID注册
 	agentID, err := dispatcher.RegisterAgentWithID(agent)
@@ -204,8 +205,8 @@ func TestUnregisterAgentByID(t *testing.T) {
 	agent1 := NewNamedMockAgent("Agent1")
 	agent2 := NewNamedMockAgent("Agent2")
 
-	agent1.On("Type").Return(core.AgentTypeGUI)
-	agent2.On("Type").Return(core.AgentTypeGUI)
+	agent1.On("Type").Return(types.AgentTypeGUI)
+	agent2.On("Type").Return(types.AgentTypeGUI)
 
 	agentID1, err := dispatcher.RegisterAgentWithID(agent1)
 	assert.NoError(t, err)
@@ -214,7 +215,7 @@ func TestUnregisterAgentByID(t *testing.T) {
 	assert.NoError(t, err)
 
 	// 验证都注册成功
-	guiAgents, err := dispatcher.GetAgentsByType(core.AgentTypeGUI)
+	guiAgents, err := dispatcher.GetAgentsByType(types.AgentTypeGUI)
 	assert.NoError(t, err)
 	assert.Len(t, guiAgents, 2)
 
@@ -223,7 +224,7 @@ func TestUnregisterAgentByID(t *testing.T) {
 	assert.NoError(t, err)
 
 	// 验证只剩一个
-	guiAgents, err = dispatcher.GetAgentsByType(core.AgentTypeGUI)
+	guiAgents, err = dispatcher.GetAgentsByType(types.AgentTypeGUI)
 	assert.NoError(t, err)
 	assert.Len(t, guiAgents, 1)
 	assert.Equal(t, "Agent2", guiAgents[0].Name())
@@ -251,9 +252,9 @@ func TestSpecializedAgentSelection(t *testing.T) {
 	socialAgent := NewNamedMockAgent("SocialMediaAnalyst")
 	financeAgent := NewNamedMockAgent("FinancialAnalyst")
 
-	sysOpsAgent.On("Type").Return(core.AgentTypeReAct)
-	socialAgent.On("Type").Return(core.AgentTypeReAct)
-	financeAgent.On("Type").Return(core.AgentTypeReAct)
+	sysOpsAgent.On("Type").Return(types.AgentTypeReAct)
+	socialAgent.On("Type").Return(types.AgentTypeReAct)
+	financeAgent.On("Type").Return(types.AgentTypeReAct)
 
 	// 注册所有Agent
 	sysOpsID, _ := dispatcher.RegisterAgentWithID(sysOpsAgent)
@@ -274,7 +275,7 @@ func TestSpecializedAgentSelection(t *testing.T) {
 	assert.Equal(t, "FinancialAnalyst", retrievedFinance.Name())
 
 	// 验证类型获取包含所有Agent
-	reactAgents, err := dispatcher.GetAgentsByType(core.AgentTypeReAct)
+	reactAgents, err := dispatcher.GetAgentsByType(types.AgentTypeReAct)
 	assert.NoError(t, err)
 	assert.Len(t, reactAgents, 3)
 

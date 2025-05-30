@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/m4n5ter/another-me/internal/core/types"
 	. "github.com/m4n5ter/another-me/pkg/option"
 )
 
@@ -22,9 +23,9 @@ type smartTaskOrchestrator struct {
 	logger             *slog.Logger
 
 	// 执行状态管理
-	activeExecutions map[string]*ExecutionState
-	executionHistory []ExecutionState
-	resourceMetrics  SystemMetrics
+	activeExecutions map[string]*types.ExecutionState
+	executionHistory []types.ExecutionState
+	resourceMetrics  types.SystemMetrics
 
 	// 并发控制
 	mu                  sync.RWMutex
@@ -43,11 +44,11 @@ type OrchestratorConfig struct {
 
 // TaskExecutionEvent 任务执行事件
 type TaskExecutionEvent struct {
-	PlanID    string          `json:"plan_id"`
-	StepID    string          `json:"step_id"`
-	TaskID    string          `json:"task_id"`
-	Result    ExecutionResult `json:"result"`
-	Timestamp time.Time       `json:"timestamp"`
+	PlanID    string                `json:"plan_id"`
+	StepID    string                `json:"step_id"`
+	TaskID    string                `json:"task_id"`
+	Result    types.ExecutionResult `json:"result"`
+	Timestamp time.Time             `json:"timestamp"`
 }
 
 // NewSmartTaskOrchestrator 创建新的智能任务编排器
@@ -68,15 +69,17 @@ func NewSmartTaskOrchestrator(
 		feedbackAnalyzer:    feedbackAnalyzer,
 		config:              config,
 		logger:              logger,
-		activeExecutions:    make(map[string]*ExecutionState),
-		executionHistory:    make([]ExecutionState, 0, config.MaxExecutionHistory),
+		activeExecutions:    make(map[string]*types.ExecutionState),
+		executionHistory:    make([]types.ExecutionState, 0, config.MaxExecutionHistory),
 		semaphore:           make(chan struct{}, config.MaxConcurrentTasks),
 		executionResultChan: make(chan TaskExecutionEvent, 100),
 	}
 }
 
+var _ SmartTaskOrchestrator = (*smartTaskOrchestrator)(nil)
+
 // ExecutePlan 执行任务计划
-func (o *smartTaskOrchestrator) ExecutePlan(ctx context.Context, plan ExecutionPlan) (ExecutionState, error) {
+func (o *smartTaskOrchestrator) ExecutePlan(ctx context.Context, plan types.ExecutionPlan) (types.ExecutionState, error) {
 	planCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -88,12 +91,12 @@ func (o *smartTaskOrchestrator) ExecutePlan(ctx context.Context, plan ExecutionP
 	}
 
 	// 初始化执行状态
-	executionState := ExecutionState{
+	executionState := types.ExecutionState{
 		PlanID:             plan.ID,
 		CurrentStepIndex:   0,
-		StepResults:        make([]StepResult, 0, len(plan.Steps)),
+		StepResults:        make([]types.StepResult, 0, len(plan.Steps)),
 		StartTime:          time.Now(),
-		Status:             ExecutionStatusInProgress,
+		Status:             types.ExecutionStatusInProgress,
 		IterationCount:     0,
 		TotalTaskCount:     o.countTotalTasks(plan.Steps),
 		CompletedTaskCount: 0,
@@ -126,7 +129,7 @@ func (o *smartTaskOrchestrator) ExecutePlan(ctx context.Context, plan ExecutionP
 		// 检查是否应该停止
 		select {
 		case <-planCtx.Done():
-			executionState.Status = ExecutionStatusCancelled
+			executionState.Status = types.ExecutionStatusCancelled
 			return executionState, planCtx.Err()
 		default:
 		}
@@ -134,7 +137,7 @@ func (o *smartTaskOrchestrator) ExecutePlan(ctx context.Context, plan ExecutionP
 		// 执行当前步骤
 		if executionState.CurrentStepIndex >= len(plan.Steps) {
 			// 所有步骤执行完毕
-			executionState.Status = ExecutionStatusSuccess
+			executionState.Status = types.ExecutionStatusSuccess
 			break
 		}
 
@@ -146,14 +149,14 @@ func (o *smartTaskOrchestrator) ExecutePlan(ctx context.Context, plan ExecutionP
 		executionState.StepResults = append(executionState.StepResults, stepResult)
 		executionState.CompletedTaskCount += len(stepResult.TaskResults)
 		for _, result := range stepResult.TaskResults {
-			if result.Status == ExecutionStatusFailure {
+			if result.Status == types.ExecutionStatusFailure {
 				executionState.FailedTaskCount++
 			}
 		}
 		o.mu.Unlock()
 
 		if err != nil && !currentStep.ContinueOnFailure {
-			executionState.Status = ExecutionStatusFailure
+			executionState.Status = types.ExecutionStatusFailure
 			o.logger.Error("步骤执行失败，停止计划执行",
 				"plan_id", plan.ID,
 				"step_id", currentStep.ID,
@@ -169,7 +172,7 @@ func (o *smartTaskOrchestrator) ExecutePlan(ctx context.Context, plan ExecutionP
 
 		if !shouldContinue {
 			o.logger.Info("决策引擎建议停止执行", "plan_id", plan.ID)
-			executionState.Status = ExecutionStatusSuccess
+			executionState.Status = types.ExecutionStatusSuccess
 			break
 		}
 
@@ -195,7 +198,7 @@ func (o *smartTaskOrchestrator) ExecutePlan(ctx context.Context, plan ExecutionP
 			o.logger.Info("达到最大迭代次数，停止执行",
 				"plan_id", plan.ID,
 				"iterations", executionState.IterationCount)
-			executionState.Status = ExecutionStatusSuccess
+			executionState.Status = types.ExecutionStatusSuccess
 			break
 		}
 	}
@@ -210,7 +213,7 @@ func (o *smartTaskOrchestrator) ExecutePlan(ctx context.Context, plan ExecutionP
 }
 
 // executeStep 执行单个步骤
-func (o *smartTaskOrchestrator) executeStep(ctx context.Context, step ExecutionStep, executionState *ExecutionState) (StepResult, error) {
+func (o *smartTaskOrchestrator) executeStep(ctx context.Context, step types.ExecutionStep, executionState *types.ExecutionState) (types.StepResult, error) {
 	stepCtx := ctx
 	if step.Timeout.IsSome() {
 		timeoutCtx, cancel := context.WithTimeout(ctx, step.Timeout.Unwrap())
@@ -218,10 +221,10 @@ func (o *smartTaskOrchestrator) executeStep(ctx context.Context, step ExecutionS
 		stepCtx = timeoutCtx
 	}
 
-	stepResult := StepResult{
+	stepResult := types.StepResult{
 		StepID:      step.ID,
-		TaskResults: make([]ExecutionResult, 0, len(step.Tasks)),
-		Status:      ExecutionStatusInProgress,
+		TaskResults: make([]types.ExecutionResult, 0, len(step.Tasks)),
+		Status:      types.ExecutionStatusInProgress,
 		StartTime:   time.Now(),
 		RetryCount:  0,
 	}
@@ -236,18 +239,18 @@ func (o *smartTaskOrchestrator) executeStep(ctx context.Context, step ExecutionS
 		stepResult.RetryCount = retryCount
 
 		switch step.Mode {
-		case ExecutionModeSerial:
+		case types.ExecutionModeSerial:
 			err = o.executeTasksSerial(stepCtx, step.Tasks, &stepResult)
-		case ExecutionModeParallel:
+		case types.ExecutionModeParallel:
 			err = o.executeTasksParallel(stepCtx, step.Tasks, &stepResult)
-		case ExecutionModeMixed:
+		case types.ExecutionModeMixed:
 			err = o.executeTasksMixed(stepCtx, step.Tasks, &stepResult)
 		default:
 			err = fmt.Errorf("不支持的执行模式: %s", step.Mode)
 		}
 
 		if err == nil {
-			stepResult.Status = ExecutionStatusSuccess
+			stepResult.Status = types.ExecutionStatusSuccess
 			break
 		}
 
@@ -263,7 +266,7 @@ func (o *smartTaskOrchestrator) executeStep(ctx context.Context, step ExecutionS
 			select {
 			case <-time.After(time.Duration(retryCount+1) * time.Second):
 			case <-stepCtx.Done():
-				stepResult.Status = ExecutionStatusCancelled
+				stepResult.Status = types.ExecutionStatusCancelled
 				stepResult.EndTime = time.Now()
 				return stepResult, stepCtx.Err()
 			}
@@ -271,7 +274,7 @@ func (o *smartTaskOrchestrator) executeStep(ctx context.Context, step ExecutionS
 	}
 
 	if err != nil {
-		stepResult.Status = ExecutionStatusFailure
+		stepResult.Status = types.ExecutionStatusFailure
 		stepResult.ErrorMessages = append(stepResult.ErrorMessages, err.Error())
 	}
 
@@ -287,7 +290,7 @@ func (o *smartTaskOrchestrator) executeStep(ctx context.Context, step ExecutionS
 }
 
 // executeTasksSerial 串行执行任务
-func (o *smartTaskOrchestrator) executeTasksSerial(ctx context.Context, tasks []Task, stepResult *StepResult) error {
+func (o *smartTaskOrchestrator) executeTasksSerial(ctx context.Context, tasks []types.Task, stepResult *types.StepResult) error {
 	for _, task := range tasks {
 		select {
 		case <-ctx.Done():
@@ -307,7 +310,7 @@ func (o *smartTaskOrchestrator) executeTasksSerial(ctx context.Context, tasks []
 
 		stepResult.TaskResults = append(stepResult.TaskResults, result)
 
-		if err != nil && result.Status == ExecutionStatusFailure {
+		if err != nil && result.Status == types.ExecutionStatusFailure {
 			return fmt.Errorf("任务 %s 执行失败: %w", task.ID, err)
 		}
 	}
@@ -315,14 +318,14 @@ func (o *smartTaskOrchestrator) executeTasksSerial(ctx context.Context, tasks []
 }
 
 // executeTasksParallel 并行执行任务
-func (o *smartTaskOrchestrator) executeTasksParallel(ctx context.Context, tasks []Task, stepResult *StepResult) error {
+func (o *smartTaskOrchestrator) executeTasksParallel(ctx context.Context, tasks []types.Task, stepResult *types.StepResult) error {
 	var wg sync.WaitGroup
-	resultChan := make(chan ExecutionResult, len(tasks))
+	resultChan := make(chan types.ExecutionResult, len(tasks))
 	errorChan := make(chan error, len(tasks))
 
 	for _, task := range tasks {
 		wg.Add(1)
-		go func(t Task) {
+		go func(t types.Task) {
 			defer wg.Done()
 
 			// 获取并发控制信号量
@@ -363,14 +366,14 @@ func (o *smartTaskOrchestrator) executeTasksParallel(ctx context.Context, tasks 
 }
 
 // executeTasksMixed 混合执行任务（根据任务依赖关系）
-func (o *smartTaskOrchestrator) executeTasksMixed(ctx context.Context, tasks []Task, stepResult *StepResult) error {
+func (o *smartTaskOrchestrator) executeTasksMixed(ctx context.Context, tasks []types.Task, stepResult *types.StepResult) error {
 	// 这里可以实现更复杂的依赖关系解析和混合执行逻辑
 	// 目前简化为并行执行
 	return o.executeTasksParallel(ctx, tasks, stepResult)
 }
 
 // executeTaskWithTimeout 执行单个任务（带超时）
-func (o *smartTaskOrchestrator) executeTaskWithTimeout(ctx context.Context, task Task) (ExecutionResult, error) {
+func (o *smartTaskOrchestrator) executeTaskWithTimeout(ctx context.Context, task types.Task) (types.ExecutionResult, error) {
 	taskCtx, cancel := context.WithTimeout(ctx, o.config.TaskExecutionTimeout)
 	defer cancel()
 
@@ -386,9 +389,9 @@ func (o *smartTaskOrchestrator) executeTaskWithTimeout(ctx context.Context, task
 			"error", err)
 
 		// 创建失败结果
-		result = ExecutionResult{
+		result = types.ExecutionResult{
 			TaskID:    task.ID,
-			Status:    ExecutionStatusFailure,
+			Status:    types.ExecutionStatusFailure,
 			Error:     err.Error(),
 			StartTime: time.Now(),
 			EndTime:   time.Now(),
@@ -400,7 +403,7 @@ func (o *smartTaskOrchestrator) executeTaskWithTimeout(ctx context.Context, task
 }
 
 // CreateExecutionPlan 创建执行计划
-func (o *smartTaskOrchestrator) CreateExecutionPlan(ctx context.Context, tasks []Task, strategy ExecutionMode) (ExecutionPlan, error) {
+func (o *smartTaskOrchestrator) CreateExecutionPlan(ctx context.Context, tasks []types.Task, strategy types.ExecutionMode) (types.ExecutionPlan, error) {
 	planID := uuid.New().String()
 
 	o.logger.Info("创建执行计划",
@@ -408,40 +411,40 @@ func (o *smartTaskOrchestrator) CreateExecutionPlan(ctx context.Context, tasks [
 		"task_count", len(tasks),
 		"strategy", strategy)
 
-	plan := ExecutionPlan{
+	plan := types.ExecutionPlan{
 		ID:        planID,
 		CreatedAt: time.Now(),
 		Context:   map[string]any{"strategy": strategy},
-		ContinuationStrategy: ContinuationStrategy{
+		ContinuationStrategy: types.ContinuationStrategy{
 			MaxIterations:        5,
 			IdleThreshold:        30 * time.Second,
-			FeedbackAnalysisType: FeedbackAnalysisLLM,
+			FeedbackAnalysisType: types.FeedbackAnalysisLLM,
 		},
 	}
 
 	// 根据策略创建执行步骤
 	switch strategy {
-	case ExecutionModeSerial:
+	case types.ExecutionModeSerial:
 		for i, task := range tasks {
-			step := ExecutionStep{
+			step := types.ExecutionStep{
 				ID:                fmt.Sprintf("step_%d", i),
-				Mode:              ExecutionModeSerial,
-				Tasks:             []Task{task},
+				Mode:              types.ExecutionModeSerial,
+				Tasks:             []types.Task{task},
 				MaxRetries:        2,
 				ContinueOnFailure: false,
 			}
 			plan.Steps = append(plan.Steps, step)
 		}
-	case ExecutionModeParallel:
-		step := ExecutionStep{
+	case types.ExecutionModeParallel:
+		step := types.ExecutionStep{
 			ID:                "parallel_step",
-			Mode:              ExecutionModeParallel,
+			Mode:              types.ExecutionModeParallel,
 			Tasks:             tasks,
 			MaxRetries:        2,
 			ContinueOnFailure: true,
 		}
-		plan.Steps = []ExecutionStep{step}
-	case ExecutionModeMixed:
+		plan.Steps = []types.ExecutionStep{step}
+	case types.ExecutionModeMixed:
 		// 简单的混合策略：按优先级分组
 		plan.Steps = o.createMixedSteps(tasks)
 	}
@@ -450,25 +453,25 @@ func (o *smartTaskOrchestrator) CreateExecutionPlan(ctx context.Context, tasks [
 }
 
 // createMixedSteps 创建混合执行步骤
-func (o *smartTaskOrchestrator) createMixedSteps(tasks []Task) []ExecutionStep {
+func (o *smartTaskOrchestrator) createMixedSteps(tasks []types.Task) []types.ExecutionStep {
 	// 按优先级分组任务
-	priorityGroups := make(map[int][]Task)
+	priorityGroups := make(map[int][]types.Task)
 	for _, task := range tasks {
 		priority := task.Priority
 		priorityGroups[priority] = append(priorityGroups[priority], task)
 	}
 
 	// 为每个优先级组创建步骤
-	var steps []ExecutionStep
+	var steps []types.ExecutionStep
 	stepIndex := 0
 	for priority := 10; priority >= 0; priority-- { // 从高优先级到低优先级
 		if tasks, exists := priorityGroups[priority]; exists {
-			mode := ExecutionModeParallel
+			mode := types.ExecutionModeParallel
 			if len(tasks) == 1 {
-				mode = ExecutionModeSerial
+				mode = types.ExecutionModeSerial
 			}
 
-			step := ExecutionStep{
+			step := types.ExecutionStep{
 				ID:                fmt.Sprintf("priority_%d_step_%d", priority, stepIndex),
 				Mode:              mode,
 				Tasks:             tasks,
@@ -484,7 +487,7 @@ func (o *smartTaskOrchestrator) createMixedSteps(tasks []Task) []ExecutionStep {
 }
 
 // MonitorExecution 监控执行状态
-func (o *smartTaskOrchestrator) MonitorExecution(ctx context.Context, planID string) (ExecutionState, error) {
+func (o *smartTaskOrchestrator) MonitorExecution(ctx context.Context, planID string) (types.ExecutionState, error) {
 	o.mu.RLock()
 	defer o.mu.RUnlock()
 
@@ -492,7 +495,7 @@ func (o *smartTaskOrchestrator) MonitorExecution(ctx context.Context, planID str
 		return *state, nil
 	}
 
-	return ExecutionState{}, fmt.Errorf("执行计划 %s 不存在或已完成", planID)
+	return types.ExecutionState{}, fmt.Errorf("执行计划 %s 不存在或已完成", planID)
 }
 
 // CancelExecution 取消执行
@@ -501,7 +504,7 @@ func (o *smartTaskOrchestrator) CancelExecution(ctx context.Context, planID stri
 	defer o.mu.Unlock()
 
 	if state, exists := o.activeExecutions[planID]; exists {
-		state.Status = ExecutionStatusCancelled
+		state.Status = types.ExecutionStatusCancelled
 		o.logger.Info("取消执行计划", "plan_id", planID)
 		return nil
 	}
@@ -510,7 +513,7 @@ func (o *smartTaskOrchestrator) CancelExecution(ctx context.Context, planID stri
 }
 
 // GetExecutionHistory 获取执行历史
-func (o *smartTaskOrchestrator) GetExecutionHistory(ctx context.Context, limit int) ([]ExecutionState, error) {
+func (o *smartTaskOrchestrator) GetExecutionHistory(ctx context.Context, limit int) ([]types.ExecutionState, error) {
 	o.mu.RLock()
 	defer o.mu.RUnlock()
 
@@ -527,7 +530,7 @@ func (o *smartTaskOrchestrator) GetExecutionHistory(ctx context.Context, limit i
 }
 
 // OptimizeExecutionPlan 优化执行计划
-func (o *smartTaskOrchestrator) OptimizeExecutionPlan(ctx context.Context, plan ExecutionPlan) (ExecutionPlan, error) {
+func (o *smartTaskOrchestrator) OptimizeExecutionPlan(ctx context.Context, plan types.ExecutionPlan) (types.ExecutionPlan, error) {
 	if !o.config.EnableOptimization {
 		return plan, nil
 	}
@@ -539,7 +542,7 @@ func (o *smartTaskOrchestrator) OptimizeExecutionPlan(ctx context.Context, plan 
 	// 简单的优化：调整并发数
 	optimizedPlan := plan
 	for i, step := range optimizedPlan.Steps {
-		if step.Mode == ExecutionModeParallel && len(step.Tasks) > o.config.MaxConcurrentTasks {
+		if step.Mode == types.ExecutionModeParallel && len(step.Tasks) > o.config.MaxConcurrentTasks {
 			// 将大的并行步骤拆分为多个较小的步骤
 			optimizedPlan.Steps = o.splitLargeParallelStep(step, i, optimizedPlan.Steps)
 		}
@@ -549,9 +552,9 @@ func (o *smartTaskOrchestrator) OptimizeExecutionPlan(ctx context.Context, plan 
 }
 
 // splitLargeParallelStep 拆分大的并行步骤
-func (o *smartTaskOrchestrator) splitLargeParallelStep(step ExecutionStep, index int, steps []ExecutionStep) []ExecutionStep {
+func (o *smartTaskOrchestrator) splitLargeParallelStep(step types.ExecutionStep, index int, steps []types.ExecutionStep) []types.ExecutionStep {
 	chunkSize := o.config.MaxConcurrentTasks
-	var newSteps []ExecutionStep
+	var newSteps []types.ExecutionStep
 
 	// 添加之前的步骤
 	newSteps = append(newSteps, steps[:index]...)
@@ -563,9 +566,9 @@ func (o *smartTaskOrchestrator) splitLargeParallelStep(step ExecutionStep, index
 			end = len(step.Tasks)
 		}
 
-		newStep := ExecutionStep{
+		newStep := types.ExecutionStep{
 			ID:                fmt.Sprintf("%s_chunk_%d", step.ID, i/chunkSize),
-			Mode:              ExecutionModeParallel,
+			Mode:              types.ExecutionModeParallel,
 			Tasks:             step.Tasks[i:end],
 			Dependencies:      step.Dependencies,
 			MaxRetries:        step.MaxRetries,
@@ -582,20 +585,20 @@ func (o *smartTaskOrchestrator) splitLargeParallelStep(step ExecutionStep, index
 }
 
 // EstimateExecutionTime 估算执行时间
-func (o *smartTaskOrchestrator) EstimateExecutionTime(ctx context.Context, plan ExecutionPlan) (time.Duration, error) {
+func (o *smartTaskOrchestrator) EstimateExecutionTime(ctx context.Context, plan types.ExecutionPlan) (time.Duration, error) {
 	var totalDuration time.Duration
 
 	for _, step := range plan.Steps {
 		var stepDuration time.Duration
 
 		switch step.Mode {
-		case ExecutionModeSerial:
+		case types.ExecutionModeSerial:
 			// 串行执行：累加所有任务时间
 			for _, task := range step.Tasks {
 				taskDuration := o.estimateTaskDuration(task)
 				stepDuration += taskDuration
 			}
-		case ExecutionModeParallel:
+		case types.ExecutionModeParallel:
 			// 并行执行：取最长的任务时间
 			var maxTaskDuration time.Duration
 			for _, task := range step.Tasks {
@@ -605,7 +608,7 @@ func (o *smartTaskOrchestrator) EstimateExecutionTime(ctx context.Context, plan 
 				}
 			}
 			stepDuration = maxTaskDuration
-		case ExecutionModeMixed:
+		case types.ExecutionModeMixed:
 			// 混合模式：估算为并行模式
 			var maxTaskDuration time.Duration
 			for _, task := range step.Tasks {
@@ -627,13 +630,13 @@ func (o *smartTaskOrchestrator) EstimateExecutionTime(ctx context.Context, plan 
 }
 
 // estimateTaskDuration 估算单个任务执行时间
-func (o *smartTaskOrchestrator) estimateTaskDuration(task Task) time.Duration {
+func (o *smartTaskOrchestrator) estimateTaskDuration(task types.Task) time.Duration {
 	// 基于任务类型和历史数据估算
 	// 这里使用简单的默认值，实际可以基于历史统计
 	switch task.AgentType {
-	case AgentTypeGUI:
+	case types.AgentTypeGUI:
 		return 10 * time.Second
-	case AgentTypeReAct:
+	case types.AgentTypeReAct:
 		return 30 * time.Second
 	default:
 		return 15 * time.Second
@@ -641,9 +644,9 @@ func (o *smartTaskOrchestrator) estimateTaskDuration(task Task) time.Duration {
 }
 
 // GetResourceUsage 获取资源使用情况
-func (o *smartTaskOrchestrator) GetResourceUsage(ctx context.Context) (SystemMetrics, error) {
+func (o *smartTaskOrchestrator) GetResourceUsage(ctx context.Context) (types.SystemMetrics, error) {
 	if !o.config.EnableMetrics {
-		return SystemMetrics{}, nil
+		return types.SystemMetrics{}, nil
 	}
 
 	// 计算当前活跃Agent数量
@@ -656,7 +659,7 @@ func (o *smartTaskOrchestrator) GetResourceUsage(ctx context.Context) (SystemMet
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
 
-	metrics := SystemMetrics{
+	metrics := types.SystemMetrics{
 		CPUUsage:            0.0, // 需要实际的CPU监控
 		MemoryUsage:         float64(memStats.Alloc) / float64(memStats.Sys) * 100,
 		ActiveAgentCount:    activeAgentCount,
@@ -673,7 +676,7 @@ func (o *smartTaskOrchestrator) GetResourceUsage(ctx context.Context) (SystemMet
 }
 
 // countTotalTasks 计算计划中的总任务数
-func (o *smartTaskOrchestrator) countTotalTasks(steps []ExecutionStep) int {
+func (o *smartTaskOrchestrator) countTotalTasks(steps []types.ExecutionStep) int {
 	total := 0
 	for _, step := range steps {
 		total += len(step.Tasks)
@@ -682,7 +685,7 @@ func (o *smartTaskOrchestrator) countTotalTasks(steps []ExecutionStep) int {
 }
 
 // addExecutionHistory 添加执行历史
-func (o *smartTaskOrchestrator) addExecutionHistory(state ExecutionState) {
+func (o *smartTaskOrchestrator) addExecutionHistory(state types.ExecutionState) {
 	if len(o.executionHistory) >= o.config.MaxExecutionHistory {
 		o.executionHistory = o.executionHistory[1:]
 	}
@@ -690,14 +693,14 @@ func (o *smartTaskOrchestrator) addExecutionHistory(state ExecutionState) {
 }
 
 // evaluateContinuation 评估是否继续执行
-func (o *smartTaskOrchestrator) evaluateContinuation(ctx context.Context, plan ExecutionPlan, state ExecutionState) (bool, Option[ExecutionPlan], error) {
+func (o *smartTaskOrchestrator) evaluateContinuation(ctx context.Context, plan types.ExecutionPlan, state types.ExecutionState) (bool, Option[types.ExecutionPlan], error) {
 	if o.continuousDecision == nil {
 		// 如果没有持续决策引擎，使用简单逻辑
-		return state.CurrentStepIndex < len(plan.Steps), None[ExecutionPlan](), nil
+		return state.CurrentStepIndex < len(plan.Steps), None[types.ExecutionPlan](), nil
 	}
 
 	// 构建持续决策上下文
-	decisionContext := ContinuousDecisionContext{
+	decisionContext := types.ContinuousDecisionContext{
 		ExecutionState: state,
 		StepResults:    state.StepResults,
 		SystemMetrics:  o.resourceMetrics,
@@ -706,7 +709,7 @@ func (o *smartTaskOrchestrator) evaluateContinuation(ctx context.Context, plan E
 
 	// 如果有反馈分析器，分析输出
 	if o.feedbackAnalyzer != nil {
-		var allResults []ExecutionResult
+		var allResults []types.ExecutionResult
 		for _, stepResult := range state.StepResults {
 			allResults = append(allResults, stepResult.TaskResults...)
 		}
@@ -719,7 +722,7 @@ func (o *smartTaskOrchestrator) evaluateContinuation(ctx context.Context, plan E
 	// 进行持续决策
 	result, err := o.continuousDecision.MakeContinuousDecision(ctx, decisionContext)
 	if err != nil {
-		return false, None[ExecutionPlan](), err
+		return false, None[types.ExecutionPlan](), err
 	}
 
 	return result.ShouldContinue, result.NextExecutionPlan, nil

@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/m4n5ter/another-me/internal/core"
+	"github.com/m4n5ter/another-me/internal/core/types"
 	. "github.com/m4n5ter/another-me/pkg/option"
 )
 
@@ -67,10 +68,10 @@ func TestQueuedOperation(t *testing.T) {
 
 func TestMindscapeConnectorMemoryItem(t *testing.T) {
 	now := time.Now()
-	memoryItem := core.MemoryItem{
+	memoryItem := types.MemoryItem{
 		ID:         "memory-test-001",
 		Timestamp:  now,
-		Type:       core.MemoryTypeObservation,
+		Type:       types.MemoryTypeObservation,
 		Content:    "测试记忆内容",
 		Keywords:   []string{"测试", "记忆"},
 		Importance: 0.8,
@@ -78,10 +79,10 @@ func TestMindscapeConnectorMemoryItem(t *testing.T) {
 		UserID:     "user-001",
 		Metadata:   map[string]any{"source": "test"},
 	}
-	
+
 	assert.Equal(t, "memory-test-001", memoryItem.ID)
 	assert.Equal(t, now, memoryItem.Timestamp)
-	assert.Equal(t, core.MemoryTypeObservation, memoryItem.Type)
+	assert.Equal(t, types.MemoryTypeObservation, memoryItem.Type)
 	assert.Equal(t, "测试记忆内容", memoryItem.Content)
 	assert.Contains(t, memoryItem.Keywords, "测试")
 	assert.Equal(t, 0.8, memoryItem.Importance)
@@ -90,11 +91,11 @@ func TestMindscapeConnectorMemoryItem(t *testing.T) {
 
 func TestMonitoringTaskWithWebhook(t *testing.T) {
 	now := time.Now()
-	task := core.MonitoringTask{
+	task := types.MonitoringTask{
 		ID:                  Some("task-001"),
 		Description:         "测试监控任务",
 		MindscapeTaskType:   "web",
-		Conditions:          []core.MonitorCondition{},
+		Conditions:          []types.MonitorCondition{},
 		TargetData:          []string{"url", "status"},
 		NotificationMethods: []string{"webhook"},
 		WebhookURL:          Some("http://localhost:8081/wakeup"),
@@ -104,7 +105,7 @@ func TestMonitoringTaskWithWebhook(t *testing.T) {
 		CreatedAt:           now,
 		UpdatedAt:           now,
 	}
-	
+
 	assert.True(t, task.ID.IsSome())
 	assert.Equal(t, "task-001", task.ID.Unwrap())
 	assert.Equal(t, "测试监控任务", task.Description)
@@ -117,7 +118,7 @@ func TestMonitoringTaskWithWebhook(t *testing.T) {
 
 func TestMindscapeConnectorWakeupEvent(t *testing.T) {
 	triggerTime := time.Now()
-	event := core.WakeupEvent{
+	event := types.WakeupEvent{
 		MonitoringTaskID: "task-001",
 		TriggerTime:      triggerTime,
 		ObservedData: map[string]any{
@@ -129,7 +130,7 @@ func TestMindscapeConnectorWakeupEvent(t *testing.T) {
 			"response_time": 150,
 		},
 	}
-	
+
 	assert.Equal(t, "task-001", event.MonitoringTaskID)
 	assert.Equal(t, triggerTime, event.TriggerTime)
 	assert.Equal(t, "https://example.com", event.ObservedData["url"])

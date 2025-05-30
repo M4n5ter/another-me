@@ -8,15 +8,17 @@ import (
 	"slices"
 	"sync"
 	"time"
+
+	"github.com/m4n5ter/another-me/internal/core/types"
 )
 
 // SmartAgentDispatcher 智能Agent调度器实现
 type SmartAgentDispatcher struct {
-	agents       map[string]Agent         // 所有注册的Agent实例 (key: Agent ID)
-	agentsByType map[AgentType][]string   // 按类型分组的Agent ID列表
-	agentStatus  map[string]AgentStatus   // Agent状态 (key: Agent ID)
-	taskQueue    chan TaskDispatchRequest // 任务队列
-	resultChan   chan ExecutionResult     // 结果通道
+	agents       map[string]Agent             // 所有注册的Agent实例 (key: Agent ID)
+	agentsByType map[types.AgentType][]string // 按类型分组的Agent ID列表
+	agentStatus  map[string]AgentStatus       // Agent状态 (key: Agent ID)
+	taskQueue    chan TaskDispatchRequest     // 任务队列
+	resultChan   chan types.ExecutionResult   // 结果通道
 	logger       *slog.Logger
 	config       DispatcherConfig
 	mu           sync.RWMutex
@@ -48,11 +50,11 @@ type AgentStatus struct {
 
 // TaskDispatchRequest 任务分发请求
 type TaskDispatchRequest struct {
-	Task           Task
+	Task           types.Task
 	RequestID      string
 	RequestTime    time.Time
 	RetryCount     int
-	ResultCallback func(ExecutionResult, error)
+	ResultCallback func(types.ExecutionResult, error)
 	AgentID        string
 }
 
@@ -78,10 +80,10 @@ func NewSmartAgentDispatcher(config DispatcherConfig, logger *slog.Logger) *Smar
 
 	dispatcher := &SmartAgentDispatcher{
 		agents:       make(map[string]Agent),
-		agentsByType: make(map[AgentType][]string),
+		agentsByType: make(map[types.AgentType][]string),
 		agentStatus:  make(map[string]AgentStatus),
 		taskQueue:    make(chan TaskDispatchRequest, config.TaskQueueSize),
-		resultChan:   make(chan ExecutionResult, config.ResultChanSize),
+		resultChan:   make(chan types.ExecutionResult, config.ResultChanSize),
 		logger:       logger,
 		config:       config,
 		ctx:          ctx,
@@ -93,6 +95,8 @@ func NewSmartAgentDispatcher(config DispatcherConfig, logger *slog.Logger) *Smar
 
 	return dispatcher
 }
+
+var _ AgentDispatcher = (*SmartAgentDispatcher)(nil)
 
 // RegisterAgent 注册Agent
 func (d *SmartAgentDispatcher) RegisterAgent(agent Agent) error {
@@ -176,13 +180,13 @@ func (d *SmartAgentDispatcher) UnregisterAgent(agentID string) error {
 }
 
 // DispatchTask 分发任务
-func (d *SmartAgentDispatcher) DispatchTask(ctx context.Context, task Task) (ExecutionResult, error) {
+func (d *SmartAgentDispatcher) DispatchTask(ctx context.Context, task types.Task) (types.ExecutionResult, error) {
 	d.logger.Debug("开始分发任务", "task_id", task.ID, "agent_type", task.AgentType)
 
 	// 选择最佳Agent
 	agentID := d.selectBestAgent(task.AgentType)
 	if agentID == "" {
-		return ExecutionResult{}, fmt.Errorf("Agent %s 不可用", task.AgentType)
+		return types.ExecutionResult{}, fmt.Errorf("Agent %s 不可用", task.AgentType)
 	}
 
 	// 创建分发请求
@@ -196,10 +200,10 @@ func (d *SmartAgentDispatcher) DispatchTask(ctx context.Context, task Task) (Exe
 	}
 
 	// 创建结果通道
-	resultChan := make(chan ExecutionResult, 1)
+	resultChan := make(chan types.ExecutionResult, 1)
 	errorChan := make(chan error, 1)
 
-	request.ResultCallback = func(result ExecutionResult, err error) {
+	request.ResultCallback = func(result types.ExecutionResult, err error) {
 		if err != nil {
 			errorChan <- err
 		} else {
@@ -212,9 +216,9 @@ func (d *SmartAgentDispatcher) DispatchTask(ctx context.Context, task Task) (Exe
 	case d.taskQueue <- request:
 		d.logger.Debug("任务已加入队列", "request_id", requestID, "agent_id", agentID)
 	case <-ctx.Done():
-		return ExecutionResult{}, fmt.Errorf("分发任务失败: %w", ctx.Err())
+		return types.ExecutionResult{}, fmt.Errorf("分发任务失败: %w", ctx.Err())
 	case <-time.After(5 * time.Second):
-		return ExecutionResult{}, fmt.Errorf("任务队列已满，无法分发任务")
+		return types.ExecutionResult{}, fmt.Errorf("任务队列已满，无法分发任务")
 	}
 
 	// 等待结果
@@ -224,16 +228,16 @@ func (d *SmartAgentDispatcher) DispatchTask(ctx context.Context, task Task) (Exe
 		return result, nil
 	case err := <-errorChan:
 		d.logger.Error("任务执行失败", "task_id", task.ID, "error", err, "agent_id", agentID)
-		return ExecutionResult{}, err
+		return types.ExecutionResult{}, err
 	case <-ctx.Done():
-		return ExecutionResult{}, fmt.Errorf("任务执行失败: %w", ctx.Err())
+		return types.ExecutionResult{}, fmt.Errorf("任务执行失败: %w", ctx.Err())
 	case <-time.After(d.config.TaskTimeout):
-		return ExecutionResult{}, fmt.Errorf("任务执行超时")
+		return types.ExecutionResult{}, fmt.Errorf("任务执行超时")
 	}
 }
 
 // selectBestAgent 选择最佳的Agent实例
-func (d *SmartAgentDispatcher) selectBestAgent(agentType AgentType) string {
+func (d *SmartAgentDispatcher) selectBestAgent(agentType types.AgentType) string {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
@@ -271,7 +275,7 @@ func (d *SmartAgentDispatcher) selectBestAgent(agentType AgentType) string {
 }
 
 // GetAgentsByType 获取指定类型的所有Agent
-func (d *SmartAgentDispatcher) GetAgentsByType(agentType AgentType) ([]Agent, error) {
+func (d *SmartAgentDispatcher) GetAgentsByType(agentType types.AgentType) ([]Agent, error) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
@@ -317,68 +321,22 @@ func (d *SmartAgentDispatcher) GetAvailableAgents(ctx context.Context) ([]Agent,
 	return available, nil
 }
 
-// GetAvailableAgentTypes 获取可用Agent类型列表 (为了向后兼容)
-func (d *SmartAgentDispatcher) GetAvailableAgentTypes() []AgentType {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-
-	return slices.Collect(maps.Keys(d.agentsByType))
-}
-
-// GetAgentByType 根据类型获取Agent
-func (d *SmartAgentDispatcher) GetAgentByType(agentType AgentType) (Agent, error) {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-
-	agentIDs := d.agentsByType[agentType]
-	if len(agentIDs) == 0 {
-		return nil, fmt.Errorf("没有可用的Agent类型 %s", agentType)
-	}
-
-	agentID := agentIDs[0]
-	agent, exists := d.agents[agentID]
-	if !exists {
-		return nil, fmt.Errorf("Agent ID %s 未注册", agentID)
-	}
-
-	return agent, nil
-}
-
-// IsAgentAvailable 检查指定类型的Agent是否可用
-func (d *SmartAgentDispatcher) IsAgentAvailable(ctx context.Context, agentType AgentType) bool {
-	return d.isAgentAvailable(agentType)
+// IsAgentAvailable 检查指定的Agent是否可用
+func (d *SmartAgentDispatcher) IsAgentAvailable(ctx context.Context, agentID string) bool {
+	return d.isAgentAvailable(agentID)
 }
 
 // GetAgentStatus 获取Agent状态
-func (d *SmartAgentDispatcher) GetAgentStatus(ctx context.Context, agentID string) (map[string]any, error) {
+func (d *SmartAgentDispatcher) GetAgentStatus(ctx context.Context, agentID string) (AgentStatus, error) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
 	status, exists := d.agentStatus[agentID]
 	if !exists {
-		return nil, fmt.Errorf("Agent ID %s 未注册", agentID)
+		return AgentStatus{}, fmt.Errorf("Agent ID %s 未注册", agentID)
 	}
 
-	result := map[string]any{
-		"is_available":  status.IsAvailable,
-		"last_used":     status.LastUsed,
-		"task_count":    status.TaskCount,
-		"success_count": status.SuccessCount,
-		"failure_count": status.FailureCount,
-		"avg_exec_time": status.AverageExecTime,
-		"health_status": status.HealthStatus,
-	}
-
-	return result, nil
-}
-
-// GetAgentStatusStruct 获取Agent状态结构体 (为了向后兼容)
-func (d *SmartAgentDispatcher) GetAgentStatusStruct(agentID string) (AgentStatus, bool) {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-
-	status, exists := d.agentStatus[agentID]
-	return status, exists
+	return status, nil
 }
 
 // GetAllAgentStatus 获取所有Agent状态
@@ -486,7 +444,7 @@ func (d *SmartAgentDispatcher) processTask(workerID int, request TaskDispatchReq
 }
 
 // handleTaskSuccess 处理任务成功
-func (d *SmartAgentDispatcher) handleTaskSuccess(request TaskDispatchRequest, result ExecutionResult, startTime time.Time) {
+func (d *SmartAgentDispatcher) handleTaskSuccess(request TaskDispatchRequest, result types.ExecutionResult, startTime time.Time) {
 	duration := time.Since(startTime)
 	d.logger.Info("任务执行成功",
 		"task_id", request.Task.ID,
@@ -528,7 +486,7 @@ func (d *SmartAgentDispatcher) handleTaskFailure(request TaskDispatchRequest, er
 
 	// 调用结果回调
 	if request.ResultCallback != nil {
-		request.ResultCallback(ExecutionResult{}, err)
+		request.ResultCallback(types.ExecutionResult{}, err)
 	}
 }
 
@@ -550,23 +508,17 @@ func (d *SmartAgentDispatcher) retryTask(request TaskDispatchRequest, lastErr er
 		default:
 			d.logger.Error("重试任务时队列已满", "task_id", request.Task.ID)
 			if request.ResultCallback != nil {
-				request.ResultCallback(ExecutionResult{}, fmt.Errorf("重试失败: 队列已满"))
+				request.ResultCallback(types.ExecutionResult{}, fmt.Errorf("重试失败: 队列已满"))
 			}
 		}
 	})
 }
 
 // isAgentAvailable 检查Agent是否可用
-func (d *SmartAgentDispatcher) isAgentAvailable(agentType AgentType) bool {
+func (d *SmartAgentDispatcher) isAgentAvailable(agentID string) bool {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
-	agentIDs := d.agentsByType[agentType]
-	if len(agentIDs) == 0 {
-		return false
-	}
-
-	agentID := agentIDs[0]
 	status, exists := d.agentStatus[agentID]
 	if !exists {
 		return false
