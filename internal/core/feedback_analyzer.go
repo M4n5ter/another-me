@@ -1,19 +1,136 @@
 package core
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"html/template"
 	"log/slog"
 	"sort"
 	"strings"
 	"time"
 
+	json "github.com/json-iterator/go"
+
 	"github.com/m4n5ter/another-me/internal/core/types"
+	"github.com/m4n5ter/another-me/pkg/llminterface"
 )
+
+const agentPromptTemplateDefault = `你是一个智能反馈分析专家，负责深度分析Agent执行结果并提供专业洞察。
+
+请分析以下执行结果：
+
+**执行结果摘要**:
+- 总结果数: {{.TotalResults}}
+- 成功数: {{.SuccessCount}}
+- 失败数: {{.FailureCount}}
+- 成功率: {{.SuccessRate}}%
+
+**详细结果**:
+{{.DetailedResults}}
+
+**分析要求**:
+{{.AnalysisRequirements}}
+
+请按以下JSON格式返回分析结果：
+{
+  "key_findings": ["发现1", "发现2"],
+  "actionable_insights": ["洞察1", "洞察2"],
+  "requires_user_input": true/false,
+  "confidence_level": 0.0-1.0,
+  "recommended_actions": ["行动1", "行动2"],
+  "risk_assessment": {
+    "level": "low/medium/high",
+    "factors": ["因子1", "因子2"],
+    "mitigation": ["缓解措施1", "缓解措施2"],
+    "description": "风险描述"
+  },
+  "next_step_suggestions": ["建议1", "建议2"],
+  "patterns_detected": ["模式1", "模式2"],
+  "improvement_opportunities": ["改进点1", "改进点2"]
+}
+
+**分析原则**:
+1. 深度分析执行模式和趋势
+2. 识别潜在问题和改进机会
+3. 提供具体可执行的建议
+4. 评估风险并给出缓解方案
+5. 基于历史数据预测未来趋势
+6. 给出详细的推理过程和置信度评估`
+
+const qualityAssessmentPromptTemplate = `你是一位经验丰富的AI智能应用执行质量评估专家。你的任务是基于提供的Agent执行结果数据，进行全面而深入的质量评估。
+请重点从以下几个维度进行分析：
+1.  **效率**: 任务执行速度、耗时、是否有不必要的延迟。
+2.  **准确性/正确性**: 任务成功率、错误发生情况、输出结果是否符合预期。
+3.  **稳定性**: 执行过程中是否出现异常、崩溃、重试等情况。
+4.  **资源利用率**: （如果提供相关数据）CPU、内存等资源使用是否合理，有无浪费。
+
+请严格按照以下JSON格式返回你的评估报告，确保所有字段都被填充：
+{
+  "overall_quality_score": <综合质量评分, 0.0-1.0>,
+  "dimension_scores": {
+    "efficiency": <效率评分, 0.0-1.0>,
+    "accuracy": <准确性评分, 0.0-1.0>,
+    "stability": <稳定性评分, 0.0-1.0>,
+    "resource_utilization": <资源利用率评分, 0.0-1.0, 如果无数据则为-1或省略该键>
+  },
+  "strengths": ["<主要优点1>", "<主要优点2>", ...],
+  "weaknesses": ["<主要不足1>", "<主要不足2>", ...],
+  "detailed_report": "<对整体质量的详细文字描述，包括对各维度表现的分析>",
+  "recommended_improvements": ["<具体的改进建议1>", "<具体的改进建议2>", ...]
+}`
+
+const riskAssessmentPromptTemplate = `你是一位资深的AI系统风险管理与预测专家。你的任务是基于提供的当前执行结果、计划中的后续行动、当前系统状态以及相关的历史分析数据，全面评估潜在的风险。
+你需要识别风险因素，预测风险发生的可能性和潜在影响，并确定风险等级。
+
+请严格按照以下JSON格式返回你的风险评估报告，确保所有字段都被填充：
+{
+  "level": "<风险级别: low/medium/high>",
+  "factors": ["<识别出的风险因子1>", "<风险因子2>", ...],
+  "mitigation": ["<针对风险的缓解措施1>", "<缓解措施2>", ...],
+  "description": "<对整体风险情况的详细文字描述，包括对主要风险因子的分析和潜在影响的评估>",
+  "predicted_impact_if_occurs": "<如果风险发生，预测的具体影响描述>",
+  "probability_assessment": "<对风险发生可能性的定性评估: low/medium/high，或定量0.0-1.0>"
+}`
+
+const insightsGenerationPromptTemplate = `你是一名顶级的AI系统分析与策略顾问。你的任务是基于提供的初步分析报告 ('baseAnalysis')、历史执行数据摘要以及已识别的关键执行模式，进行深度分析，并生成一份富有洞察力的报告。
+这份报告需要包含：
+1.  **核心发现 (Key Takeaways)**: 从所有信息中提炼出的最关键、最重要的结论。
+2.  **可执行的建议 (Actionable Recommendations)**: 具体的、可操作的改进建议，每条建议需包含理由、优先级评估以及潜在影响。
+3.  **改进机会 (Improvement Opportunities)**: 指出潜在的可以优化或提升的方面，包括潜在益处和预估的实现难度。
+4.  **预测的下一步行动 (Predicted Next Steps)**: 基于你的洞察，建议接下来应该采取哪些具体步骤。
+5.  **洞察置信度 (Confidence Level)**: 你对这份洞察报告整体准确性和价值的置信度评分 (0.0-1.0)。
+6.  **洞察总结 (Summary)**: 对整个洞察报告的简短总结。
+
+请严格按照以下JSON格式返回你的洞察报告：
+{
+  "key_takeaways": ["<核心发现1>", "<核心发现2>", ...],
+  "actionable_recommendations": [
+    {
+      "recommendation": "<建议内容>",
+      "rationale": "<理由>",
+      "priority": "<high/medium/low>",
+      "potential_impact": "<潜在影响描述>"
+    },
+    ...
+  ],
+  "improvement_opportunities": [
+    {
+      "opportunity": "<机会描述>",
+      "potential_benefit": "<潜在益处>",
+      "difficulty": "<high/medium/low>"
+    },
+    ...
+  ],
+  "predicted_next_steps": ["<预测的下一步1>", "<下一步2>", ...],
+  "confidence_level": <置信度评分, 0.0-1.0>,
+  "summary": "<洞察总结文本>"
+}`
 
 // SmartFeedbackAnalyzer 智能反馈分析器实现 - 基于Agent的智能分析
 type SmartFeedbackAnalyzer struct {
-	agent  Agent // 底层智能Agent
+	llm    llminterface.ChatAdapter
 	logger *slog.Logger
 	config FeedbackAnalyzerConfig
 
@@ -96,50 +213,61 @@ type AgentFeedbackAnalysisResult struct {
 	ImprovementOpportunities []string             `json:"improvement_opportunities"`
 }
 
+// --- Structs for Quality Assessment ---
+// QualityAssessmentPromptData LLM质量评估提示数据
+type QualityAssessmentPromptData struct {
+	TotalResults         int            `json:"total_results"`
+	SuccessCount         int            `json:"success_count"`
+	FailureCount         int            `json:"failure_count"`
+	SuccessRate          float64        `json:"success_rate"`
+	DetailedResults      string         `json:"detailed_results"`
+	AnalysisRequirements string         `json:"analysis_requirements"`
+	HistoricalContext    map[string]any `json:"historical_context,omitempty"`
+}
+
+// AgentQualityAssessmentResult LLM返回的质量评估结果 (matches JSON in qualityAssessmentPromptTemplate)
+type AgentQualityAssessmentResult struct {
+	OverallQualityScore     float64            `json:"overall_quality_score"`
+	DimensionScores         map[string]float64 `json:"dimension_scores"`
+	Strengths               []string           `json:"strengths"`
+	Weaknesses              []string           `json:"weaknesses"`
+	DetailedReport          string             `json:"detailed_report"`
+	RecommendedImprovements []string           `json:"recommended_improvements"`
+}
+
+// --- Structs for Insights Generation ---
+// InsightsGenerationPromptData LLM洞察生成的提示数据
+type InsightsGenerationPromptData struct {
+	BaseAnalysisSummary     string         `json:"base_analysis_summary"`     // 基础分析的摘要
+	HistoricalDataSummary   string         `json:"historical_data_summary"`   // 历史执行数据的摘要
+	DetectedPatternsSummary string         `json:"detected_patterns_summary"` // 已识别模式的摘要
+	AnalysisRequirements    string         `json:"analysis_requirements"`     // 分析的具体要求
+	HistoricalContext       map[string]any `json:"historical_context,omitempty"`
+}
+
+// AgentInsightsResult LLM返回的洞察结果 (matches JSON in insightsGenerationPromptTemplate)
+type AgentInsightsResult struct {
+	KeyTakeaways              []string `json:"key_takeaways"`
+	ActionableRecommendations []struct {
+		Recommendation  string `json:"recommendation"`
+		Rationale       string `json:"rationale"`
+		Priority        string `json:"priority"`
+		PotentialImpact string `json:"potential_impact"`
+	} `json:"actionable_recommendations"`
+	ImprovementOpportunities []struct {
+		Opportunity      string `json:"opportunity"`
+		PotentialBenefit string `json:"potential_benefit"`
+		Difficulty       string `json:"difficulty"`
+	} `json:"improvement_opportunities"`
+	PredictedNextSteps []string `json:"predicted_next_steps"`
+	ConfidenceLevel    float64  `json:"confidence_level"`
+	Summary            string   `json:"summary"`
+}
+
 // DefaultFeedbackAnalyzerConfig 返回默认配置
 func DefaultFeedbackAnalyzerConfig() FeedbackAnalyzerConfig {
 	return FeedbackAnalyzerConfig{
-		AgentPromptTemplate: `你是一个智能反馈分析专家，负责深度分析Agent执行结果并提供专业洞察。
-
-请分析以下执行结果：
-
-**执行结果摘要**:
-- 总结果数: {{.TotalResults}}
-- 成功数: {{.SuccessCount}}
-- 失败数: {{.FailureCount}}
-- 成功率: {{.SuccessRate}}%
-
-**详细结果**:
-{{.DetailedResults}}
-
-**分析要求**:
-{{.AnalysisRequirements}}
-
-请按以下JSON格式返回分析结果：
-{
-  "key_findings": ["发现1", "发现2"],
-  "actionable_insights": ["洞察1", "洞察2"],
-  "requires_user_input": true/false,
-  "confidence_level": 0.0-1.0,
-  "recommended_actions": ["行动1", "行动2"],
-  "risk_assessment": {
-    "level": "low/medium/high",
-    "factors": ["因子1", "因子2"],
-    "mitigation": ["缓解措施1", "缓解措施2"],
-    "description": "风险描述"
-  },
-  "next_step_suggestions": ["建议1", "建议2"],
-  "patterns_detected": ["模式1", "模式2"],
-  "improvement_opportunities": ["改进点1", "改进点2"]
-}
-
-**分析原则**:
-1. 深度分析执行模式和趋势
-2. 识别潜在问题和改进机会
-3. 提供具体可执行的建议
-4. 评估风险并给出缓解方案
-5. 基于历史数据预测未来趋势
-6. 给出详细的推理过程和置信度评估`,
+		AgentPromptTemplate:        agentPromptTemplateDefault,
 		AnalysisTimeout:            30 * time.Second,
 		MaxRetries:                 3,
 		AnalysisDepth:              "detailed",
@@ -165,7 +293,7 @@ func DefaultFeedbackAnalyzerConfig() FeedbackAnalyzerConfig {
 
 // NewSmartFeedbackAnalyzer 创建新的智能反馈分析器
 func NewSmartFeedbackAnalyzer(
-	agent Agent,
+	llmAdapter llminterface.ChatAdapter,
 	config FeedbackAnalyzerConfig,
 	logger *slog.Logger,
 ) *SmartFeedbackAnalyzer {
@@ -174,7 +302,7 @@ func NewSmartFeedbackAnalyzer(
 	}
 
 	return &SmartFeedbackAnalyzer{
-		agent:           agent,
+		llm:             llmAdapter,
 		logger:          logger,
 		config:          config,
 		analysisHistory: make([]FeedbackAnalysisRecord, 0, config.HistoryRetention),
@@ -189,46 +317,56 @@ func (fa *SmartFeedbackAnalyzer) AnalyzeExecutionResults(
 	ctx context.Context,
 	results []types.ExecutionResult,
 ) (types.AgentOutputAnalysis, error) {
-	// if len(results) == 0 {
-	// 	return types.AgentOutputAnalysis{
-	// 		KeyFindings:         []string{"没有执行结果"},
-	// 		ActionableInsights:  []string{},
-	// 		RequiresUserInput:   false,
-	// 		ConfidenceLevel:     0.0,
-	// 		RecommendedActions:  []string{},
-	// 		RiskAssessment:      types.RiskAssessment{Level: "low"},
-	// 		NextStepSuggestions: []string{},
-	// 	}, nil
-	// }
+	if len(results) == 0 {
+		return types.AgentOutputAnalysis{
+			KeyFindings:         []string{"没有执行结果"},
+			ActionableInsights:  []string{},
+			RequiresUserInput:   false,
+			ConfidenceLevel:     0.0,
+			RecommendedActions:  []string{},
+			RiskAssessment:      types.RiskAssessment{Level: "low"},
+			NextStepSuggestions: []string{},
+		}, nil
+	}
 
-	// fa.logger.Info("开始AI驱动的执行结果分析", "result_count", len(results))
+	fa.logger.Info("开始AI驱动的执行结果分析", "result_count", len(results))
 
-	// // 设置分析超时
-	// analysisCtx, cancel := context.WithTimeout(ctx, fa.config.AnalysisTimeout)
-	// defer cancel()
+	analysisCtx, cancel := context.WithTimeout(ctx, fa.config.AnalysisTimeout)
+	defer cancel()
 
-	// // 1. 构建分析提示数据
-	// promptData := fa.buildAnalysisPromptData(results)
+	// 1. 构建分析提示数据
+	promptData, err := fa.buildAnalysisPromptData(results)
+	if err != nil {
+		fa.logger.Error("构建Agent分析提示数据失败", "error", err)
+		return fa.createFallbackAnalysis(results), nil
+	}
 
-	// // 2. 调用Agent进行智能分析
-	// agentResult, err := fa.invokeAgentForAnalysis(analysisCtx, promptData)
-	// if err != nil {
-	// 	fa.logger.Error("AI分析失败，使用后备分析", "error", err)
-	// 	return fa.createFallbackAnalysis(results), nil
-	// }
+	promptMessage, err := fa.buildLLMPromptMessage(promptData, fa.config.AgentPromptTemplate, "AgentAnalysis")
+	if err != nil {
+		fa.logger.Error("构建Agent分析提示消息失败", "error", err)
+		return fa.createFallbackAnalysis(results), nil
+	}
 
-	// // 3. 转换Agent结果为标准分析结果
-	// analysis := fa.convertAgentResultToAnalysis(agentResult)
+	agentResult, err := fa.invokeLLMForAnalysis(analysisCtx, promptMessage)
+	if err != nil {
+		fa.logger.Error("AI分析失败，使用后备分析", "error", err)
+		return fa.createFallbackAnalysis(results), nil
+	}
 
-	// // 4. 更新分析历史
-	// fa.updateAnalysisHistory(results, analysis)
+	analysis, err := fa.convertAgentResultToAnalysis(agentResult)
+	if err != nil {
+		fa.logger.Error("转换Agent结果为标准分析结果失败", "error", err)
+		return fa.createFallbackAnalysis(results), nil
+	}
 
-	// fa.logger.Info("AI执行结果分析完成",
-	// 	"confidence", analysis.ConfidenceLevel,
-	// 	"findings_count", len(analysis.KeyFindings),
-	// 	"insights_count", len(analysis.ActionableInsights))
+	fa.updateAnalysisHistory(results, analysis)
 
-	return types.AgentOutputAnalysis{}, nil
+	fa.logger.Info("AI执行结果分析完成",
+		"confidence", analysis.ConfidenceLevel,
+		"findings_count", len(analysis.KeyFindings),
+		"insights_count", len(analysis.ActionableInsights))
+
+	return analysis, nil
 }
 
 // DetectPatterns 检测执行模式 - 实现FeedbackAnalyzer接口
@@ -321,96 +459,381 @@ func (fa *SmartFeedbackAnalyzer) PredictNextSteps(
 	return predictions, nil
 }
 
-// AssessRisk 评估风险 - 实现FeedbackAnalyzer接口
+// AssessRisk 评估风险 - 实现FeedbackAnalyzer接口 (LLM Implementation)
 func (fa *SmartFeedbackAnalyzer) AssessRisk(
 	ctx context.Context,
+	currentResults []types.ExecutionResult,
 	proposedActions []types.Task,
 	systemState types.SystemState,
+	history []FeedbackAnalysisRecord,
 ) (types.RiskAssessment, error) {
-	fa.logger.Debug("评估风险",
-		"action_count", len(proposedActions),
-		"error_count", systemState.ErrorCount)
+	fa.logger.Debug("开始LLM驱动的风险评估", "current_results", len(currentResults), "actions", len(proposedActions))
 
-	if !fa.config.EnableHistoryAnalysis {
-		return types.RiskAssessment{
-			Level:       "unknown",
-			Factors:     []string{"风险评估未启用"},
-			Mitigation:  []string{},
-			Description: "风险评估功能未启用",
-		}, nil
+	// 1. 构建分析提示数据
+	promptData, err := fa.buildRiskAssessmentPromptData(currentResults, proposedActions, systemState, history)
+	if err != nil {
+		fa.logger.Error("构建LLM风险评估提示数据失败", "error", err)
+		// Fallback to a simple rule-based assessment or error
+		return types.RiskAssessment{Level: "unknown", Description: fmt.Sprintf("构建风险评估提示失败: %v", err)}, err
 	}
 
-	// 1. 收集风险因子
-	riskFactors := fa.identifyRiskFactors(proposedActions, systemState)
-
-	// 2. 计算风险分数
-	riskScore := fa.calculateRiskScore(riskFactors, systemState)
-
-	// 3. 确定风险级别
-	riskLevel := fa.determineRiskLevel(riskScore)
-
-	// 4. 生成缓解措施
-	mitigation := fa.generateMitigationStrategies(riskFactors, riskLevel)
-
-	// 5. 生成风险描述
-	description := fa.generateRiskDescription(riskLevel, riskScore, riskFactors)
-
-	assessment := types.RiskAssessment{
-		Level:       riskLevel,
-		Factors:     riskFactors,
-		Mitigation:  mitigation,
-		Description: description,
+	// 2. 构建LLM提示消息
+	promptMessage, err := fa.buildLLMPromptMessage(promptData, riskAssessmentPromptTemplate, "RiskAssessment")
+	if err != nil {
+		fa.logger.Error("构建LLM风险评估提示消息失败", "error", err)
+		return types.RiskAssessment{Level: "unknown", Description: fmt.Sprintf("构建风险评估提示消息失败: %v", err)}, err
 	}
 
-	fa.logger.Info("风险评估完成",
-		"risk_level", riskLevel,
-		"risk_score", riskScore,
-		"factor_count", len(riskFactors))
+	analysisCtx, cancel := context.WithTimeout(ctx, fa.config.AnalysisTimeout) // Reuse existing timeout
+	defer cancel()
 
-	return assessment, nil
+	// 3. 调用LLM进行智能分析
+	llmResultJSON, err := fa.invokeLLMForAnalysis(analysisCtx, promptMessage)
+	if err != nil {
+		fa.logger.Error("LLM风险评估失败", "error", err)
+		wrappedError := fmt.Errorf("LLM风险评估API调用失败: %w", err)
+		return types.RiskAssessment{Level: "unknown", Description: fmt.Sprintf("LLM风险评估API调用失败: %v", err)}, wrappedError // Return the wrapped error
+	}
+
+	// 4. 转换LLM结果为标准分析结果
+	riskAssessment, err := fa.convertLLMResultToRiskAssessment(llmResultJSON)
+	if err != nil {
+		fa.logger.Error("转换LLM风险评估结果失败", "error", err, "llm_json", llmResultJSON)
+		return types.RiskAssessment{Level: "unknown", Description: fmt.Sprintf("转换LLM风险评估结果失败: %v", err)}, err
+	}
+
+	fa.logger.Info("LLM风险评估完成", "risk_level", riskAssessment.Level)
+	return riskAssessment, nil
 }
 
-// GenerateInsights 生成洞察 - 实现FeedbackAnalyzer接口
+// GenerateInsights 生成洞察 - 实现FeedbackAnalyzer接口 (LLM Implementation)
 func (fa *SmartFeedbackAnalyzer) GenerateInsights(
 	ctx context.Context,
-	analysis types.AgentOutputAnalysis,
-) ([]string, error) {
-	fa.logger.Debug("生成洞察", "confidence", analysis.ConfidenceLevel)
+	baseAnalysis types.AgentOutputAnalysis, // 新增参数
+	history []types.ExecutionResult, // 新增参数
+	detectedPatterns []string, // 新增参数
+) (types.GeneratedInsights, error) { // 返回类型修改
+	fa.logger.Debug("开始LLM驱动的洞察生成", "base_analysis_findings", len(baseAnalysis.KeyFindings), "history_count", len(history), "patterns_count", len(detectedPatterns))
 
-	insights := []string{}
-
-	// 1. 基于置信度的洞察
-	if analysis.ConfidenceLevel < fa.config.MinConfidenceThreshold {
-		insights = append(insights,
-			fmt.Sprintf("执行置信度较低(%.2f)，建议增加验证步骤", analysis.ConfidenceLevel))
+	// 1. 构建分析提示数据
+	promptData, err := fa.buildInsightsGenerationPromptData(baseAnalysis, history, detectedPatterns)
+	if err != nil {
+		fa.logger.Error("构建LLM洞察生成提示数据失败", "error", err)
+		// Fallback: return a basic insight or error
+		wrappedError := fmt.Errorf("构建洞察生成提示数据失败: %w", err)
+		return types.GeneratedInsights{Summary: fmt.Sprintf("构建洞察生成提示失败: %v", err)}, wrappedError // Return the wrapped error
 	}
 
-	// 2. 基于风险评估的洞察
-	switch analysis.RiskAssessment.Level {
-	case "high":
-		insights = append(insights, "检测到高风险，建议谨慎执行或寻求人工确认")
-	case "medium":
-		insights = append(insights, "存在中等风险，建议增加监控和错误处理")
+	// 2. 构建LLM提示消息
+	promptMessage, err := fa.buildLLMPromptMessage(promptData, insightsGenerationPromptTemplate, "InsightsGeneration")
+	if err != nil {
+		fa.logger.Error("构建LLM洞察生成提示消息失败", "error", err)
+		wrappedError := fmt.Errorf("构建洞察生成提示消息失败: %w", err)
+		return types.GeneratedInsights{Summary: fmt.Sprintf("构建洞察生成提示消息失败: %v", err)}, wrappedError // Return the wrapped error
 	}
 
-	// 3. 基于关键发现的洞察
-	if len(analysis.KeyFindings) > 3 {
-		insights = append(insights, "执行过程中发现多个问题，建议优化任务流程")
+	analysisCtx, cancel := context.WithTimeout(ctx, fa.config.AnalysisTimeout) // Reuse existing timeout
+	defer cancel()
+
+	// 3. 调用LLM进行智能分析
+	llmResultJSON, err := fa.invokeLLMForAnalysis(analysisCtx, promptMessage)
+	if err != nil {
+		fa.logger.Error("LLM洞察生成失败", "error", err)
+		wrappedError := fmt.Errorf("LLM洞察生成API调用失败: %w", err)
+		return types.GeneratedInsights{Summary: fmt.Sprintf("LLM洞察生成API调用失败: %v", err)}, wrappedError // Return the wrapped error
 	}
 
-	// 4. 基于历史模式的洞察
-	if len(fa.analysisHistory) > 10 {
-		historicalInsights := fa.generateHistoricalInsights()
-		insights = append(insights, historicalInsights...)
+	// 4. 转换LLM结果为标准分析结果
+	insights, err := fa.convertLLMResultToGeneratedInsights(llmResultJSON)
+	if err != nil {
+		fa.logger.Error("转换LLM洞察生成结果失败", "error", err, "llm_json", llmResultJSON)
+		wrappedError := fmt.Errorf("转换LLM洞察生成结果失败: %w", err)
+		return types.GeneratedInsights{Summary: fmt.Sprintf("转换LLM洞察生成结果失败: %v", err)}, wrappedError // Return the wrapped error
 	}
 
-	// 5. 基于推荐行动的洞察
-	if len(analysis.RecommendedActions) == 0 {
-		insights = append(insights, "未生成推荐行动，可能需要用户指导")
-	}
-
-	fa.logger.Info("洞察生成完成", "insight_count", len(insights))
+	fa.logger.Info("LLM洞察生成完成", "key_takeaways", len(insights.KeyTakeaways), "confidence", insights.ConfidenceLevel)
 	return insights, nil
+}
+
+// AssessExecutionQuality 评估执行质量 - 实现FeedbackAnalyzer接口 (新方法)
+func (fa *SmartFeedbackAnalyzer) AssessExecutionQuality(
+	ctx context.Context,
+	results []types.ExecutionResult,
+) (types.QualityAssessment, error) {
+	fa.logger.Debug("开始LLM驱动的执行质量评估", "result_count", len(results))
+
+	if len(results) == 0 {
+		fa.logger.Info("没有执行结果可供质量评估")
+		return types.QualityAssessment{}, nil
+	}
+
+	// 1. 构建分析提示数据
+	// For detailed results, we can reuse parts of buildAnalysisPromptData logic if appropriate or simplify
+	// For now, let's create a simplified representation for detailed results.
+	promptData, err := fa.buildQualityAssessmentPromptData(results)
+	if err != nil {
+		fa.logger.Error("构建LLM质量评估提示数据失败", "error", err)
+		// Consider a fallback or simple rule-based assessment here if desired
+		return types.QualityAssessment{}, fmt.Errorf("构建质量评估提示数据失败: %w", err)
+	}
+
+	// 2. 构建LLM提示消息
+	promptMessage, err := fa.buildLLMPromptMessage(promptData, qualityAssessmentPromptTemplate, "QualityAssessment")
+	if err != nil {
+		fa.logger.Error("构建LLM质量评估提示消息失败", "error", err)
+		return types.QualityAssessment{}, fmt.Errorf("构建质量评估提示消息失败: %w", err)
+	}
+
+	// 设置分析超时 (can use existing config or a new one for quality assessment)
+	analysisCtx, cancel := context.WithTimeout(ctx, fa.config.AnalysisTimeout) // Using existing AnalysisTimeout
+	defer cancel()
+
+	// 3. 调用LLM进行智能分析
+	llmResultJSON, err := fa.invokeLLMForAnalysis(analysisCtx, promptMessage)
+	if err != nil {
+		fa.logger.Error("LLM质量评估失败", "error", err)
+		// Fallback: return a basic assessment or error
+		return types.QualityAssessment{}, fmt.Errorf("LLM质量评估API调用失败: %w", err) // Propagate error to caller to decide
+	}
+
+	// 4. 转换LLM结果为标准分析结果
+	qualityAssessment, err := fa.convertLLMResultToQualityAssessment(llmResultJSON)
+	if err != nil {
+		fa.logger.Error("转换LLM质量评估结果失败", "error", err, "llm_json", llmResultJSON)
+		return types.QualityAssessment{}, fmt.Errorf("转换LLM质量评估结果失败: %w", err)
+	}
+
+	fa.logger.Info("LLM执行质量评估完成", "overall_score", qualityAssessment.OverallQualityScore)
+	return qualityAssessment, nil
+}
+
+// buildQualityAssessmentPromptData 构建质量评估的提示数据
+func (fa *SmartFeedbackAnalyzer) buildQualityAssessmentPromptData(results []types.ExecutionResult) (QualityAssessmentPromptData, error) {
+	totalResults := len(results)
+	successCount := 0
+	failureCount := 0
+	detailedResultsBuilder := strings.Builder{}
+
+	// Simplified detailed results for quality assessment prompt (can be expanded)
+	for i, res := range results {
+		if res.Status == types.ExecutionStatusSuccess {
+			successCount++
+		} else if res.Status == types.ExecutionStatusFailure {
+			failureCount++
+		}
+		detailedResultsBuilder.WriteString(fmt.Sprintf("  结果 %d: 状态=%s, 耗时=%s", i+1, res.Status, res.EndTime.Sub(res.StartTime)))
+		if res.Error != "" {
+			detailedResultsBuilder.WriteString(fmt.Sprintf(", 错误=%s", res.Error))
+		}
+		detailedResultsBuilder.WriteString("\n")
+	}
+
+	successRate := 0.0
+	if totalResults > 0 {
+		successRate = float64(successCount) / float64(totalResults) * 100
+	}
+
+	// TODO: Populate AnalysisRequirements and HistoricalContext meaningfully for quality assessment
+	analysisRequirements := "请对执行效率、准确性、稳定性进行综合评估。"
+
+	data := QualityAssessmentPromptData{
+		TotalResults:         totalResults,
+		SuccessCount:         successCount,
+		FailureCount:         failureCount,
+		SuccessRate:          successRate,
+		DetailedResults:      detailedResultsBuilder.String(),
+		AnalysisRequirements: analysisRequirements,
+		// HistoricalContext can be added if relevant past quality scores are stored
+	}
+	return data, nil
+}
+
+// convertLLMResultToQualityAssessment 将LLM的JSON输出转换为 QualityAssessment 类型
+func (fa *SmartFeedbackAnalyzer) convertLLMResultToQualityAssessment(llmResultJSON string) (types.QualityAssessment, error) {
+	cleanedJSON := fa.cleanLLMJSONOutput(llmResultJSON) // Using a common cleaning function
+
+	var agentAssessment AgentQualityAssessmentResult
+	err := json.Unmarshal([]byte(cleanedJSON), &agentAssessment)
+	if err != nil {
+		return types.QualityAssessment{}, fmt.Errorf("解析LLM质量评估JSON失败: %w, json_content: %s", err, cleanedJSON)
+	}
+
+	// Map from AgentQualityAssessmentResult to types.QualityAssessment
+	// In this case, fields are identical, so direct mapping works.
+	// If structures were different, manual mapping would be needed.
+	return types.QualityAssessment{
+		OverallQualityScore:     agentAssessment.OverallQualityScore,
+		DimensionScores:         agentAssessment.DimensionScores,
+		Strengths:               agentAssessment.Strengths,
+		Weaknesses:              agentAssessment.Weaknesses,
+		DetailedReport:          agentAssessment.DetailedReport,
+		RecommendedImprovements: agentAssessment.RecommendedImprovements,
+	}, nil
+}
+
+// buildLLMPromptMessage 构建LLM提示消息 (generic helper)
+func (fa *SmartFeedbackAnalyzer) buildLLMPromptMessage(promptData any, templateContent, templateName string) (llminterface.InputMessage, error) {
+	tmpl, err := template.New(templateName).Parse(templateContent)
+	if err != nil {
+		return llminterface.InputMessage{}, fmt.Errorf("解析LLM提示模板 '%s' 失败: %w", templateName, err)
+	}
+
+	var promptBuffer bytes.Buffer
+	if err := tmpl.Execute(&promptBuffer, promptData); err != nil {
+		return llminterface.InputMessage{}, fmt.Errorf("执行LLM提示模板 '%s' 失败: %w", templateName, err)
+	}
+
+	return llminterface.InputMessage{
+		Role: llminterface.RoleSystem, // Or RoleUser, depending on how the LLM expects it for the specific task
+		Content: []llminterface.ContentPart{
+			{
+				Type: llminterface.PartTypeText,
+				Text: promptBuffer.String(),
+			},
+		},
+	}, nil
+}
+
+// cleanLLMJSONOutput helper to remove markdown fences and trim space
+func (fa *SmartFeedbackAnalyzer) cleanLLMJSONOutput(jsonString string) string {
+	cleaned := jsonString
+	if strings.HasPrefix(cleaned, "```json\n") {
+		cleaned = strings.TrimPrefix(cleaned, "```json\n")
+	}
+	if strings.HasPrefix(cleaned, "```json") {
+		cleaned = strings.TrimPrefix(cleaned, "```json")
+	}
+	if strings.HasSuffix(cleaned, "\n```") {
+		cleaned = strings.TrimSuffix(cleaned, "\n```")
+	}
+	if strings.HasSuffix(cleaned, "```") {
+		cleaned = strings.TrimSuffix(cleaned, "```")
+	}
+	return strings.TrimSpace(cleaned)
+}
+
+// invokeLLMForAnalysis 调用LLM进行分析
+func (fa *SmartFeedbackAnalyzer) invokeLLMForAnalysis(ctx context.Context, promptMessage llminterface.InputMessage) (string, error) {
+	chatInput := llminterface.ChatInput{
+		Messages: []llminterface.InputMessage{promptMessage},
+	}
+
+	if fa.llm == nil {
+		return "", fmt.Errorf("LLM未初始化")
+	}
+
+	outputChan, err := fa.llm.Chat(ctx, chatInput)
+	if err != nil {
+		return "", fmt.Errorf("LLM Chat调用失败: %w", err)
+	}
+
+	var fullResponse strings.Builder
+	for chunk := range outputChan {
+		if chunk.Error != nil && !errors.Is(chunk.Error, context.DeadlineExceeded) {
+			// Handle partial errors or decide to fail fast
+			fa.logger.Error("LLM分析流错误", "error", chunk.Error)
+			// Depending on the desired behavior, you might return here or try to process partial results
+			return "", fmt.Errorf("LLM流处理错误: %w", chunk.Error)
+		}
+
+		for _, part := range chunk.ContentParts {
+			if part.Type == llminterface.PartTypeText {
+				fullResponse.WriteString(part.Text)
+			}
+		}
+	}
+	return fullResponse.String(), nil
+}
+
+// convertAgentResultToAnalysis 将Agent结果转换为标准分析结果
+func (fa *SmartFeedbackAnalyzer) convertAgentResultToAnalysis(agentResultJSON string) (types.AgentOutputAnalysis, error) {
+	cleanedJSON := fa.cleanLLMJSONOutput(agentResultJSON) // Use the helper
+
+	var agentFeedback AgentFeedbackAnalysisResult
+	err := json.Unmarshal([]byte(cleanedJSON), &agentFeedback)
+	if err != nil {
+		return types.AgentOutputAnalysis{}, fmt.Errorf("解析Agent反馈JSON失败: %w, json_content: %s", err, cleanedJSON)
+	}
+
+	analysis := types.AgentOutputAnalysis{
+		KeyFindings:         agentFeedback.KeyFindings,
+		ActionableInsights:  agentFeedback.ActionableInsights,
+		RequiresUserInput:   agentFeedback.RequiresUserInput,
+		ConfidenceLevel:     agentFeedback.ConfidenceLevel,
+		RecommendedActions:  agentFeedback.RecommendedActions,
+		RiskAssessment:      agentFeedback.RiskAssessment,
+		NextStepSuggestions: agentFeedback.NextStepSuggestions,
+	}
+	if len(agentFeedback.PatternsDetected) > 0 {
+		fa.logger.Debug("LLM检测到的模式", "patterns", agentFeedback.PatternsDetected)
+	}
+	if len(agentFeedback.ImprovementOpportunities) > 0 {
+		fa.logger.Debug("LLM建议的改进机会", "opportunities", agentFeedback.ImprovementOpportunities)
+	}
+
+	return analysis, nil
+}
+
+// updateAnalysisHistory 更新分析历史
+func (fa *SmartFeedbackAnalyzer) updateAnalysisHistory(results []types.ExecutionResult, analysis types.AgentOutputAnalysis) {
+	record := FeedbackAnalysisRecord{
+		Timestamp: time.Now(),
+		Results:   results, // Storing full results might be memory intensive; consider summaries.
+		Analysis:  analysis,
+		AnalysisContext: map[string]any{
+			"config_snapshot": fa.config, // Storing the whole config might be large. Consider storing key params or version.
+			"result_count":    len(results),
+		},
+	}
+
+	fa.analysisHistory = append(fa.analysisHistory, record)
+
+	if len(fa.analysisHistory) > fa.config.HistoryRetention && fa.config.HistoryRetention > 0 {
+		excess := len(fa.analysisHistory) - fa.config.HistoryRetention
+		fa.analysisHistory = fa.analysisHistory[excess:]
+	}
+}
+
+// createFallbackAnalysis 创建后备分析 (当AI分析失败时)
+func (fa *SmartFeedbackAnalyzer) createFallbackAnalysis(results []types.ExecutionResult) types.AgentOutputAnalysis {
+	fa.logger.Info("执行后备分析")
+	basicStats := fa.performBasicAnalysis(results)
+
+	failureRate, _ := basicStats["failure_rate"].(float64)
+	errorCount := 0
+	if errors, ok := basicStats["errors"].([]string); ok {
+		errorCount = len(errors)
+	}
+
+	riskLevel := "low"
+	if failureRate > 0.5 || errorCount > 3 {
+		riskLevel = "high"
+	} else if failureRate > 0.2 || errorCount > 0 {
+		riskLevel = "medium"
+	}
+
+	keyFindings := []string{
+		fmt.Sprintf("总共执行任务数: %v", basicStats["total_count"]),
+		fmt.Sprintf("成功率: %.2f%%", basicStats["success_rate"].(float64)*100),
+	}
+	if errorCount > 0 {
+		keyFindings = append(keyFindings, fmt.Sprintf("错误数: %d", errorCount))
+	}
+
+	return types.AgentOutputAnalysis{
+		KeyFindings:        keyFindings,
+		ActionableInsights: []string{"建议检查执行日志以获取详细信息。"},
+		RequiresUserInput:  riskLevel == "high" || failureRate > 0.6,
+		ConfidenceLevel:    0.2, // Low confidence for fallback
+		RecommendedActions: []string{"如果问题持续存在，请查看错误并考虑调整配置。"},
+		RiskAssessment: types.RiskAssessment{
+			Level:       riskLevel,
+			Factors:     []string{fmt.Sprintf("失败率: %.2f", failureRate), fmt.Sprintf("错误数: %d", errorCount)},
+			Mitigation:  []string{"审查失败的任务并解决根本原因。"},
+			Description: "基于基本统计数据的后备风险评估。",
+		},
+		NextStepSuggestions: []string{"重试失败的任务或调整策略。"},
+	}
 }
 
 // 私有辅助方法
@@ -465,6 +888,577 @@ func (fa *SmartFeedbackAnalyzer) performBasicAnalysis(
 	}
 }
 
+func (fa *SmartFeedbackAnalyzer) detectSuccessFailurePattern(
+	history []types.ExecutionResult,
+) string {
+	if len(history) < 5 {
+		return ""
+	}
+
+	// 检查最近的成功/失败模式
+	recent := history[len(history)-5:]
+	successCount := 0
+	for _, result := range recent {
+		if result.Status == types.ExecutionStatusSuccess {
+			successCount++
+		}
+	}
+
+	if successCount == 5 {
+		return "连续成功模式：最近5次执行全部成功"
+	} else if successCount == 0 {
+		return "连续失败模式：最近5次执行全部失败"
+	} else if successCount >= 4 {
+		return "高成功率模式：最近执行成功率很高"
+	} else if successCount <= 1 {
+		return "高失败率模式：最近执行成功率很低"
+	}
+
+	return ""
+}
+
+func (fa *SmartFeedbackAnalyzer) detectTimePattern(
+	history []types.ExecutionResult,
+) string {
+	if len(history) < 3 {
+		return ""
+	}
+
+	durations := []time.Duration{}
+	for _, result := range history {
+		duration := result.EndTime.Sub(result.StartTime)
+		durations = append(durations, duration)
+	}
+
+	// 检查执行时间趋势
+	if len(durations) >= 3 {
+		last3 := durations[len(durations)-3:]
+		if last3[0] < last3[1] && last3[1] < last3[2] {
+			return "执行时间递增模式：任务执行时间逐渐增长"
+		} else if last3[0] > last3[1] && last3[1] > last3[2] {
+			return "执行时间递减模式：任务执行时间逐渐缩短"
+		}
+	}
+
+	return ""
+}
+
+func (fa *SmartFeedbackAnalyzer) detectErrorPattern(
+	history []types.ExecutionResult,
+) string {
+	errorCount := 0
+	for _, result := range history {
+		if result.Status == types.ExecutionStatusFailure && result.Error != "" {
+			errorCount++
+		}
+	}
+
+	if errorCount > len(history)/2 {
+		return "高错误率模式：大部分执行都出现错误"
+	}
+
+	return ""
+}
+
+func (fa *SmartFeedbackAnalyzer) detectPerformancePattern(
+	history []types.ExecutionResult,
+) string {
+	if len(history) < 5 {
+		return ""
+	}
+
+	// 计算平均执行时间
+	totalDuration := time.Duration(0)
+	for _, result := range history {
+		totalDuration += result.EndTime.Sub(result.StartTime)
+	}
+	avgDuration := totalDuration / time.Duration(len(history))
+
+	if avgDuration > 10*time.Minute {
+		return "性能问题模式：平均执行时间过长"
+	}
+
+	return ""
+}
+
+func (fa *SmartFeedbackAnalyzer) predictFromResults(
+	results []types.ExecutionResult,
+) []string {
+	predictions := []string{}
+
+	successCount := 0
+	for _, result := range results {
+		if result.Status == types.ExecutionStatusSuccess {
+			successCount++
+		}
+	}
+
+	successRate := float64(successCount) / float64(len(results))
+
+	if successRate > 0.8 {
+		predictions = append(predictions, "基于当前成功率，建议继续当前策略")
+	} else if successRate < 0.5 {
+		predictions = append(predictions, "基于当前失败率，建议调整执行策略")
+	}
+
+	return predictions
+}
+
+func (fa *SmartFeedbackAnalyzer) predictFromSystemState(
+	systemState types.SystemState,
+) []string {
+	predictions := []string{}
+
+	if systemState.ErrorCount > 3 {
+		predictions = append(predictions, "系统错误较多，建议进行健康检查")
+	}
+
+	if systemState.IsWaitingMode {
+		predictions = append(predictions, "系统处于等待模式，可能需要外部触发")
+	}
+
+	return predictions
+}
+
+func (fa *SmartFeedbackAnalyzer) predictFromHistory() []string {
+	predictions := []string{}
+
+	if len(fa.analysisHistory) > 10 {
+		recentAnalyses := fa.analysisHistory[len(fa.analysisHistory)-10:]
+		avgConfidence := 0.0
+		for _, analysis := range recentAnalyses {
+			avgConfidence += analysis.Analysis.ConfidenceLevel
+		}
+		avgConfidence /= float64(len(recentAnalyses))
+
+		if avgConfidence > 0.8 {
+			predictions = append(predictions, "基于历史分析，系统运行稳定")
+		} else if avgConfidence < 0.5 {
+			predictions = append(predictions, "基于历史分析，系统需要优化")
+		}
+	}
+
+	return predictions
+}
+
+func (fa *SmartFeedbackAnalyzer) deduplicateAndSort(
+	predictions []string,
+) []string {
+	seen := make(map[string]bool)
+	unique := []string{}
+
+	for _, pred := range predictions {
+		if !seen[pred] {
+			seen[pred] = true
+			unique = append(unique, pred)
+		}
+	}
+
+	sort.Strings(unique)
+	return unique
+}
+
+func (fa *SmartFeedbackAnalyzer) determineRiskLevel(score float64) string {
+	if score >= 0.8 {
+		return "high"
+	} else if score >= 0.5 {
+		return "medium"
+	}
+	return "low"
+}
+
+func (fa *SmartFeedbackAnalyzer) isCriticalError(errorMsg string) bool {
+	criticalKeywords := []string{
+		"panic", "fatal", "critical", "severe",
+		"崩溃", "严重", "致命", "关键",
+	}
+
+	errorLower := strings.ToLower(errorMsg)
+	for _, keyword := range criticalKeywords {
+		if strings.Contains(errorLower, keyword) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (fa *SmartFeedbackAnalyzer) extractKeyTerms(
+	observations []string,
+	outputs []string,
+) []string {
+	// 简化的关键词提取
+	termCount := make(map[string]int)
+
+	allText := append(observations, outputs...)
+	for _, text := range allText {
+		words := strings.Fields(strings.ToLower(text))
+		for _, word := range words {
+			if len(word) > 3 { // 只考虑长度大于3的词
+				termCount[word]++
+			}
+		}
+	}
+
+	// 找出频率最高的词
+	var terms []string
+	for term, count := range termCount {
+		if count > 1 {
+			terms = append(terms, term)
+		}
+	}
+
+	if len(terms) > 10 {
+		terms = terms[:10] // 限制返回数量
+	}
+
+	return terms
+}
+
+func (fa *SmartFeedbackAnalyzer) analyzeSentiment(
+	observations []string,
+	outputs []string,
+) string {
+	// 简化的情感分析
+	positiveWords := []string{"成功", "完成", "正确", "好", "excellent", "success", "complete"}
+	negativeWords := []string{"失败", "错误", "问题", "异常", "error", "fail", "problem", "issue"}
+
+	allText := strings.Join(append(observations, outputs...), " ")
+	allTextLower := strings.ToLower(allText)
+
+	positiveCount := 0
+	negativeCount := 0
+
+	for _, word := range positiveWords {
+		positiveCount += strings.Count(allTextLower, word)
+	}
+
+	for _, word := range negativeWords {
+		negativeCount += strings.Count(allTextLower, word)
+	}
+
+	if positiveCount > negativeCount {
+		return "positive"
+	} else if negativeCount > positiveCount {
+		return "negative"
+	}
+
+	return "neutral"
+}
+
+func (fa *SmartFeedbackAnalyzer) analyzeDurationTrend(
+	durations []time.Duration,
+) string {
+	if len(durations) < 3 {
+		return "insufficient_data"
+	}
+
+	// 简化的趋势分析
+	increasing := 0
+	decreasing := 0
+
+	for i := 1; i < len(durations); i++ {
+		if durations[i] > durations[i-1] {
+			increasing++
+		} else if durations[i] < durations[i-1] {
+			decreasing++
+		}
+	}
+
+	if increasing > decreasing {
+		return "increasing"
+	} else if decreasing > increasing {
+		return "decreasing"
+	}
+
+	return "stable"
+}
+
+func (fa *SmartFeedbackAnalyzer) buildAnalysisPromptData(results []types.ExecutionResult) (AgentAnalysisPromptData, error) {
+	totalResults := len(results)
+	successCount := 0
+	failureCount := 0
+	detailedResultsBuilder := strings.Builder{}
+
+	for i, res := range results {
+		if res.Status == types.ExecutionStatusSuccess {
+			successCount++
+		} else if res.Status == types.ExecutionStatusFailure {
+			failureCount++
+		}
+		detailedResultsBuilder.WriteString(fmt.Sprintf("  结果 %d:%s", i+1, "\n"))
+		detailedResultsBuilder.WriteString(fmt.Sprintf("    任务ID: %s%s", res.TaskID, "\n"))
+		detailedResultsBuilder.WriteString(fmt.Sprintf("    状态: %s%s", res.Status, "\n"))
+		if res.Error != "" {
+			detailedResultsBuilder.WriteString(fmt.Sprintf("    错误: %s%s", res.Error, "\n"))
+		}
+		detailedResultsBuilder.WriteString(fmt.Sprintf("    开始时间: %s%s", res.StartTime.Format(time.RFC3339), "\n"))
+		detailedResultsBuilder.WriteString(fmt.Sprintf("    结束时间: %s%s", res.EndTime.Format(time.RFC3339), "\n"))
+		outputBytes, err := json.Marshal(res.Output)
+		if err == nil {
+			detailedResultsBuilder.WriteString(fmt.Sprintf("    输出: %s%s", string(outputBytes), "\n"))
+		} else {
+			detailedResultsBuilder.WriteString(fmt.Sprintf("    输出: (无法序列化: %v)%s", err, "\n"))
+		}
+		if len(res.Observations) > 0 {
+			detailedResultsBuilder.WriteString(fmt.Sprintf("    观察: %s%s", strings.Join(res.Observations, "; "), "\n"))
+		}
+	}
+
+	successRate := 0.0
+	if totalResults > 0 {
+		successRate = float64(successCount) / float64(totalResults) * 100
+	}
+
+	analysisRequirements := "请进行详细分析并提供可操作的见解。" // Default or from config
+	historicalContext := make(map[string]any)
+	if fa.config.EnableHistoryAnalysis && len(fa.analysisHistory) > 0 {
+		historicalContext["previous_analysis_count"] = len(fa.analysisHistory)
+		if len(fa.analysisHistory) > 0 {
+			lastRecord := fa.analysisHistory[len(fa.analysisHistory)-1]
+			historicalContext["last_analysis_confidence"] = lastRecord.Analysis.ConfidenceLevel
+			historicalContext["last_analysis_risk"] = lastRecord.Analysis.RiskAssessment.Level
+		}
+	}
+
+	data := AgentAnalysisPromptData{
+		TotalResults:         totalResults,
+		SuccessCount:         successCount,
+		FailureCount:         failureCount,
+		SuccessRate:          successRate,
+		DetailedResults:      detailedResultsBuilder.String(),
+		AnalysisRequirements: analysisRequirements,
+		HistoricalContext:    historicalContext,
+	}
+	return data, nil
+}
+
+// --- Structs for Risk Assessment (New) ---
+type RiskAssessmentPromptData struct {
+	CurrentResultsSummary  string         `json:"current_results_summary"`
+	ProposedActionsSummary string         `json:"proposed_actions_summary"`
+	SystemStateSummary     string         `json:"system_state_summary"`
+	HistoricalContext      map[string]any `json:"historical_context,omitempty"`
+	AnalysisRequirements   string         `json:"analysis_requirements"`
+}
+
+// AgentRiskAssessmentResult LLM返回的风险评估结果 (matches JSON in riskAssessmentPromptTemplate)
+type AgentRiskAssessmentResult struct {
+	Level                   string   `json:"level"`
+	Factors                 []string `json:"factors"`
+	Mitigation              []string `json:"mitigation"`
+	Description             string   `json:"description"`
+	PredictedImpactIfOccurs string   `json:"predicted_impact_if_occurs,omitempty"` // Optional based on template
+	ProbabilityAssessment   string   `json:"probability_assessment,omitempty"`     // Optional based on template
+}
+
+// buildRiskAssessmentPromptData 构建风险评估的提示数据
+func (fa *SmartFeedbackAnalyzer) buildRiskAssessmentPromptData(
+	currentResults []types.ExecutionResult,
+	proposedActions []types.Task,
+	systemState types.SystemState,
+	history []FeedbackAnalysisRecord,
+) (RiskAssessmentPromptData, error) {
+	// Summarize currentResults
+	crSummaryBuilder := strings.Builder{}
+	crSummaryBuilder.WriteString(fmt.Sprintf("最近执行结果 (%d条):\n", len(currentResults)))
+	for i, r := range currentResults {
+		if i >= 3 { // Limit summary to a few recent results
+			crSummaryBuilder.WriteString(fmt.Sprintf("...还有%d条更早的结果\n", len(currentResults)-i))
+			break
+		}
+		crSummaryBuilder.WriteString(fmt.Sprintf("  - 状态: %s, 错误: %s\n", r.Status, r.Error))
+	}
+
+	// Summarize proposedActions
+	paSummaryBuilder := strings.Builder{}
+	paSummaryBuilder.WriteString(fmt.Sprintf("计划行动 (%d条):\n", len(proposedActions)))
+	for i, a := range proposedActions {
+		if i >= 3 { // Limit summary
+			paSummaryBuilder.WriteString(fmt.Sprintf("...还有%d个行动\n", len(proposedActions)-i))
+			break
+		}
+		paSummaryBuilder.WriteString(fmt.Sprintf("  - 任务ID: %s, 类型: %s, 优先级: %d\n", a.ID, a.Type, a.Priority))
+	}
+
+	// Summarize systemState
+	ssSummary := fmt.Sprintf("当前系统状态: 活跃=%t, 错误数=%d, 等待模式=%t\n", systemState.IsActive, systemState.ErrorCount, systemState.IsWaitingMode)
+
+	// Summarize history
+	historicalCtx := make(map[string]any)
+	if fa.config.EnableHistoryAnalysis && len(history) > 0 {
+		historicalCtx["total_historical_analyses"] = len(history)
+		// Add more specific historical data points if needed, e.g., past high-risk events
+		if len(history) > 0 {
+			lastRecord := history[len(history)-1]
+			historicalCtx["last_analysis_risk_level"] = lastRecord.Analysis.RiskAssessment.Level
+			historicalCtx["last_analysis_factors_count"] = len(lastRecord.Analysis.RiskAssessment.Factors)
+		}
+	}
+	analysisReq := "请全面评估风险因素、可能性和潜在影响，并提供缓解措施。"
+
+	data := RiskAssessmentPromptData{
+		CurrentResultsSummary:  crSummaryBuilder.String(),
+		ProposedActionsSummary: paSummaryBuilder.String(),
+		SystemStateSummary:     ssSummary,
+		HistoricalContext:      historicalCtx,
+		AnalysisRequirements:   analysisReq,
+	}
+	return data, nil
+}
+
+// convertLLMResultToRiskAssessment 将LLM的JSON输出转换为 types.RiskAssessment 类型
+func (fa *SmartFeedbackAnalyzer) convertLLMResultToRiskAssessment(llmResultJSON string) (types.RiskAssessment, error) {
+	cleanedJSON := fa.cleanLLMJSONOutput(llmResultJSON)
+
+	var agentAssessment AgentRiskAssessmentResult
+	err := json.Unmarshal([]byte(cleanedJSON), &agentAssessment)
+	if err != nil {
+		return types.RiskAssessment{}, fmt.Errorf("解析LLM风险评估JSON失败: %w, json_content: %s", err, cleanedJSON)
+	}
+
+	// Map from AgentRiskAssessmentResult to types.RiskAssessment
+	// Note: types.RiskAssessment might not have PredictedImpactIfOccurs and ProbabilityAssessment.
+	// The prompt asks for them, so they'll be in AgentRiskAssessmentResult.
+	// We only map what's available in types.RiskAssessment.
+	// If types.RiskAssessment is to be extended, this mapping should be updated.
+	riskAssessment := types.RiskAssessment{
+		Level:       agentAssessment.Level,
+		Factors:     agentAssessment.Factors,
+		Mitigation:  agentAssessment.Mitigation,
+		Description: agentAssessment.Description,
+	}
+
+	// Log extra fields if needed
+	if agentAssessment.PredictedImpactIfOccurs != "" {
+		fa.logger.Debug("LLM风险评估 - 预测影响", "impact", agentAssessment.PredictedImpactIfOccurs)
+	}
+	if agentAssessment.ProbabilityAssessment != "" {
+		fa.logger.Debug("LLM风险评估 - 概率评估", "probability", agentAssessment.ProbabilityAssessment)
+	}
+
+	return riskAssessment, nil
+}
+
+// buildInsightsGenerationPromptData 构建洞察生成的提示数据
+func (fa *SmartFeedbackAnalyzer) buildInsightsGenerationPromptData(
+	baseAnalysis types.AgentOutputAnalysis,
+	history []types.ExecutionResult,
+	detectedPatterns []string,
+) (InsightsGenerationPromptData, error) {
+	// Summarize baseAnalysis
+	baseAnalysisSummary := fmt.Sprintf("基础分析摘要: 关键发现数=%d, 风险级别=%s, 置信度=%.2f",
+		len(baseAnalysis.KeyFindings),
+		baseAnalysis.RiskAssessment.Level,
+		baseAnalysis.ConfidenceLevel)
+
+	// Summarize history - keeping it concise for the prompt
+	historicalDataSummaryBuilder := strings.Builder{}
+	historicalDataSummaryBuilder.WriteString(fmt.Sprintf("历史执行结果摘要 (%d条):\n", len(history)))
+	successCount := 0
+	failureCount := 0
+	limit := 5 // Limit how many historical results to detail to keep prompt shorter
+	for i, res := range history {
+		if res.Status == types.ExecutionStatusSuccess {
+			successCount++
+		} else {
+			failureCount++
+		}
+		if i < limit {
+			historicalDataSummaryBuilder.WriteString(fmt.Sprintf("  - 结果 %d: 状态=%s, 耗时=%s\n",
+				i+1, res.Status, res.EndTime.Sub(res.StartTime)))
+		}
+	}
+	if len(history) > limit {
+		historicalDataSummaryBuilder.WriteString(fmt.Sprintf("...等 %d 条更早的记录...\n", len(history)-limit))
+	}
+	historicalDataSummaryBuilder.WriteString(fmt.Sprintf("历史总览: %d 成功, %d 失败\n", successCount, failureCount))
+
+	// Summarize detectedPatterns
+	detectedPatternsSummary := fmt.Sprintf("已识别的模式: %s", strings.Join(detectedPatterns, ", "))
+	if len(detectedPatterns) == 0 {
+		detectedPatternsSummary = "已识别的模式: 无"
+	}
+
+	analysisRequirements := "请基于提供的信息进行深度分析，生成包含核心发现、可执行建议、改进机会、预测下一步和置信度的洞察报告。"
+
+	// Populate historical context if needed, similar to other prompt builders
+	historicalCtx := make(map[string]any)
+	if fa.config.EnableHistoryAnalysis && len(fa.analysisHistory) > 0 {
+		// Example: add overall system stability trend if available from history
+		historicalCtx["num_past_analyses"] = len(fa.analysisHistory)
+	}
+
+	data := InsightsGenerationPromptData{
+		BaseAnalysisSummary:     baseAnalysisSummary,
+		HistoricalDataSummary:   historicalDataSummaryBuilder.String(),
+		DetectedPatternsSummary: detectedPatternsSummary,
+		AnalysisRequirements:    analysisRequirements,
+		HistoricalContext:       historicalCtx,
+	}
+	return data, nil
+}
+
+// convertLLMResultToGeneratedInsights 将LLM的JSON输出转换为 types.GeneratedInsights 类型
+func (fa *SmartFeedbackAnalyzer) convertLLMResultToGeneratedInsights(llmResultJSON string) (types.GeneratedInsights, error) {
+	cleanedJSON := fa.cleanLLMJSONOutput(llmResultJSON)
+
+	var agentInsights AgentInsightsResult
+	err := json.Unmarshal([]byte(cleanedJSON), &agentInsights)
+	if err != nil {
+		return types.GeneratedInsights{}, fmt.Errorf("解析LLM洞察生成JSON失败: %w, json_content: %s", err, cleanedJSON)
+	}
+
+	// Map from AgentInsightsResult to types.GeneratedInsights
+	// The structures are designed to be similar, but explicit mapping is safer.
+	generatedInsights := types.GeneratedInsights{
+		KeyTakeaways:       agentInsights.KeyTakeaways,
+		PredictedNextSteps: agentInsights.PredictedNextSteps,
+		ConfidenceLevel:    agentInsights.ConfidenceLevel,
+		Summary:            agentInsights.Summary,
+		ActionableRecommendations: make([]struct {
+			Recommendation  string `json:"recommendation"`
+			Rationale       string `json:"rationale"`
+			Priority        string `json:"priority"`
+			PotentialImpact string `json:"potential_impact"`
+		}, len(agentInsights.ActionableRecommendations)),
+		ImprovementOpportunities: make([]struct {
+			Opportunity      string `json:"opportunity"`
+			PotentialBenefit string `json:"potential_benefit"`
+			Difficulty       string `json:"difficulty"`
+		}, len(agentInsights.ImprovementOpportunities)),
+	}
+
+	for i, ar := range agentInsights.ActionableRecommendations {
+		generatedInsights.ActionableRecommendations[i] = struct {
+			Recommendation  string `json:"recommendation"`
+			Rationale       string `json:"rationale"`
+			Priority        string `json:"priority"`
+			PotentialImpact string `json:"potential_impact"`
+		}{
+			Recommendation:  ar.Recommendation,
+			Rationale:       ar.Rationale,
+			Priority:        ar.Priority,
+			PotentialImpact: ar.PotentialImpact,
+		}
+	}
+
+	for i, io := range agentInsights.ImprovementOpportunities {
+		generatedInsights.ImprovementOpportunities[i] = struct {
+			Opportunity      string `json:"opportunity"`
+			PotentialBenefit string `json:"potential_benefit"`
+			Difficulty       string `json:"difficulty"`
+		}{
+			Opportunity:      io.Opportunity,
+			PotentialBenefit: io.PotentialBenefit,
+			Difficulty:       io.Difficulty,
+		}
+	}
+
+	return generatedInsights, nil
+}
+
+// 未使用的函数
 func (fa *SmartFeedbackAnalyzer) performContentAnalysis(
 	ctx context.Context,
 	results []types.ExecutionResult,
@@ -766,183 +1760,11 @@ func (fa *SmartFeedbackAnalyzer) recordAnalysis(
 	}
 }
 
-// 辅助方法实现
-
-func (fa *SmartFeedbackAnalyzer) detectSuccessFailurePattern(
-	history []types.ExecutionResult,
-) string {
-	if len(history) < 5 {
-		return ""
-	}
-
-	// 检查最近的成功/失败模式
-	recent := history[len(history)-5:]
-	successCount := 0
-	for _, result := range recent {
-		if result.Status == types.ExecutionStatusSuccess {
-			successCount++
-		}
-	}
-
-	if successCount == 5 {
-		return "连续成功模式：最近5次执行全部成功"
-	} else if successCount == 0 {
-		return "连续失败模式：最近5次执行全部失败"
-	} else if successCount >= 4 {
-		return "高成功率模式：最近执行成功率很高"
-	} else if successCount <= 1 {
-		return "高失败率模式：最近执行成功率很低"
-	}
-
-	return ""
-}
-
-func (fa *SmartFeedbackAnalyzer) detectTimePattern(
-	history []types.ExecutionResult,
-) string {
-	if len(history) < 3 {
-		return ""
-	}
-
-	durations := []time.Duration{}
-	for _, result := range history {
-		duration := result.EndTime.Sub(result.StartTime)
-		durations = append(durations, duration)
-	}
-
-	// 检查执行时间趋势
-	if len(durations) >= 3 {
-		last3 := durations[len(durations)-3:]
-		if last3[0] < last3[1] && last3[1] < last3[2] {
-			return "执行时间递增模式：任务执行时间逐渐增长"
-		} else if last3[0] > last3[1] && last3[1] > last3[2] {
-			return "执行时间递减模式：任务执行时间逐渐缩短"
-		}
-	}
-
-	return ""
-}
-
 func (fa *SmartFeedbackAnalyzer) detectTaskTypePattern(
 	history []types.ExecutionResult,
 ) string {
 	// 这里需要更多的任务类型信息，暂时简化实现
 	return ""
-}
-
-func (fa *SmartFeedbackAnalyzer) detectErrorPattern(
-	history []types.ExecutionResult,
-) string {
-	errorCount := 0
-	for _, result := range history {
-		if result.Status == types.ExecutionStatusFailure && result.Error != "" {
-			errorCount++
-		}
-	}
-
-	if errorCount > len(history)/2 {
-		return "高错误率模式：大部分执行都出现错误"
-	}
-
-	return ""
-}
-
-func (fa *SmartFeedbackAnalyzer) detectPerformancePattern(
-	history []types.ExecutionResult,
-) string {
-	if len(history) < 5 {
-		return ""
-	}
-
-	// 计算平均执行时间
-	totalDuration := time.Duration(0)
-	for _, result := range history {
-		totalDuration += result.EndTime.Sub(result.StartTime)
-	}
-	avgDuration := totalDuration / time.Duration(len(history))
-
-	if avgDuration > 10*time.Minute {
-		return "性能问题模式：平均执行时间过长"
-	}
-
-	return ""
-}
-
-func (fa *SmartFeedbackAnalyzer) predictFromResults(
-	results []types.ExecutionResult,
-) []string {
-	predictions := []string{}
-
-	successCount := 0
-	for _, result := range results {
-		if result.Status == types.ExecutionStatusSuccess {
-			successCount++
-		}
-	}
-
-	successRate := float64(successCount) / float64(len(results))
-
-	if successRate > 0.8 {
-		predictions = append(predictions, "基于当前成功率，建议继续当前策略")
-	} else if successRate < 0.5 {
-		predictions = append(predictions, "基于当前失败率，建议调整执行策略")
-	}
-
-	return predictions
-}
-
-func (fa *SmartFeedbackAnalyzer) predictFromSystemState(
-	systemState types.SystemState,
-) []string {
-	predictions := []string{}
-
-	if systemState.ErrorCount > 3 {
-		predictions = append(predictions, "系统错误较多，建议进行健康检查")
-	}
-
-	if systemState.IsWaitingMode {
-		predictions = append(predictions, "系统处于等待模式，可能需要外部触发")
-	}
-
-	return predictions
-}
-
-func (fa *SmartFeedbackAnalyzer) predictFromHistory() []string {
-	predictions := []string{}
-
-	if len(fa.analysisHistory) > 10 {
-		recentAnalyses := fa.analysisHistory[len(fa.analysisHistory)-10:]
-		avgConfidence := 0.0
-		for _, analysis := range recentAnalyses {
-			avgConfidence += analysis.Analysis.ConfidenceLevel
-		}
-		avgConfidence /= float64(len(recentAnalyses))
-
-		if avgConfidence > 0.8 {
-			predictions = append(predictions, "基于历史分析，系统运行稳定")
-		} else if avgConfidence < 0.5 {
-			predictions = append(predictions, "基于历史分析，系统需要优化")
-		}
-	}
-
-	return predictions
-}
-
-func (fa *SmartFeedbackAnalyzer) deduplicateAndSort(
-	predictions []string,
-) []string {
-	seen := make(map[string]bool)
-	unique := []string{}
-
-	for _, pred := range predictions {
-		if !seen[pred] {
-			seen[pred] = true
-			unique = append(unique, pred)
-		}
-	}
-
-	sort.Strings(unique)
-	return unique
 }
 
 func (fa *SmartFeedbackAnalyzer) identifyRiskFactors(
@@ -995,15 +1817,6 @@ func (fa *SmartFeedbackAnalyzer) calculateRiskScore(
 	return score
 }
 
-func (fa *SmartFeedbackAnalyzer) determineRiskLevel(score float64) string {
-	if score >= 0.8 {
-		return "high"
-	} else if score >= 0.5 {
-		return "medium"
-	}
-	return "low"
-}
-
 func (fa *SmartFeedbackAnalyzer) generateMitigationStrategies(
 	factors []string,
 	level string,
@@ -1038,113 +1851,6 @@ func (fa *SmartFeedbackAnalyzer) generateRiskDescription(
 	}
 
 	return description
-}
-
-func (fa *SmartFeedbackAnalyzer) isCriticalError(errorMsg string) bool {
-	criticalKeywords := []string{
-		"panic", "fatal", "critical", "severe",
-		"崩溃", "严重", "致命", "关键",
-	}
-
-	errorLower := strings.ToLower(errorMsg)
-	for _, keyword := range criticalKeywords {
-		if strings.Contains(errorLower, keyword) {
-			return true
-		}
-	}
-
-	return false
-}
-
-func (fa *SmartFeedbackAnalyzer) extractKeyTerms(
-	observations []string,
-	outputs []string,
-) []string {
-	// 简化的关键词提取
-	termCount := make(map[string]int)
-
-	allText := append(observations, outputs...)
-	for _, text := range allText {
-		words := strings.Fields(strings.ToLower(text))
-		for _, word := range words {
-			if len(word) > 3 { // 只考虑长度大于3的词
-				termCount[word]++
-			}
-		}
-	}
-
-	// 找出频率最高的词
-	var terms []string
-	for term, count := range termCount {
-		if count > 1 {
-			terms = append(terms, term)
-		}
-	}
-
-	if len(terms) > 10 {
-		terms = terms[:10] // 限制返回数量
-	}
-
-	return terms
-}
-
-func (fa *SmartFeedbackAnalyzer) analyzeSentiment(
-	observations []string,
-	outputs []string,
-) string {
-	// 简化的情感分析
-	positiveWords := []string{"成功", "完成", "正确", "好", "excellent", "success", "complete"}
-	negativeWords := []string{"失败", "错误", "问题", "异常", "error", "fail", "problem", "issue"}
-
-	allText := strings.Join(append(observations, outputs...), " ")
-	allTextLower := strings.ToLower(allText)
-
-	positiveCount := 0
-	negativeCount := 0
-
-	for _, word := range positiveWords {
-		positiveCount += strings.Count(allTextLower, word)
-	}
-
-	for _, word := range negativeWords {
-		negativeCount += strings.Count(allTextLower, word)
-	}
-
-	if positiveCount > negativeCount {
-		return "positive"
-	} else if negativeCount > positiveCount {
-		return "negative"
-	}
-
-	return "neutral"
-}
-
-func (fa *SmartFeedbackAnalyzer) analyzeDurationTrend(
-	durations []time.Duration,
-) string {
-	if len(durations) < 3 {
-		return "insufficient_data"
-	}
-
-	// 简化的趋势分析
-	increasing := 0
-	decreasing := 0
-
-	for i := 1; i < len(durations); i++ {
-		if durations[i] > durations[i-1] {
-			increasing++
-		} else if durations[i] < durations[i-1] {
-			decreasing++
-		}
-	}
-
-	if increasing > decreasing {
-		return "increasing"
-	} else if decreasing > increasing {
-		return "decreasing"
-	}
-
-	return "stable"
 }
 
 func (fa *SmartFeedbackAnalyzer) generateHistoricalInsights() []string {

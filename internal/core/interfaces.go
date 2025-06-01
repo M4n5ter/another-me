@@ -315,13 +315,17 @@ type FeedbackAnalyzer interface {
 	// 基于历史数据和当前结果预测最优的下一步操作
 	PredictNextSteps(ctx context.Context, currentResults []types.ExecutionResult, systemState types.SystemState) ([]string, error)
 
-	// AssessRisk 评估风险
-	// 分析当前操作可能的风险和影响
-	AssessRisk(ctx context.Context, proposedActions []types.Task, systemState types.SystemState) (types.RiskAssessment, error)
+	// AssessRisk 评估风险 (修改)
+	// 通过LLM，基于当前结果、提议的行动、系统状态和历史数据进行风险预测
+	AssessRisk(ctx context.Context, currentResults []types.ExecutionResult, proposedActions []types.Task, systemState types.SystemState, history []FeedbackAnalysisRecord) (types.RiskAssessment, error)
 
-	// GenerateInsights 生成洞察
-	// 从执行结果中生成可执行的洞察和建议
-	GenerateInsights(ctx context.Context, analysis types.AgentOutputAnalysis) ([]string, error)
+	// GenerateInsights 生成洞察 (修改)
+	// 通过LLM，从分析数据、历史记录和模式中生成更深层次的可执行洞察
+	GenerateInsights(ctx context.Context, baseAnalysis types.AgentOutputAnalysis, history []types.ExecutionResult, detectedPatterns []string) (types.GeneratedInsights, error)
+
+	// AssessExecutionQuality 评估执行质量 (新方法)
+	// 基于执行结果，通过LLM进行多维度质量评估
+	AssessExecutionQuality(ctx context.Context, results []types.ExecutionResult) (types.QualityAssessment, error)
 }
 
 // TaskFlowManager 任务流管理器接口
