@@ -13,6 +13,7 @@ import (
 	"github.com/m4n5ter/another-me/pkg/toolcore"
 )
 
+// Decision 决策结构体
 type Decision struct {
 	ShouldExecuteTask       bool                     `json:"should_execute_task" jsonschema:"title=should_execute_task,description=Whether to execute the task,example=true,example=false,default=false"`
 	SelectedAgentType       string                   `json:"selected_agent_type"`
@@ -28,11 +29,13 @@ type Decision struct {
 	ExpectedDurationMinutes int                      `json:"expected_duration_minutes"`
 }
 
+// MakeDecisionTool 决策工具结构体
 type MakeDecisionTool struct {
 	logger  *slog.Logger
 	i18nMgr *i18n.Manager
 }
 
+// NewMakeDecisionTool 创建决策工具实例
 func NewMakeDecisionTool(i18nMgr *i18n.Manager) *MakeDecisionTool {
 	return &MakeDecisionTool{
 		logger:  slog.Default().WithGroup("decision_maker_tool"),
@@ -40,8 +43,10 @@ func NewMakeDecisionTool(i18nMgr *i18n.Manager) *MakeDecisionTool {
 	}
 }
 
+// MakeDecisionTool 实现 toolcore.Tool 接口
 var _ toolcore.Tool = (*MakeDecisionTool)(nil)
 
+// Schema 返回工具的完整模式
 func (t *MakeDecisionTool) Schema(ctx context.Context) (toolcore.ToolSchema, error) {
 	// 获取不同语言的描述文本
 	langs := t.i18nMgr.GetSupportedLanguages()
@@ -80,6 +85,7 @@ func (t *MakeDecisionTool) Schema(ctx context.Context) (toolcore.ToolSchema, err
 	}, nil
 }
 
+// Call 一般并不会被调用。
 func (t *MakeDecisionTool) Call(ctx context.Context, inputJSON string) (string, error) {
 	var decision Decision
 	if err := json.Unmarshal([]byte(inputJSON), &decision); err != nil {

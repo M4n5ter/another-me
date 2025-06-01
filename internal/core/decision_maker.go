@@ -13,7 +13,6 @@ import (
 
 	decisionmaker "github.com/m4n5ter/another-me/internal/core/tools/decision_maker"
 	"github.com/m4n5ter/another-me/internal/core/types"
-	"github.com/m4n5ter/another-me/pkg/i18n"
 	"github.com/m4n5ter/another-me/pkg/llminterface"
 	. "github.com/m4n5ter/another-me/pkg/option"
 	"github.com/m4n5ter/another-me/pkg/reactagent"
@@ -31,9 +30,7 @@ type SmartDecisionMaker struct {
 
 // DecisionMakerConfig 决策引擎配置
 type DecisionMakerConfig struct {
-	// DecisionMaker配置
-	SystemPrompt    string        `json:"system_prompt"`    // 系统提示词
-	PromptTemplate  string        `json:"prompt_template"`  // 提示词模板
+	// 决策超时配置
 	DecisionTimeout time.Duration `json:"decision_timeout"` // 决策超时时间
 	MaxRetries      int           `json:"max_retries"`      // 最大重试次数
 
@@ -55,40 +52,6 @@ type DecisionMakerConfig struct {
 // DefaultDecisionMakerConfig 返回默认决策引擎配置
 func DefaultDecisionMakerConfig() DecisionMakerConfig {
 	return DecisionMakerConfig{
-		PromptTemplate: `
-请基于以下信息进行决策分析：
-
-**用户输入**: {{.UserInput}}
-
-**相关记忆**: {{.RelevantMemories}}
-
-**当前上下文**: {{.SystemContext}}
-
-**唤醒事件**: {{.WakeupEvent}}
-
-按照以下JSON格式调用决策工具输出决策结果：
-{
-  "should_execute_task": true/false,
-  "selected_agent_type": "gui" | "react",
-  "task_type": "任务类型",
-  "task_description": "任务描述",
-  "task_priority": 1-10,
-  "task_parameters": {},
-  "should_setup_monitoring": true/false,
-  "monitoring_conditions": [],
-  "should_enter_wait_mode": true/false,
-  "reasoning_steps": ["推理步骤1", "推理步骤2"],
-  "confidence": 0.0-1.0,
-  "expected_duration_minutes": 5
-}
-
-**决策原则**:
-1. 仔细分析用户意图，选择最合适的Agent类型
-2. GUI Agent适用于：界面操作、点击、输入、截图等
-3. ReAct Agent适用于：搜索、分析、计算、工具调用等
-4. 根据任务紧急程度设置优先级
-5. 考虑是否需要设置监控任务
-6. 给出详细的推理过程和置信度评估`,
 		DecisionTimeout:          30 * time.Second,
 		MaxRetries:               3,
 		MemoryQueryLimit:         20,
@@ -100,7 +63,7 @@ func DefaultDecisionMakerConfig() DecisionMakerConfig {
 	}
 }
 
-// NewSmartDecisionMaker 创建新的智能决策引擎
+// NewSmartDecisionMaker 创建决策者
 func NewSmartDecisionMaker(
 	agent *reactagent.ReActAgent,
 	llmAdapter llminterface.ChatAdapter,
@@ -113,14 +76,17 @@ func NewSmartDecisionMaker(
 	}
 
 	registry := toolcore.NewRegistry()
-	dicisionMakerTool := decisionmaker.NewMakeDecisionTool(i18n.GlobalManager)
-	err := registry.Register(context.Background(), dicisionMakerTool)
+	err := decisionmaker.RegistDecisionMakerTools(context.Background(), registry)
 	if err != nil {
 		logger.Error("注册决策工具失败，无法继续初始化", "error", err)
 		return nil
 	}
 
-	llmAdapter.RegisterTools(context.Background(), registry)
+	err = llmAdapter.RegisterTools(context.Background(), registry)
+	if err != nil {
+		logger.Error("注册决策工具失败，无法继续初始化", "error", err)
+		return nil
+	}
 
 	return &SmartDecisionMaker{
 		agent:            agent,
@@ -132,6 +98,35 @@ func NewSmartDecisionMaker(
 }
 
 var _ DecisionMaker = (*SmartDecisionMaker)(nil)
+
+// getSystemPrompt 系统提示词
+func (dm *SmartDecisionMaker) getSystemPrompt() string {
+	return `你是一个智能决策引擎，专门分析用户意图并做出最优决策。你的核心职责是：
+
+**核心能力**：
+1. 理解用户输入的真实意图和需求
+2. 分析当前系统状态和相关记忆
+3. 选择最合适的执行方案和Agent类型
+4. 评估任务优先级和设置监控策略
+5. 提供清晰的推理过程和置信度评估
+
+**决策原则**：
+- 准确性：确保理解用户真实需求，避免误解
+- 效率性：选择最高效的执行路径和Agent类型
+- 可靠性：设置适当的监控和容错机制
+- 透明性：提供详细的决策推理过程
+
+**Agent类型选择指南**：
+- GUI Agent：适用于界面操作、点击、输入、截图、自动化操作等视觉交互任务
+- ReAct Agent：适用于搜索、分析、计算、API调用、逻辑推理等工具调用任务
+
+**输出要求**：
+- 必须使用指定的工具来提供结构化输出
+- 给出清晰的推理步骤和置信度评估
+- 根据任务特性选择合适的优先级和监控策略
+
+请根据具体场景调用相应的工具来提供格式化的决策结果。`
+}
 
 // DecisionPromptData 决策提示词数据结构
 type DecisionPromptData struct {
@@ -159,7 +154,7 @@ type AgentDecisionResult struct {
 
 // MakeDecision 进行决策 - 实现DecisionMaker接口
 func (dm *SmartDecisionMaker) MakeDecision(ctx context.Context, decisionContext types.DecisionContext) (types.DecisionResult, error) {
-	dm.logger.Info("开始AI驱动的决策分析")
+	dm.logger.Info("开始决策分析")
 
 	// 设置决策超时
 	decisionCtx, cancel := context.WithTimeout(ctx, dm.config.DecisionTimeout)
@@ -175,7 +170,7 @@ func (dm *SmartDecisionMaker) MakeDecision(ctx context.Context, decisionContext 
 // AnalyzeUserInput 分析用户输入，通过Agent进行智能决策
 func (dm *SmartDecisionMaker) AnalyzeUserInput(ctx context.Context, decisionCtx types.DecisionContext) (types.DecisionResult, error) {
 	userInput := extractUserInputFromContext(decisionCtx)
-	dm.logger.Info("开始AI分析用户输入", "user_input", userInput)
+	dm.logger.Info("开始分析用户输入", "user_input", userInput)
 
 	// 1. 检索相关记忆
 	memories, err := dm.retrieveRelevantMemories(ctx, decisionCtx)
@@ -184,29 +179,24 @@ func (dm *SmartDecisionMaker) AnalyzeUserInput(ctx context.Context, decisionCtx 
 		memories = []types.MemoryItem{} // 继续执行，但没有记忆辅助
 	}
 
-	// 2. 构建Agent决策提示
-	promptData := DecisionPromptData{
-		UserInput:        userInput,
-		RelevantMemories: memories,
-		SystemContext:    decisionCtx.SystemState,
-		WakeupEvent:      nil,
-	}
+	// 2. 构建决策提示词
+	prompt := dm.buildMainDecisionPrompt(userInput, memories, decisionCtx.SystemState)
 
-	// 3. 调用Agent进行智能决策
-	agentResult, err := dm.invokeAgentForDecision(ctx, promptData)
+	// 3. 调用LLM进行决策
+	agentResult, err := dm.invokeLLMForDecision(ctx, prompt)
 	if err != nil {
 		return dm.createFallbackDecision(userInput, err), nil
 	}
 
-	// 4. 转换Agent结果为标准决策结果
+	// 4. 转换Agent结果为决策结果
 	result := dm.convertAgentResultToDecisionResult(agentResult, userInput)
 
 	// 5. 验证和后处理决策结果
 	result = dm.validateAndEnhanceDecision(result, decisionCtx)
 
-	dm.logger.Info("AI决策分析完成",
+	dm.logger.Info("决策分析完成",
 		"should_execute", result.ShouldExecuteTask,
-		"agent_type", dm.getAgentTypeFromResult(agentResult),
+		"agent_type", dm.parseAgentType(agentResult.SelectedAgentType),
 		"confidence", result.Confidence)
 
 	return result, nil
@@ -224,19 +214,17 @@ func (dm *SmartDecisionMaker) HandleWakeupEvent(ctx context.Context, wakeupEvent
 	}
 
 	// 2. 构建唤醒事件决策提示
-	promptData := DecisionPromptData{
-		UserInput:        fmt.Sprintf("监控任务唤醒: %s", wakeupEvent.Reason),
-		RelevantMemories: memories,
-		SystemContext: map[string]any{
-			"wakeup_trigger_time": wakeupEvent.TriggerTime,
-			"observed_data":       wakeupEvent.ObservedData,
-			"metadata":            wakeupEvent.Metadata,
-		},
-		WakeupEvent: &wakeupEvent,
+	wakeupInput := fmt.Sprintf("监控任务唤醒: %s", wakeupEvent.Reason)
+	systemContext := map[string]any{
+		"wakeup_trigger_time": wakeupEvent.TriggerTime,
+		"observed_data":       wakeupEvent.ObservedData,
+		"metadata":            wakeupEvent.Metadata,
 	}
 
-	// 3. 调用Agent进行智能决策
-	agentResult, err := dm.invokeAgentForDecision(ctx, promptData)
+	prompt := dm.buildWakeupDecisionPrompt(wakeupInput, memories, systemContext, wakeupEvent)
+
+	// 3. 调用LLM进行智能决策
+	agentResult, err := dm.invokeLLMForDecision(ctx, prompt)
 	if err != nil {
 		return dm.createFallbackWakeupDecision(wakeupEvent, err), nil
 	}
@@ -260,30 +248,22 @@ func (dm *SmartDecisionMaker) SelectAgent(ctx context.Context, task types.Task, 
 	}
 
 	// 构建Agent类型选择提示
-	promptData := map[string]any{
-		"task_description":      task.Description,
-		"task_type":             task.Type,
-		"task_parameters":       task.Parameters,
-		"available_agent_types": availableAgentTypes,
-		"context":               task.Context,
-	}
-
-	prompt := dm.buildAgentSelectionPrompt(promptData)
+	prompt := dm.buildAgentSelectionPrompt(task, availableAgentTypes)
 
 	// 创建Agent类型选择任务
 	response, err := llminterface.ChatAndGetFullResponse(ctx, dm.llmAdapter, llminterface.ChatInput{
 		Messages: []llminterface.InputMessage{
-			llminterface.SystemInputMessage(dm.config.SystemPrompt),
+			llminterface.SystemInputMessage(dm.getSystemPrompt()),
 			llminterface.UserInputMessageText(prompt),
 		},
 		ConversationID: uuid.NewString(),
 	})
 	if err != nil {
-		return types.AgentTypeUnknown, fmt.Errorf("Agent类型选择失败: %w", err)
+		return types.AgentTypeUnknown, fmt.Errorf("agent类型选择失败: %w", err)
 	}
 
 	if !response.HasToolCalls() {
-		return types.AgentTypeUnknown, fmt.Errorf("Agent类型选择失败: 没有工具调用")
+		return types.AgentTypeUnknown, fmt.Errorf("agent类型选择失败: 没有工具调用")
 	}
 
 	// 解析Agent选择结果
@@ -307,17 +287,21 @@ func (dm *SmartDecisionMaker) EvaluateTaskPriority(ctx context.Context, tasks []
 	// 调用LLM进行优先级评估
 	response, err := llminterface.ChatAndGetFullResponse(ctx, dm.llmAdapter, llminterface.ChatInput{
 		Messages: []llminterface.InputMessage{
-			llminterface.SystemInputMessage(dm.config.SystemPrompt),
+			llminterface.SystemInputMessage(dm.getSystemPrompt()),
 			llminterface.UserInputMessageText(prompt),
 		},
 		ConversationID: uuid.NewString(),
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("监控定义失败: %w", err)
+	}
+
+	if !response.HasToolCalls() {
+		return nil, fmt.Errorf("优先级评估失败: 没有工具调用")
 	}
 
 	// 解析优先级结果并排序
-	prioritizedTasks := dm.parsePriorityEvaluationResult(response.FullText, tasks)
+	prioritizedTasks := dm.parsePriorityEvaluationResult(response.GetToolCalls()[0].Arguments, tasks)
 
 	dm.logger.Info("AI任务优先级评估完成", "task_count", len(prioritizedTasks))
 	return prioritizedTasks, nil
@@ -332,17 +316,21 @@ func (dm *SmartDecisionMaker) DefineMonitoringConditions(ctx context.Context, sy
 
 	response, err := llminterface.ChatAndGetFullResponse(ctx, dm.llmAdapter, llminterface.ChatInput{
 		Messages: []llminterface.InputMessage{
-			llminterface.SystemInputMessage(dm.config.SystemPrompt),
+			llminterface.SystemInputMessage(dm.getSystemPrompt()),
 			llminterface.UserInputMessageText(prompt),
 		},
 		ConversationID: uuid.NewString(),
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("优先级评估失败: %w", err)
+	}
+
+	if !response.HasToolCalls() {
+		return nil, fmt.Errorf("监控定义失败: 没有工具调用")
 	}
 
 	// 解析监控条件结果
-	monitoringTasks := dm.parseMonitoringDefinitionResult(response.FullText)
+	monitoringTasks := dm.parseMonitoringDefinitionResult(response.GetToolCalls()[0].Arguments)
 
 	dm.logger.Info("AI监控条件定义完成", "monitoring_task_count", len(monitoringTasks))
 	return monitoringTasks, nil
@@ -368,7 +356,7 @@ func (dm *SmartDecisionMaker) GetDecisionHistory(ctx context.Context, limit int)
 	memories, err := dm.mindscapeService.RetrieveMemories(ctx, queryContext)
 	if err != nil {
 		dm.logger.Error("检索决策历史失败", "error", err)
-		return []types.DecisionResult{}, err
+		return []types.DecisionResult{}, fmt.Errorf("检索决策历史失败: %w", err)
 	}
 
 	// 转换记忆为决策结果
@@ -389,14 +377,11 @@ func (dm *SmartDecisionMaker) GetDecisionHistory(ctx context.Context, limit int)
 
 // 私有方法实现
 
-func (dm *SmartDecisionMaker) invokeAgentForDecision(ctx context.Context, promptData DecisionPromptData) (*AgentDecisionResult, error) {
-	// 构建决策提示
-	prompt := dm.buildDecisionPrompt(promptData)
-
-	// 调用 LLM 进行决策
+// invokeLLMForDecision 调用LLM进行决策
+func (dm *SmartDecisionMaker) invokeLLMForDecision(ctx context.Context, prompt string) (*AgentDecisionResult, error) {
 	response, err := llminterface.ChatAndGetFullResponse(ctx, dm.llmAdapter, llminterface.ChatInput{
 		Messages: []llminterface.InputMessage{
-			llminterface.SystemInputMessage(dm.config.SystemPrompt),
+			llminterface.SystemInputMessage(dm.getSystemPrompt()),
 			llminterface.UserInputMessageText(prompt),
 		},
 		ConversationID: uuid.NewString(),
@@ -420,21 +405,61 @@ func (dm *SmartDecisionMaker) invokeAgentForDecision(ctx context.Context, prompt
 	return &agentResult, nil
 }
 
-func (dm *SmartDecisionMaker) buildDecisionPrompt(data DecisionPromptData) string {
-	template := dm.config.PromptTemplate
+// buildMainDecisionPrompt 构建主要决策提示词
+func (dm *SmartDecisionMaker) buildMainDecisionPrompt(userInput string, memories []types.MemoryItem, systemContext map[string]any) string {
+	return fmt.Sprintf(`请分析以下用户请求并做出决策：
 
-	// 简单的模板替换
-	template = strings.ReplaceAll(template, "{{.UserInput}}", data.UserInput)
-	template = strings.ReplaceAll(template, "{{.RelevantMemories}}", dm.formatMemories(data.RelevantMemories))
-	template = strings.ReplaceAll(template, "{{.SystemContext}}", dm.formatContext(data.SystemContext))
+**用户输入**: %s
 
-	if data.WakeupEvent != nil {
-		template = strings.ReplaceAll(template, "{{.WakeupEvent}}", dm.formatWakeupEvent(*data.WakeupEvent))
-	} else {
-		template = strings.ReplaceAll(template, "{{.WakeupEvent}}", "无")
-	}
+**相关记忆**: 
+%s
 
-	return template
+**当前系统状态**: 
+%s
+
+请仔细分析用户的真实意图，考虑以下因素：
+1. 用户想要完成什么任务？
+2. 这个任务最适合哪种Agent类型（GUI操作 vs ReAct推理）？
+3. 任务的紧急程度和重要性如何？
+4. 是否需要设置监控来跟踪执行状态？
+5. 预期的执行时间是多少？
+
+请使用 decision_maker 工具提供完整的决策结果，包括详细的推理步骤和置信度评估。`,
+		userInput,
+		dm.formatMemories(memories),
+		dm.formatContext(systemContext))
+}
+
+// buildWakeupDecisionPrompt 构建唤醒事件决策提示词
+func (dm *SmartDecisionMaker) buildWakeupDecisionPrompt(wakeupInput string, memories []types.MemoryItem, systemContext map[string]any, wakeupEvent types.WakeupEvent) string {
+	return fmt.Sprintf(`分析以下监控唤醒事件并决定后续行动：
+
+**唤醒原因**: %s
+**监控任务ID**: %s
+**触发时间**: %s
+
+**相关记忆**: 
+%s
+
+**观测数据**: 
+%s
+
+**系统上下文**: 
+%s
+
+请分析：
+1. 这个唤醒事件的性质和严重程度
+2. 是否需要立即采取行动？
+3. 如果需要行动，应该使用什么类型的Agent？
+4. 是否需要调整或重新设置监控条件？
+
+请使用 decision_maker 工具提供决策结果。`,
+		wakeupEvent.Reason,
+		wakeupEvent.MonitoringTaskID,
+		wakeupEvent.TriggerTime.Format(time.RFC3339),
+		dm.formatMemories(memories),
+		dm.formatContext(wakeupEvent.ObservedData),
+		dm.formatContext(systemContext))
 }
 
 func (dm *SmartDecisionMaker) formatMemories(memories []types.MemoryItem) string {
@@ -454,19 +479,39 @@ func (dm *SmartDecisionMaker) formatContext(context map[string]any) string {
 		return "无上下文信息"
 	}
 
-	contextJson, err := json.MarshalIndent(context, "", "  ")
+	contextJSON, err := json.MarshalIndent(context, "", "  ")
 	if err != nil {
 		return fmt.Sprintf("上下文格式化错误: %v", err)
 	}
-	return string(contextJson)
+	return string(contextJSON)
+}
+
+func (dm *SmartDecisionMaker) formatTaskParameters(params map[string]any) string {
+	if len(params) == 0 {
+		return "无参数"
+	}
+
+	paramsJSON, err := json.MarshalIndent(params, "", "  ")
+	if err != nil {
+		return fmt.Sprintf("参数格式化错误: %v", err)
+	}
+	return string(paramsJSON)
+}
+
+func (dm *SmartDecisionMaker) formatSystemState(state types.SystemState) string {
+	stateJSON, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return fmt.Sprintf("系统状态格式化错误: %v", err)
+	}
+	return string(stateJSON)
 }
 
 func (dm *SmartDecisionMaker) formatWakeupEvent(event types.WakeupEvent) string {
-	eventJson, err := json.MarshalIndent(event, "", "  ")
+	eventJSON, err := json.MarshalIndent(event, "", "  ")
 	if err != nil {
 		return fmt.Sprintf("唤醒事件格式化错误: %v", err)
 	}
-	return string(eventJson)
+	return string(eventJSON)
 }
 
 func (dm *SmartDecisionMaker) parseDecisionFromText(output string) *AgentDecisionResult {
@@ -654,10 +699,6 @@ func (dm *SmartDecisionMaker) parseAgentType(agentTypeStr string) types.AgentTyp
 	}
 }
 
-func (dm *SmartDecisionMaker) getAgentTypeFromResult(result *AgentDecisionResult) types.AgentType {
-	return dm.parseAgentType(result.SelectedAgentType)
-}
-
 func extractUserInputFromContext(ctx types.DecisionContext) string {
 	if ctx.WakeupEvent.IsSome() {
 		return fmt.Sprintf("监控任务触发: %s", ctx.WakeupEvent.Unwrap().Reason)
@@ -708,80 +749,134 @@ func convertMemoryToDecisionResult(memory types.MemoryItem) (types.DecisionResul
 	return result, true
 }
 
-// 以下是其他辅助方法的简化实现，主要由AI Agent处理
+// buildAgentSelectionPrompt 构建Agent选择提示词
+func (dm *SmartDecisionMaker) buildAgentSelectionPrompt(task types.Task, availableAgentTypes []types.AgentType) string {
+	agentTypesStr := make([]string, len(availableAgentTypes))
+	for i, agentType := range availableAgentTypes {
+		agentTypesStr[i] = string(agentType)
+	}
 
-func (dm *SmartDecisionMaker) buildAgentSelectionPrompt(data map[string]any) string {
 	return fmt.Sprintf(`请为以下任务选择最合适的Agent类型：
 
-任务描述: %v
-任务类型: %v
-可用Agent类型: %v
+**任务信息**:
+- 类型: %s
+- 描述: %s
+- 参数: %s
+- 上下文: %s
 
-请返回最合适的Agent类型（gui 或 react）`,
-		data["task_description"], data["task_type"], data["available_agent_types"])
+**可用Agent类型**: %s
+
+**选择标准**:
+- GUI Agent: 适用于界面操作、点击、输入、截图等视觉交互
+- ReAct Agent: 适用于搜索、分析、计算、API调用等逻辑推理
+
+请使用 select_agent 工具提供你的选择，包括选择理由和置信度。`,
+		task.Type,
+		task.Description,
+		dm.formatTaskParameters(task.Parameters),
+		dm.formatContext(task.Context),
+		strings.Join(agentTypesStr, ", "))
 }
 
-func (dm *SmartDecisionMaker) parseAgentSelectionResult(output any, availableAgents []types.AgentType) types.AgentType {
-	outputStr := strings.ToLower(fmt.Sprintf("%v", output))
-
-	if strings.Contains(outputStr, "gui") {
-		if slices.Contains(availableAgents, types.AgentTypeGUI) {
-			return types.AgentTypeGUI
-		}
+func (dm *SmartDecisionMaker) parseAgentSelectionResult(arguments string, availableAgents []types.AgentType) types.AgentType {
+	var selection decisionmaker.AgentSelection
+	if err := json.UnmarshalFromString(arguments, &selection); err != nil {
+		dm.logger.Warn("解析Agent选择结果失败", "error", err)
+		return dm.config.DefaultAgent
 	}
 
-	if strings.Contains(outputStr, "react") {
-		if slices.Contains(availableAgents, types.AgentTypeReAct) {
-			return types.AgentTypeReAct
-		}
+	selectedType := dm.parseAgentType(string(selection.SelectedAgentType))
+	if slices.Contains(availableAgents, selectedType) {
+		return selectedType
 	}
 
-	return availableAgents[0]
+	return dm.config.DefaultAgent
 }
 
+// buildPriorityEvaluationPrompt 构建优先级评估提示词
 func (dm *SmartDecisionMaker) buildPriorityEvaluationPrompt(tasks []types.Task) string {
-	tasksJson, _ := json.MarshalIndent(tasks, "", "  ")
-	return fmt.Sprintf(`请为以下任务评估优先级并排序（1-10，10为最高）：
-
-%s
-
-请返回按优先级排序的任务ID列表`, string(tasksJson))
-}
-
-func (dm *SmartDecisionMaker) parsePriorityEvaluationResult(output any, tasks []types.Task) []types.Task {
-	// 简化实现：如果解析失败，保持原序
-	return tasks
-}
-
-func (dm *SmartDecisionMaker) buildMonitoringDefinitionPrompt(systemState types.SystemState) string {
-	stateJson, _ := json.MarshalIndent(systemState, "", "  ")
-	return fmt.Sprintf(`基于以下系统状态，定义合适的监控条件：
-
-%s
-
-请返回JSON格式的监控任务定义`, string(stateJson))
-}
-
-func (dm *SmartDecisionMaker) parseMonitoringDefinitionResult(output any) []types.MonitoringTask {
-	// 简化实现：返回默认监控任务
-	return []types.MonitoringTask{}
-}
-
-func (dm *SmartDecisionMaker) createDefaultMonitoringTasks(systemState types.SystemState) []types.MonitoringTask {
-	return []types.MonitoringTask{
-		{
-			ID:                  None[string](),
-			Description:         "默认系统监控",
-			MindscapeTaskType:   "default_monitoring",
-			Conditions:          []types.MonitorCondition{},
-			TargetData:          []string{"status"},
-			NotificationMethods: []string{"webhook"},
-			WebhookURL:          None[string](),
-			MQTopic:             None[string](),
-			MaxRetries:          Some(3),
-			IsEnabled:           true,
-			CreatedAt:           time.Now(),
-			UpdatedAt:           time.Now(),
-		},
+	tasksInfo := make([]string, len(tasks))
+	for i, task := range tasks {
+		tasksInfo[i] = fmt.Sprintf("- ID: %s, 类型: %s, 描述: %s, 当前优先级: %d",
+			task.ID, task.Type, task.Description, task.Priority)
 	}
+
+	return fmt.Sprintf(`请评估以下任务的优先级并重新排序：
+
+**任务列表**:
+%s
+
+**评估标准**:
+1. 紧急程度 (用户等待时间、时效性)
+2. 重要程度 (对系统/用户的影响)
+3. 依赖关系 (是否阻塞其他任务)
+4. 资源需求 (执行难度和时间)
+
+优先级范围: 1-10 (10为最高优先级)
+
+请使用 evaluate_priority 工具提供排序结果，包括每个任务的新优先级和整体推理。`,
+		strings.Join(tasksInfo, "\n"))
+}
+
+func (dm *SmartDecisionMaker) parsePriorityEvaluationResult(arguments string, originalTasks []types.Task) []types.Task {
+	var evaluation decisionmaker.TaskPriorityEvaluation
+	if err := json.UnmarshalFromString(arguments, &evaluation); err != nil {
+		dm.logger.Warn("解析优先级评估结果失败", "error", err)
+		return originalTasks
+	}
+
+	// 创建任务ID到任务的映射
+	taskMap := make(map[string]types.Task)
+	for _, task := range originalTasks {
+		taskMap[task.ID] = task
+	}
+
+	// 根据评估结果重新排序任务
+	var sortedTasks []types.Task
+	for _, priorityItem := range evaluation.PrioritizedTasks {
+		if task, exists := taskMap[priorityItem.TaskID]; exists {
+			task.Priority = priorityItem.Priority
+			sortedTasks = append(sortedTasks, task)
+			delete(taskMap, priorityItem.TaskID)
+		}
+	}
+
+	// 添加未在评估中的任务
+	for _, task := range taskMap {
+		sortedTasks = append(sortedTasks, task)
+	}
+
+	return sortedTasks
+}
+
+// buildMonitoringDefinitionPrompt 构建监控定义提示词
+func (dm *SmartDecisionMaker) buildMonitoringDefinitionPrompt(systemState types.SystemState) string {
+	return fmt.Sprintf(`基于当前系统状态，定义合适的监控任务：
+
+**系统状态**: 
+%s
+
+**监控目标**:
+1. 识别系统异常和性能问题
+2. 跟踪重要任务的执行状态
+3. 监控用户交互和反馈
+4. 检测安全威胁和数据泄露
+
+**监控类型**:
+- 实时监控: 需要即时响应的关键指标
+- 定期检查: 周期性状态评估
+- 事件驱动: 基于特定触发条件
+
+请使用 define_monitoring 工具定义监控任务，包括监控条件、触发阈值、通知方式等。`,
+		dm.formatSystemState(systemState))
+}
+
+func (dm *SmartDecisionMaker) parseMonitoringDefinitionResult(arguments string) []types.MonitoringTask {
+	var definition decisionmaker.MonitoringDefinition
+	if err := json.UnmarshalFromString(arguments, &definition); err != nil {
+		dm.logger.Warn("解析监控定义结果失败", "error", err)
+		return []types.MonitoringTask{}
+	}
+
+	return definition.MonitoringTasks
 }

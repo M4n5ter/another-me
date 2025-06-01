@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"maps"
 	"sync"
 	"time"
 
@@ -461,9 +462,7 @@ func (ml *SmartMainLoop) executeSmartWorkflow(ctx context.Context, userInput Use
 	}
 
 	// 添加用户提供的上下文
-	for k, v := range userInput.Context {
-		decisionCtx.SystemState[k] = v
-	}
+	maps.Copy(decisionCtx.SystemState, userInput.Context)
 
 	// 使用标准的MakeDecision方法进行初始决策
 	initialDecision, err := ml.decisionMaker.MakeDecision(ctx, decisionCtx)

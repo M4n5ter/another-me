@@ -4,13 +4,9 @@
     "error.missing_translation": "Translation missing for key: {key}",
     "system.prompt": "You are a friendly assistant. Please answer the user's question.",
     "assistant.gui.prompt": "You are a GUI agent. You are given a task and your action history, with screenshots. You need to perform the next action to complete the task.\\n## Output Format\\n```\\nThought: ...\\nAction: ...\\n```\\n## Action Space\\nclick(start_box=\"[x1, y1, x2, y2]\") # Click on a specific area, coordinates are relative [0-1000]\\nleft_double(start_box=\"[x1, y1, x2, y2]\") # Double-click left button\\nright_single(start_box=\"[x1, y1, x2, y2]\") # Single-click right button\\ndrag(start_box=\"[x1, y1, x2, y2]\", end_box=\"[x3, y3, x4, y4]\") # Drag from one area to another\\nkey_tap(keys=[\"key1\", \"key2\"]) # Press and release specified keys, supports single or combined keys, e.g. [\"a\"] or [\"ctrl\", \"c\"]\\ntype(content=\"text\") # Type text. If you want to submit your input, use \"\\\\n\" at the end of content.\\nscroll(start_box=\"[x1, y1, x2, y2]\", direction=\"down or up or right or left\") # Scroll in a specific direction\\ntoggle_key(keys=[\"key1\", \"key2\"], up=true/false) # Press or release specified keys, up=true means release, up=false means press\\ntoggle_mouse(button=\"left/right/wheelUp\", up=true/false) # Press or release mouse button, up=true means release, up=false means press\\nmouse_location() # Get current mouse position\\nscroll_relative(x=10, y=10, ms_delay=10) # Scroll mouse relative to current position\\nkey_sleep(ms=100) # Set key interval time (milliseconds)\\nwait(ms=5000) # Sleep for specified time (milliseconds) and take a screenshot to check for any changes, default is 5000ms\\nfinished(content=\"xxx\") # Task is completed. Use escape characters \\\\\\\", \\\\\\\", and \\\\\\\\n in content part if needed.\\n## Coordinates System\\n- All box coordinates (start_box, end_box) must be specified as [x1, y1, x2, y2] where:\\n  - (x1, y1) is the top-left corner\\n  - (x2, y2) is the bottom-right corner\\n  - All values are relative coordinates from 0 to 1000 (screen is normalized)\\n- Be specific and accurate with coordinates by looking at the screenshot carefully\\n## Note\\n- Use Chinese in Thought part.\\n- In the Thought part, write a short plan and finally summarize your next action with its target element in one sentence.\\n- You MUST include all required parameters for each action (e.g., start_box for click)\\n- For text input, make sure to escape special characters properly\\n## User Instruction",
-    
     "evaluator.prompt": "You are a task completion evaluator. Your role is to determine if the user's original task has been fully addressed based on the provided information. The user's original task was: '{userInput}'. The agent's thoughts and actions so far are: '{llmThinks}'.\\n\\nAnalyze the user's task and the agent's progress. Then, provide your evaluation in the following XML format:\\n<completion_status>COMPLETED_OR_NOT_COMPLETED</completion_status>\\n<feedback_if_not_completed>If NOT_COMPLETED, provide concise feedback here for the agent to continue. This feedback will be presented as if it's from the user, guiding the next steps. If COMPLETED, leave this tag empty or omit it.</feedback_if_not_completed>",
-
     "browser.prompt.default": "You are a powerful browser automation assistant capable of performing various web interactions and debugging tasks. Your capabilities include:\\n\\n1. **Navigation**: Navigate to any specified URL to load web pages.\\n\\n2. **Screenshots**: Capture screenshots of the entire page or specific elements using CSS selectors, with a default size of 1700x1100 pixels.\\n\\n3. **Element Interactions**:\\n   - Click on elements identified by CSS selectors\\n   - Hover over specified elements\\n   - Fill input fields with specified values\\n   - Select options from dropdown menus\\n\\n4. **JavaScript Execution**:\\n   - Run arbitrary JavaScript code in the browser context\\n   - Evaluate scripts and return results\\n\\n5. **Debugging Tools**:\\n   - Enable/disable JavaScript debugging mode\\n   - Set breakpoints at specific script locations (URL+line+optional column/condition)\\n   - Remove existing breakpoints by ID\\n   - Pause and resume script execution\\n   - Get the current call stack when paused\\n\\nFor all operations requiring element selection, you must use precise CSS selectors. When capturing screenshots, you can specify the entire page or specific elements. For debugging operations, you have precise control over execution flow and can inspect runtime behavior.\\n\\nPlease provide clear instructions, including:\\n- The specific operation you want to perform\\n- Required parameters (URL, selectors, values, etc.)\\n- Any optional parameters (dimensions, conditions, etc.)\\n- Related expected results\\n\\nYou should confirm sensitive or destructive commands before execution. Report with clear status updates, success/failure indications, and any relevant output or captured data.",
-    
     "tool.registry.prompt": "When you need to call tools multiple times, just give multiple call requests in the correct format. You have the following tools available to you:\\n{toolRegistry}",
-
     "tool.browser.description": "A powerful browser automation tool that allows you to control web browsers through a programmatic interface.",
     "tool.browser.arg.operation": "The operation to perform",
     "tool.browser.arg.url": "The URL to navigate to",
@@ -19,7 +15,6 @@
     "tool.browser.arg.script": "JavaScript code to execute",
     "tool.browser.arg.debug": "Debug operation parameters",
     "tool.browser.arg.options": "Additional options for the operation",
-    
     "tool.fetch.description": "Fetches content from a given URL. It can simplify HTML content or return raw data.",
     "tool.fetch.arg.url": "The URL to fetch content from.",
     "tool.fetch.arg.max_length": "Maximum number of characters to return from the content (default: 10000).",
@@ -29,7 +24,6 @@
     "tool.fetch.arg.user_agent": "Custom User-Agent string to use for the request. Defaults based on context (autonomous vs manual).",
     "tool.fetch.arg.proxy_url": "Optional proxy URL to use for the request (e.g., 'http://user:pass@host:port'). Uses environment proxy if unset.",
     "tool.fetch.arg.is_manual_request": "Indicates if the request is triggered manually by a user action (affects default User-Agent and robots.txt check behavior).",
-
     "tool.gui.screenshot.description": "Capture a screenshot of the default desktop, format like: data:image/png;base64,...",
     "tool.gui.move_mouse.description": "Move the mouse to the specified coordinates.",
     "tool.gui.move_mouse.arg.x": "x coordinate",
@@ -67,24 +61,20 @@
     "tool.gui.key_sleep_milli.arg.ms": "sleep time(milliseconds)",
     "tool.gui.sleep_milli.description": "Sleep(milliseconds).",
     "tool.gui.sleep_milli.arg.ms": "sleep time(milliseconds)",
-
     "tool.admin.syslog.description": "View system logs with filtering and time range options.",
     "tool.admin.syslog.arg.lines": "Number of lines to display (default: 50).",
     "tool.admin.syslog.arg.filter": "Filter logs by keyword or pattern.",
     "tool.admin.syslog.arg.since": "Show logs since this time (e.g., '1 hour ago').",
     "tool.admin.syslog.arg.until": "Show logs until this time (e.g., 'now').",
     "tool.admin.syslog.arg.log_type": "Type of log to view: kernel, system, or all.",
-
     "tool.admin.sysstat.description": "Monitor system resource status including CPU, memory, and disk usage.",
     "tool.admin.sysstat.arg.resource": "Resource type to monitor: cpu, memory, disk, or all.",
     "tool.admin.sysstat.arg.format": "Output format: text or json.",
-
     "tool.admin.procinfo.description": "View process information with various detail levels.",
     "tool.admin.procinfo.arg.pid": "Process ID to get information for.",
     "tool.admin.procinfo.arg.name": "Process name to search for.",
     "tool.admin.procinfo.arg.info_type": "Type of information to display: basic, detailed, environment, files, or all.",
     "tool.admin.procinfo.arg.count": "Maximum number of processes to return when searching by name.",
-    
     "tool.admin.file.name": "File Operations",
     "tool.admin.file.description": "Provides a set of utilities for file system operations like reading, writing, listing, copying, moving, and deleting files and directories. It can also execute shell commands related to file management.",
     "tool.admin.file.arg.path": "The path to the file or directory.",
@@ -96,7 +86,6 @@
     "tool.admin.file.arg.find_text": "Text to find in the file for replacement.",
     "tool.admin.file.arg.replace_text": "Text to replace the found text with.",
     "tool.admin.file.arg.destination_path": "Destination path for move or copy operations. Required if operation is 'move' or 'copy'.",
-    
     "tool.admin.search.name": "Search File System",
     "tool.admin.search.description": "Searches files and directories in the file system based on various criteria.",
     "tool.admin.search.arg.path": "Starting path for the search. Defaults to current directory.",
@@ -110,11 +99,9 @@
     "tool.admin.search.arg.modified_after": "Only files modified after this timestamp (RFC3339 format, e.g., '2006-01-02T15:04:05Z07:00').",
     "tool.admin.search.arg.modified_before": "Only files modified before this timestamp (RFC3339 format).",
     "tool.admin.search.arg.case_sensitive_match": "Perform case-sensitive matching for name_pattern and content_regex. Defaults to false (case-insensitive).",
-    
     "tool.admin.time.name": "Get Current Time",
     "tool.admin.time.description": "Gets the current system time, optionally formatted.",
     "tool.admin.time.arg.format": "Optional. The layout string for formatting the time (e.g., '2006-01-02 15:04:05'). If not provided, RFC3339 format is used.",
-
     "tool.admin.archive.name": "Archive and Extract Files",
     "tool.admin.archive.description": "Compress and extract files in various formats including zip, tar, tar.gz, and more.",
     "tool.admin.archive.arg.operation": "Operation to perform: compress or extract.",
@@ -123,8 +110,36 @@
     "tool.admin.archive.arg.format": "Archive format to use: zip, tar, targz, tarbz2, or tarxz.",
     "tool.admin.archive.arg.source_paths": "Multiple source paths to compress (when compressing multiple files/directories).",
     "tool.admin.archive.arg.verbose": "Whether to display detailed information during operation.",
-
     "tool.cryptoexchange.binance.list_ticker_prices.name": "List Ticker Prices",
     "tool.cryptoexchange.binance.list_ticker_prices.description": "List ticker prices from Binance.",
-    "tool.cryptoexchange.binance.list_ticker_prices.arg.symbols": "Symbols to list prices for. (e.g., [\"BTCUSDT\", \"ETHUSDT\", \"SOLUSDT\", \"XRPUSDT\", \"DOGEUSDT\"])"
-} 
+    "tool.cryptoexchange.binance.list_ticker_prices.arg.symbols": "Symbols to list prices for. (e.g., [\"BTCUSDT\", \"ETHUSDT\", \"SOLUSDT\", \"XRPUSDT\", \"DOGEUSDT\"])",
+    "tool.decision_maker.name": "make a decision",
+    "tool.decision_maker.description": "Make decisions based on the user's questions and current status.",
+    "tool.decision_maker.arg.should_execute_task": "Whether to execute the task",
+    "tool.decision_maker.arg.selected_agent_type": "Selected agent type",
+    "tool.decision_maker.arg.task_type": "Task type",
+    "tool.decision_maker.arg.task_description": "Task description",
+    "tool.decision_maker.arg.task_priority": "Task priority",
+    "tool.decision_maker.arg.task_parameters": "Task parameters",
+    "tool.decision_maker.arg.should_setup_monitoring": "Whether to setup monitoring",
+    "tool.decision_maker.arg.monitoring_conditions": "Monitoring conditions",
+    "tool.decision_maker.arg.should_enter_wait_mode": "Whether to enter wait mode",
+    "tool.decision_maker.arg.reasoning_steps": "Reasoning steps",
+    "tool.decision_maker.arg.confidence": "Confidence",
+    "tool.decision_maker.arg.expected_duration_minutes": "Expected duration (minutes)",
+    "tool.select_agent.name": "Select Agent",
+    "tool.select_agent.description": "Select the most suitable agent type for a given task.",
+    "tool.select_agent.arg.selected_agent_type": "Selected agent type (gui or react)",
+    "tool.select_agent.arg.reasoning": "Reasoning for the selection",
+    "tool.select_agent.arg.confidence": "Confidence level (0-1)",
+    "tool.evaluate_priority.name": "Evaluate Task Priority",
+    "tool.evaluate_priority.description": "Evaluate and rank tasks by priority based on urgency and importance.",
+    "tool.evaluate_priority.arg.prioritized_tasks": "Tasks ordered by priority",
+    "tool.evaluate_priority.arg.reasoning": "Overall reasoning for priority assignments",
+    "tool.evaluate_priority.arg.confidence": "Confidence level (0-1)",
+    "tool.define_monitoring.name": "Define Monitoring Conditions",
+    "tool.define_monitoring.description": "Define monitoring conditions and tasks based on system state.",
+    "tool.define_monitoring.arg.monitoring_tasks": "Defined monitoring tasks",
+    "tool.define_monitoring.arg.reasoning": "Reasoning for monitoring definitions",
+    "tool.define_monitoring.arg.confidence": "Confidence level (0-1)"
+}

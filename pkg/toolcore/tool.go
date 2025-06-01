@@ -6,7 +6,7 @@ import (
 	. "github.com/m4n5ter/another-me/pkg/option"
 )
 
-// Tool 是任何可供 LLM 代理使用的核心工具接口。
+// Tool 是任何可供 LLM Agent使用的核心工具接口。
 type Tool interface {
 	// Schema 返回工具的元数据 (ToolSchema)。
 	// ctx 可用于传递请求范围的值，例如用于国际化描述的语言偏好。
