@@ -3,7 +3,6 @@ package core
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"html/template"
 	"log/slog"
@@ -11,128 +10,145 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	json "github.com/json-iterator/go"
+
+	feedbackanalyzer "github.com/m4n5ter/another-me/internal/core/tools/feedback_analyzer"
 
 	"github.com/m4n5ter/another-me/internal/core/types"
 	"github.com/m4n5ter/another-me/pkg/llminterface"
+	"github.com/m4n5ter/another-me/pkg/reactagent"
+	"github.com/m4n5ter/another-me/pkg/toolcore"
 )
 
-const agentPromptTemplateDefault = `你是一个智能反馈分析专家，负责深度分析Agent执行结果并提供专业洞察。
+const agentPromptTemplateDefault = `你是一位专注于Agent执行结果分析的智能反馈专家。
 
-请分析以下执行结果：
+**任务**: 请基于以下提供的Agent执行数据和分析要求，进行深入分析。
 
-**执行结果摘要**:
+**执行数据概览**:
 - 总结果数: {{.TotalResults}}
 - 成功数: {{.SuccessCount}}
 - 失败数: {{.FailureCount}}
 - 成功率: {{.SuccessRate}}%
 
-**详细结果**:
+**详细执行结果**:
 {{.DetailedResults}}
 
-**分析要求**:
+**核心分析要求**:
 {{.AnalysisRequirements}}
 
-请按以下JSON格式返回分析结果：
-{
-  "key_findings": ["发现1", "发现2"],
-  "actionable_insights": ["洞察1", "洞察2"],
-  "requires_user_input": true/false,
-  "confidence_level": 0.0-1.0,
-  "recommended_actions": ["行动1", "行动2"],
-  "risk_assessment": {
-    "level": "low/medium/high",
-    "factors": ["因子1", "因子2"],
-    "mitigation": ["缓解措施1", "缓解措施2"],
-    "description": "风险描述"
-  },
-  "next_step_suggestions": ["建议1", "建议2"],
-  "patterns_detected": ["模式1", "模式2"],
-  "improvement_opportunities": ["改进点1", "改进点2"]
-}
+**历史分析参考**:
+{{if .HistoricalContext}}
+  {{range $key, $value := .HistoricalContext}}
+- {{$key}}: {{$value}}
+  {{end}}
+{{else}}
+- 无可用的历史分析数据。
+{{end}}
 
-**分析原则**:
-1. 深度分析执行模式和趋势
-2. 识别潜在问题和改进机会
-3. 提供具体可执行的建议
-4. 评估风险并给出缓解方案
-5. 基于历史数据预测未来趋势
-6. 给出详细的推理过程和置信度评估`
+**指示**: 请运用 "AgentFeedbackAnalysis" 工具来构建你的分析报告。确保全面覆盖工具所要求的所有参数，包括：关键发现、可行动的洞察、是否需要用户输入、分析的置信水平、推荐行动、风险评估详情、下一步骤建议、检测到的模式以及潜在的改进机会。
 
-const qualityAssessmentPromptTemplate = `你是一位经验丰富的AI智能应用执行质量评估专家。你的任务是基于提供的Agent执行结果数据，进行全面而深入的质量评估。
-请重点从以下几个维度进行分析：
-1.  **效率**: 任务执行速度、耗时、是否有不必要的延迟。
+**请遵循以下分析原则**:
+1. 深度挖掘执行模式与趋势。
+2. 精准识别潜在问题与改进契机。
+3. 提供具体且可操作的建议。
+4. 全面评估相关风险并提出有效的缓解策略。
+5. (若可能)基于历史数据预测未来趋势。
+6. 清晰阐述分析的推理过程及置信度评估。`
+
+const qualityAssessmentPromptTemplate = `你是一位经验丰富的AI应用执行质量评估专家。
+
+**任务**: 请根据下方提供的Agent执行数据，进行全面细致的质量评估。
+
+**执行数据概览**:
+- 总结果数: {{.TotalResults}}
+- 成功数: {{.SuccessCount}}
+- 失败数: {{.FailureCount}}
+- 成功率: {{.SuccessRate}}%
+
+**详细执行结果**:
+{{.DetailedResults}}
+
+**核心评估要求**:
+{{.AnalysisRequirements}}
+
+**历史评估参考**:
+{{if .HistoricalContext}}
+  {{range $key, $value := .HistoricalContext}}
+- {{$key}}: {{$value}}
+  {{end}}
+{{else}}
+- 无可用的历史评估数据。
+{{end}}
+
+**指示**: 请使用 "AgentQualityAssessment" 工具提交你的评估报告。你需要准确填充工具所需的全部参数，包括：综合质量评分，各维度（如效率、准确性、稳定性、资源利用率）的评分，主要的优点和不足，详细的文字评估报告，以及具体的改进建议。
+
+**评估重点维度**:
+1.  **效率**: 任务执行速度、耗时、有无不必要的延迟。
 2.  **准确性/正确性**: 任务成功率、错误发生情况、输出结果是否符合预期。
 3.  **稳定性**: 执行过程中是否出现异常、崩溃、重试等情况。
-4.  **资源利用率**: （如果提供相关数据）CPU、内存等资源使用是否合理，有无浪费。
+4.  **资源利用率**: (若有数据) CPU、内存等资源使用是否合理。`
 
-请严格按照以下JSON格式返回你的评估报告，确保所有字段都被填充：
-{
-  "overall_quality_score": <综合质量评分, 0.0-1.0>,
-  "dimension_scores": {
-    "efficiency": <效率评分, 0.0-1.0>,
-    "accuracy": <准确性评分, 0.0-1.0>,
-    "stability": <稳定性评分, 0.0-1.0>,
-    "resource_utilization": <资源利用率评分, 0.0-1.0, 如果无数据则为-1或省略该键>
-  },
-  "strengths": ["<主要优点1>", "<主要优点2>", ...],
-  "weaknesses": ["<主要不足1>", "<主要不足2>", ...],
-  "detailed_report": "<对整体质量的详细文字描述，包括对各维度表现的分析>",
-  "recommended_improvements": ["<具体的改进建议1>", "<具体的改进建议2>", ...]
-}`
+const riskAssessmentPromptTemplate = `你是一位资深的AI系统风险管理与预测专家。
 
-const riskAssessmentPromptTemplate = `你是一位资深的AI系统风险管理与预测专家。你的任务是基于提供的当前执行结果、计划中的后续行动、当前系统状态以及相关的历史分析数据，全面评估潜在的风险。
-你需要识别风险因素，预测风险发生的可能性和潜在影响，并确定风险等级。
+**任务**: 请基于当前执行结果、计划中的后续行动、当前系统状态以及历史分析数据，进行全面的潜在风险评估。
 
-请严格按照以下JSON格式返回你的风险评估报告，确保所有字段都被填充：
-{
-  "level": "<风险级别: low/medium/high>",
-  "factors": ["<识别出的风险因子1>", "<风险因子2>", ...],
-  "mitigation": ["<针对风险的缓解措施1>", "<缓解措施2>", ...],
-  "description": "<对整体风险情况的详细文字描述，包括对主要风险因子的分析和潜在影响的评估>",
-  "predicted_impact_if_occurs": "<如果风险发生，预测的具体影响描述>",
-  "probability_assessment": "<对风险发生可能性的定性评估: low/medium/high，或定量0.0-1.0>"
-}`
+**当前执行结果摘要**:
+{{.CurrentResultsSummary}}
 
-const insightsGenerationPromptTemplate = `你是一名顶级的AI系统分析与策略顾问。你的任务是基于提供的初步分析报告 ('baseAnalysis')、历史执行数据摘要以及已识别的关键执行模式，进行深度分析，并生成一份富有洞察力的报告。
-这份报告需要包含：
-1.  **核心发现 (Key Takeaways)**: 从所有信息中提炼出的最关键、最重要的结论。
-2.  **可执行的建议 (Actionable Recommendations)**: 具体的、可操作的改进建议，每条建议需包含理由、优先级评估以及潜在影响。
-3.  **改进机会 (Improvement Opportunities)**: 指出潜在的可以优化或提升的方面，包括潜在益处和预估的实现难度。
-4.  **预测的下一步行动 (Predicted Next Steps)**: 基于你的洞察，建议接下来应该采取哪些具体步骤。
-5.  **洞察置信度 (Confidence Level)**: 你对这份洞察报告整体准确性和价值的置信度评分 (0.0-1.0)。
-6.  **洞察总结 (Summary)**: 对整个洞察报告的简短总结。
+**计划行动摘要**:
+{{.ProposedActionsSummary}}
 
-请严格按照以下JSON格式返回你的洞察报告：
-{
-  "key_takeaways": ["<核心发现1>", "<核心发现2>", ...],
-  "actionable_recommendations": [
-    {
-      "recommendation": "<建议内容>",
-      "rationale": "<理由>",
-      "priority": "<high/medium/low>",
-      "potential_impact": "<潜在影响描述>"
-    },
-    ...
-  ],
-  "improvement_opportunities": [
-    {
-      "opportunity": "<机会描述>",
-      "potential_benefit": "<潜在益处>",
-      "difficulty": "<high/medium/low>"
-    },
-    ...
-  ],
-  "predicted_next_steps": ["<预测的下一步1>", "<下一步2>", ...],
-  "confidence_level": <置信度评分, 0.0-1.0>,
-  "summary": "<洞察总结文本>"
-}`
+**当前系统状态摘要**:
+{{.SystemStateSummary}}
+
+**核心风险评估要求**:
+{{.AnalysisRequirements}}
+
+**历史风险数据参考**:
+{{if .HistoricalContext}}
+  {{range $key, $value := .HistoricalContext}}
+- {{$key}}: {{$value}}
+  {{end}}
+{{else}}
+- 无可用的历史风险数据。
+{{end}}
+
+**指示**: 请使用 "AgentRiskAssessment" 工具提交你的风险评估报告。务必完整填写工具所需参数，包括：风险级别（高/中/低）、主要的风险因素、具体的缓解措施、对整体风险情况的详细描述、风险发生时的预测影响，以及对风险发生可能性的评估。`
+
+const insightsGenerationPromptTemplate = `你是一名顶级的AI系统分析与策略顾问。
+
+**任务**: 请基于提供的初步分析报告、历史执行数据摘要以及已识别的关键执行模式，进行深度分析，并生成一份富有洞察力的报告。
+
+**基础分析摘要**:
+{{.BaseAnalysisSummary}}
+
+**历史执行数据摘要**:
+{{.HistoricalDataSummary}}
+
+**已识别模式摘要**:
+{{.DetectedPatternsSummary}}
+
+**核心洞察要求**:
+{{.AnalysisRequirements}}
+
+**历史洞察参考**:
+{{if .HistoricalContext}}
+  {{range $key, $value := .HistoricalContext}}
+- {{$key}}: {{$value}}
+  {{end}}
+{{else}}
+- 无可用的历史洞察数据。
+{{end}}
+
+**指示**: 请运用 "AgentInsights" 工具来构建并提交你的洞察报告。确保全面、准确地填充该工具的所有参数，包括：核心发现总结，可执行的改进建议（每条均需包含具体建议、理由、优先级评估及潜在影响描述），潜在的改进机会（每项均需包含机会描述、潜在益处及预估实现难度），预测的下一步行动，你对整体洞察的置信度评分，以及对整个洞察报告的简明扼要的总结。`
 
 // SmartFeedbackAnalyzer 智能反馈分析器实现 - 基于Agent的智能分析
 type SmartFeedbackAnalyzer struct {
-	llm    llminterface.ChatAdapter
-	logger *slog.Logger
-	config FeedbackAnalyzerConfig
+	agent      *reactagent.ReActAgent
+	llmAdapter llminterface.ChatAdapter
+	logger     *slog.Logger
+	config     FeedbackAnalyzerConfig
 
 	// 分析历史缓存
 	analysisHistory []FeedbackAnalysisRecord
@@ -293,6 +309,7 @@ func DefaultFeedbackAnalyzerConfig() FeedbackAnalyzerConfig {
 
 // NewSmartFeedbackAnalyzer 创建新的智能反馈分析器
 func NewSmartFeedbackAnalyzer(
+	agent *reactagent.ReActAgent,
 	llmAdapter llminterface.ChatAdapter,
 	config FeedbackAnalyzerConfig,
 	logger *slog.Logger,
@@ -301,8 +318,22 @@ func NewSmartFeedbackAnalyzer(
 		logger = slog.Default().WithGroup("smart_feedback_analyzer")
 	}
 
+	registry := toolcore.NewRegistry()
+	err := feedbackanalyzer.RegistFeedbackAnalyzerTools(context.Background(), registry)
+	if err != nil {
+		logger.Error("注册反馈分析工具失败，无法继续初始化", "error", err)
+		return nil
+	}
+
+	err = llmAdapter.RegisterTools(context.Background(), registry)
+	if err != nil {
+		logger.Error("注册决策工具失败，无法继续初始化", "error", err)
+		return nil
+	}
+
 	return &SmartFeedbackAnalyzer{
-		llm:             llmAdapter,
+		agent:           agent,
+		llmAdapter:      llmAdapter,
 		logger:          logger,
 		config:          config,
 		analysisHistory: make([]FeedbackAnalysisRecord, 0, config.HistoryRetention),
@@ -341,7 +372,7 @@ func (fa *SmartFeedbackAnalyzer) AnalyzeExecutionResults(
 		return fa.createFallbackAnalysis(results), nil
 	}
 
-	promptMessage, err := fa.buildLLMPromptMessage(promptData, fa.config.AgentPromptTemplate, "AgentAnalysis")
+	promptMessage, err := fa.buildLLMPromptMessage(promptData, agentPromptTemplateDefault, "AgentAnalysis")
 	if err != nil {
 		fa.logger.Error("构建Agent分析提示消息失败", "error", err)
 		return fa.createFallbackAnalysis(results), nil
@@ -671,6 +702,18 @@ func (fa *SmartFeedbackAnalyzer) convertLLMResultToQualityAssessment(llmResultJS
 	}, nil
 }
 
+func (fa *SmartFeedbackAnalyzer) getSystemPrompt() string {
+	return `你是一位顶尖的AI反馈分析专家。你的任务是深入理解和分析用户提供的Agent执行数据，并生成有价值的反馈报告。
+
+为了帮助你完成任务，你拥有以下强大的分析工具：
+- **AgentFeedbackAnalysis**: 用于对Agent的执行结果进行全面和详细的反馈分析。
+- **AgentQualityAssessment**: 用于评估Agent执行的整体质量，包括效率、准确性和稳定性等维度。
+- **AgentRiskAssessment**: 用于识别和评估与Agent执行相关的潜在风险。
+- **AgentInsights**: 用于从分析数据中提炼核心发现、可行动建议和改进机会。
+
+请仔细理解用户的具体分析要求和提供的数据，然后选择最合适的工具来构建你的回应。确保为所选工具的所有参数提供准确和完整的信息。`
+}
+
 // buildLLMPromptMessage 构建LLM提示消息 (generic helper)
 func (fa *SmartFeedbackAnalyzer) buildLLMPromptMessage(promptData any, templateContent, templateName string) (llminterface.InputMessage, error) {
 	tmpl, err := template.New(templateName).Parse(templateContent)
@@ -688,7 +731,7 @@ func (fa *SmartFeedbackAnalyzer) buildLLMPromptMessage(promptData any, templateC
 		Content: []llminterface.ContentPart{
 			{
 				Type: llminterface.PartTypeText,
-				Text: promptBuffer.String(),
+				Text: promptBuffer.String(), // This is the text content
 			},
 		},
 	}, nil
@@ -713,36 +756,28 @@ func (fa *SmartFeedbackAnalyzer) cleanLLMJSONOutput(jsonString string) string {
 }
 
 // invokeLLMForAnalysis 调用LLM进行分析
-func (fa *SmartFeedbackAnalyzer) invokeLLMForAnalysis(ctx context.Context, promptMessage llminterface.InputMessage) (string, error) {
-	chatInput := llminterface.ChatInput{
-		Messages: []llminterface.InputMessage{promptMessage},
+func (fa *SmartFeedbackAnalyzer) invokeLLMForAnalysis(ctx context.Context, msg llminterface.InputMessage) (string, error) {
+	if fa.llmAdapter == nil {
+		return "", fmt.Errorf("llmAdapter 未初始化")
 	}
 
-	if fa.llm == nil {
-		return "", fmt.Errorf("LLM未初始化")
-	}
-
-	outputChan, err := fa.llm.Chat(ctx, chatInput)
+	response, err := llminterface.ChatAndGetFullResponse(ctx, fa.llmAdapter, llminterface.ChatInput{
+		Messages: []llminterface.InputMessage{
+			llminterface.SystemInputMessage(fa.getSystemPrompt()),
+			msg,
+		},
+		ConversationID: uuid.NewString(),
+	})
 	if err != nil {
-		return "", fmt.Errorf("LLM Chat调用失败: %w", err)
+		return "", fmt.Errorf("决策失败: %w", err)
 	}
 
-	var fullResponse strings.Builder
-	for chunk := range outputChan {
-		if chunk.Error != nil && !errors.Is(chunk.Error, context.DeadlineExceeded) {
-			// Handle partial errors or decide to fail fast
-			fa.logger.Error("LLM分析流错误", "error", chunk.Error)
-			// Depending on the desired behavior, you might return here or try to process partial results
-			return "", fmt.Errorf("LLM流处理错误: %w", chunk.Error)
-		}
-
-		for _, part := range chunk.ContentParts {
-			if part.Type == llminterface.PartTypeText {
-				fullResponse.WriteString(part.Text)
-			}
-		}
+	if response.HasToolCalls() && len(response.GetToolCalls()) > 0 {
+		return response.GetToolCalls()[0].Arguments, nil
 	}
-	return fullResponse.String(), nil
+
+	fa.logger.Warn("LLM 响应不包含预期的工具调用")
+	return "", fmt.Errorf("LLM 响应不包含工具调用")
 }
 
 // convertAgentResultToAnalysis 将Agent结果转换为标准分析结果

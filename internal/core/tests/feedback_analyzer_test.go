@@ -31,7 +31,7 @@ func TestSmartFeedbackAnalyzer_AnalyzeExecutionResults(t *testing.T) {
 	t.Run("no results provided", func(t *testing.T) {
 		// For this case, LLM is not called, so a nil adapter or a basic mock is fine.
 		mockLLM := new(MockChatAdapter) // Use mock, no real LLM needed
-		analyzer := core.NewSmartFeedbackAnalyzer(mockLLM, cfg, newTestLogger())
+		analyzer := core.NewSmartFeedbackAnalyzer(nil, mockLLM, cfg, newTestLogger())
 
 		analysis, err := analyzer.AnalyzeExecutionResults(context.Background(), []types.ExecutionResult{})
 		require.NoError(t, err)
@@ -44,7 +44,7 @@ func TestSmartFeedbackAnalyzer_AnalyzeExecutionResults(t *testing.T) {
 	t.Run("successful LLM analysis (using mock)", func(t *testing.T) {
 		mockLLM := new(MockChatAdapter)
 		logger := newTestLogger()
-		analyzer := core.NewSmartFeedbackAnalyzer(mockLLM, cfg, logger)
+		analyzer := core.NewSmartFeedbackAnalyzer(nil, mockLLM, cfg, logger)
 
 		results := []types.ExecutionResult{
 			{TaskID: "llm_task1", Status: types.ExecutionStatusSuccess, Output: "Good output", StartTime: baseTime, EndTime: baseTime.Add(time.Second)},
@@ -87,7 +87,7 @@ func TestSmartFeedbackAnalyzer_AnalyzeExecutionResults(t *testing.T) {
 
 	t.Run("LLM adapter is nil (simulating init failure), fallback to basic analysis", func(t *testing.T) {
 		// Pass nil adapter to simulate LLM init failure
-		analyzerWithNilAdapter := core.NewSmartFeedbackAnalyzer(nil, cfg, newTestLogger())
+		analyzerWithNilAdapter := core.NewSmartFeedbackAnalyzer(nil, nil, cfg, newTestLogger())
 
 		results := []types.ExecutionResult{
 			{TaskID: "fail_task1", Status: types.ExecutionStatusFailure, Error: "some error", StartTime: baseTime, EndTime: baseTime.Add(time.Second)},
@@ -108,7 +108,7 @@ func TestSmartFeedbackAnalyzer_AnalyzeExecutionResults(t *testing.T) {
 
 		// Even with a mock LLM, if prompt building fails, it should fallback.
 		mockLLM := new(MockChatAdapter)
-		analyzerBadTemplate := core.NewSmartFeedbackAnalyzer(mockLLM, badTemplateCfg, newTestLogger())
+		analyzerBadTemplate := core.NewSmartFeedbackAnalyzer(nil, mockLLM, badTemplateCfg, newTestLogger())
 
 		results := []types.ExecutionResult{
 			{TaskID: "fail_task_prompt", Status: types.ExecutionStatusSuccess, StartTime: baseTime, EndTime: baseTime.Add(time.Second)},
@@ -149,7 +149,7 @@ func TestSmartFeedbackAnalyzer_AssessExecutionQuality_Success(t *testing.T) {
 
 	config := core.DefaultFeedbackAnalyzerConfig()
 	logger := newTestLogger()
-	analyzer := core.NewSmartFeedbackAnalyzer(mockLLM, config, logger)
+	analyzer := core.NewSmartFeedbackAnalyzer(nil, mockLLM, config, logger)
 
 	results := []types.ExecutionResult{
 		{TaskID: "task1", Status: types.ExecutionStatusSuccess, StartTime: time.Now(), EndTime: time.Now().Add(1 * time.Second)},
@@ -172,7 +172,7 @@ func TestSmartFeedbackAnalyzer_AssessExecutionQuality_EmptyResults(t *testing.T)
 	mockLLM := &MockChatAdapter{} // Default behavior is fine
 	config := core.DefaultFeedbackAnalyzerConfig()
 	logger := newTestLogger()
-	analyzer := core.NewSmartFeedbackAnalyzer(mockLLM, config, logger)
+	analyzer := core.NewSmartFeedbackAnalyzer(nil, mockLLM, config, logger)
 
 	assessment, err := analyzer.AssessExecutionQuality(context.Background(), []types.ExecutionResult{})
 	require.NoError(t, err) // Expect no error, should return empty/default assessment
@@ -189,7 +189,7 @@ func TestSmartFeedbackAnalyzer_AssessExecutionQuality_LLMError(t *testing.T) {
 
 	config := core.DefaultFeedbackAnalyzerConfig()
 	logger := newTestLogger()
-	analyzer := core.NewSmartFeedbackAnalyzer(mockLLM, config, logger)
+	analyzer := core.NewSmartFeedbackAnalyzer(nil, mockLLM, config, logger)
 
 	results := []types.ExecutionResult{
 		{TaskID: "task1", Status: types.ExecutionStatusSuccess, StartTime: time.Now(), EndTime: time.Now().Add(1 * time.Second)},
@@ -217,7 +217,7 @@ func TestSmartFeedbackAnalyzer_AssessExecutionQuality_InvalidJSON(t *testing.T) 
 
 	config := core.DefaultFeedbackAnalyzerConfig()
 	logger := newTestLogger()
-	analyzer := core.NewSmartFeedbackAnalyzer(mockLLM, config, logger)
+	analyzer := core.NewSmartFeedbackAnalyzer(nil, mockLLM, config, logger)
 
 	results := []types.ExecutionResult{
 		{TaskID: "task1", Status: types.ExecutionStatusSuccess, StartTime: time.Now(), EndTime: time.Now().Add(1 * time.Second)},
@@ -253,7 +253,7 @@ func TestSmartFeedbackAnalyzer_AssessRisk_Success(t *testing.T) {
 
 	config := core.DefaultFeedbackAnalyzerConfig()
 	logger := newTestLogger()
-	analyzer := core.NewSmartFeedbackAnalyzer(mockLLM, config, logger)
+	analyzer := core.NewSmartFeedbackAnalyzer(nil, mockLLM, config, logger)
 
 	currentResults := []types.ExecutionResult{
 		{TaskID: "task1", Status: types.ExecutionStatusFailure, Error: "error1", StartTime: time.Now(), EndTime: time.Now().Add(1 * time.Second)},
@@ -286,7 +286,7 @@ func TestSmartFeedbackAnalyzer_AssessRisk_LLMError(t *testing.T) {
 
 	config := core.DefaultFeedbackAnalyzerConfig()
 	logger := newTestLogger()
-	analyzer := core.NewSmartFeedbackAnalyzer(mockLLM, config, logger)
+	analyzer := core.NewSmartFeedbackAnalyzer(nil, mockLLM, config, logger)
 
 	_, err := analyzer.AssessRisk(context.Background(), []types.ExecutionResult{}, []types.Task{}, types.SystemState{}, []core.FeedbackAnalysisRecord{})
 	require.Error(t, err)
@@ -309,7 +309,7 @@ func TestSmartFeedbackAnalyzer_AssessRisk_InvalidJSON(t *testing.T) {
 
 	config := core.DefaultFeedbackAnalyzerConfig()
 	logger := newTestLogger()
-	analyzer := core.NewSmartFeedbackAnalyzer(mockLLM, config, logger)
+	analyzer := core.NewSmartFeedbackAnalyzer(nil, mockLLM, config, logger)
 
 	_, err := analyzer.AssessRisk(context.Background(), []types.ExecutionResult{}, []types.Task{}, types.SystemState{}, []core.FeedbackAnalysisRecord{})
 	require.Error(t, err)
@@ -353,7 +353,7 @@ func TestSmartFeedbackAnalyzer_GenerateInsights_Success(t *testing.T) {
 
 	config := core.DefaultFeedbackAnalyzerConfig()
 	logger := newTestLogger()
-	analyzer := core.NewSmartFeedbackAnalyzer(mockLLM, config, logger)
+	analyzer := core.NewSmartFeedbackAnalyzer(nil, mockLLM, config, logger)
 
 	baseAnalysis := types.AgentOutputAnalysis{
 		KeyFindings:     []string{"Initial finding"},
@@ -389,7 +389,7 @@ func TestSmartFeedbackAnalyzer_GenerateInsights_LLMError(t *testing.T) {
 
 	config := core.DefaultFeedbackAnalyzerConfig()
 	logger := newTestLogger()
-	analyzer := core.NewSmartFeedbackAnalyzer(mockLLM, config, logger)
+	analyzer := core.NewSmartFeedbackAnalyzer(nil, mockLLM, config, logger)
 
 	_, err := analyzer.GenerateInsights(context.Background(), types.AgentOutputAnalysis{}, []types.ExecutionResult{}, []string{})
 	require.Error(t, err)
@@ -412,7 +412,7 @@ func TestSmartFeedbackAnalyzer_GenerateInsights_InvalidJSON(t *testing.T) {
 
 	config := core.DefaultFeedbackAnalyzerConfig()
 	logger := newTestLogger()
-	analyzer := core.NewSmartFeedbackAnalyzer(mockLLM, config, logger)
+	analyzer := core.NewSmartFeedbackAnalyzer(nil, mockLLM, config, logger)
 
 	_, err := analyzer.GenerateInsights(context.Background(), types.AgentOutputAnalysis{}, []types.ExecutionResult{}, []string{})
 	require.Error(t, err)
