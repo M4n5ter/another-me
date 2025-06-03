@@ -142,7 +142,6 @@
     "tool.define_monitoring.arg.monitoring_tasks": "定义的监控任务",
     "tool.define_monitoring.arg.reasoning": "监控定义的推理",
     "tool.define_monitoring.arg.confidence": "置信度水平 (0-1)",
-
     "tool.memory.vector_store.name": "向量存储记忆",
     "tool.memory.vector_store.description": "用于与向量存储记忆交互的工具。",
     "tool.memory.vector_store.arg.operation": "要执行的操作（例如，add, query, delete）。",
@@ -197,5 +196,11 @@
     "tool.agent_risk_assessment.arg.mitigation": "缓解风险的措施。",
     "tool.agent_risk_assessment.arg.description": "风险的详细描述。",
     "tool.agent_risk_assessment.arg.predicted_impact_if_occurs": "如果风险发生，预测的影响。",
-    "tool.agent_risk_assessment.arg.probability_assessment": "风险概率的定性或定量评估 (低/中/高 或 0.0-1.0)。"
+    "tool.agent_risk_assessment.arg.probability_assessment": "风险概率的定性或定量评估 (低/中/高 或 0.0-1.0)。",
+    "tool.human_in.name": "人类介入",
+    "tool.human_in.description": "请求人类介入，获取人类操作员的输入、确认或决策。",
+    "tool.human_in.arg.message": "显示给人类操作员的消息",
+    "tool.human_in.arg.timeout": "超时时间（秒，默认：300秒）",
+    "tool.human_in.arg.request_type": "请求类型：input（输入）、confirmation（确认）或decision（决策）",
+    "tool.human_in.arg.options": "决策类型请求的选项"
 }

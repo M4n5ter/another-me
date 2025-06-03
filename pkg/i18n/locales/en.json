@@ -142,7 +142,6 @@
     "tool.define_monitoring.arg.monitoring_tasks": "Defined monitoring tasks",
     "tool.define_monitoring.arg.reasoning": "Reasoning for monitoring definitions",
     "tool.define_monitoring.arg.confidence": "Confidence level (0-1)",
-
     "tool.memory.vector_store.name": "Vector Store Memory",
     "tool.memory.vector_store.description": "Tool for interacting with a vector store memory.",
     "tool.memory.vector_store.arg.operation": "Operation to perform (e.g., add, query, delete).",
@@ -197,5 +196,11 @@
     "tool.agent_risk_assessment.arg.mitigation": "Measures to mitigate the risk.",
     "tool.agent_risk_assessment.arg.description": "Detailed description of the risk.",
     "tool.agent_risk_assessment.arg.predicted_impact_if_occurs": "Predicted impact if the risk occurs.",
-    "tool.agent_risk_assessment.arg.probability_assessment": "Qualitative or quantitative assessment of risk probability (low/medium/high or 0.0-1.0)."
+    "tool.agent_risk_assessment.arg.probability_assessment": "Qualitative or quantitative assessment of risk probability (low/medium/high or 0.0-1.0).",
+    "tool.human_in.name": "Human Intervention",
+    "tool.human_in.description": "Request human intervention to get input, confirmation, or decisions from a human operator.",
+    "tool.human_in.arg.message": "Message to display to the human operator",
+    "tool.human_in.arg.timeout": "Timeout in seconds (default: 300 seconds)",
+    "tool.human_in.arg.request_type": "Type of request: input, confirmation, or decision",
+    "tool.human_in.arg.options": "Options for decision-type requests"
 }
