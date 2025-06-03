@@ -1,5 +1,6 @@
 package llminterface
 
+// SystemInputMessage 创建系统输入消息
 func SystemInputMessage(text string) InputMessage {
 	return InputMessage{
 		Role: RoleSystem,
@@ -9,6 +10,7 @@ func SystemInputMessage(text string) InputMessage {
 	}
 }
 
+// UserInputMessageText 创建用户输入消息
 func UserInputMessageText(text string) InputMessage {
 	return InputMessage{
 		Role: RoleUser,

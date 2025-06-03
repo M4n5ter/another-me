@@ -254,7 +254,7 @@ func (t *HumanInTool) Call(ctx context.Context, inputJSON string) (string, error
 }
 
 // createOutputParameters 创建输出参数定义
-func (t *HumanInTool) createOutputParameters(ctx context.Context) []toolcore.ParameterDefinition {
+func (t *HumanInTool) createOutputParameters(_ context.Context) []toolcore.ParameterDefinition {
 	statusDesc := map[string]string{
 		"en": "Request status: success, timeout, or cancelled",
 		"zh": "请求状态：success（成功）、timeout（超时）或cancelled（取消）",
