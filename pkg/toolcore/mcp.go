@@ -3,6 +3,7 @@ package toolcore
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	json "github.com/json-iterator/go"
 	"github.com/mark3labs/mcp-go/client"
@@ -14,6 +15,24 @@ func STDIOMCPTools(command string, env []string, args ...string) ([]Tool, error)
 	c, err := client.NewStdioMCPClient(command, env, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create MCP client: %w", err)
+	}
+
+	if err := c.Start(context.Background()); err != nil {
+		return nil, fmt.Errorf("failed to start MCP client: %w", err)
+	}
+
+	return getTools(c)
+}
+
+// RemoteMCPTools 从远程MCP服务器获取所有工具，优先使用Streamable HTTP MCP服务器，如果失败则使用SSE MCP服务器
+func RemoteMCPTools(url string) ([]Tool, error) {
+	c, err := client.NewStreamableHttpClient(url)
+	if err != nil {
+		slog.Error("failed to create streamable http MCP client, fallback to sse", "error", err)
+		c, err = client.NewSSEMCPClient(url)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create sse MCP client: %w", err)
+		}
 	}
 
 	if err := c.Start(context.Background()); err != nil {
