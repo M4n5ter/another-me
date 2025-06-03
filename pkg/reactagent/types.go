@@ -6,11 +6,13 @@ import (
 	"github.com/m4n5ter/another-me/pkg/llminterface"
 )
 
+// ReActAgent 代表一个 ReAct 智能体
 type ReActAgent struct {
 	ReAct
 	Capabilities []string
 }
 
+// NewReActAgent 创建一个 ReAct 智能体
 func NewReActAgent(react ReAct, capabilities []string) *ReActAgent {
 	return &ReActAgent{
 		ReAct:        react,

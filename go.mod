@@ -8,21 +8,21 @@ require (
 	github.com/BurntSushi/toml v1.5.0
 	github.com/JohannesKaufmann/html-to-markdown v1.6.0
 	github.com/adshao/go-binance/v2 v2.8.2
-	github.com/chromedp/cdproto v0.0.0-20250527225801-8f9bc3ce9e31
+	github.com/chromedp/cdproto v0.0.0-20250530212709-4dcc110a7b92
 	github.com/chromedp/chromedp v0.13.6
-	github.com/cloudwego/eino v0.3.37
+	github.com/cloudwego/eino v0.3.38
 	github.com/cloudwego/eino-ext/components/model/ark v0.1.10
-	github.com/cloudwego/eino-ext/components/model/deepseek v0.0.0-20250527025003-c8588b6dc7a9
+	github.com/cloudwego/eino-ext/components/model/deepseek v0.0.0-20250530094010-bd1c4fc20bbe
 	github.com/go-shiori/go-readability v0.0.0-20250217085726-9f5bf5ca7612
 	github.com/go-vgo/robotgo v0.110.8
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/schema v1.4.1
 	github.com/json-iterator/go v1.1.12
 	github.com/m4n5ter/mindscape v0.0.0-20250528053507-3082210e9ea3
-	github.com/mark3labs/mcp-go v0.30.0
+	github.com/mark3labs/mcp-go v0.31.0
 	github.com/stretchr/testify v1.10.0
 	github.com/temoto/robotstxt v1.1.2
-	google.golang.org/genai v1.6.0
+	google.golang.org/genai v1.8.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
