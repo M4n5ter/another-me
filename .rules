@@ -1,3 +1,127 @@
+# GO 编码规范
+
+## 1. 日志记录 (Logging)
+
+- **核心库**: 必须使用标准库 `slog` 进行日志记录。
+- **模块化**: 不同模块或组件的日志应使用 `logger.WithGroup("groupName")` 进行逻辑分组，以便于跟踪和过滤。
+  ```go
+  // 示例
+  dbLogger := slog.Default().WithGroup("database")
+  dbLogger.Info("数据库连接成功")
+  ```
+- **日志级别**: 合理使用日志级别 (`Debug`, `Info`, `Warn`, `Error`) 以反映事件的重要性和性质。
+  - `Debug`: 用于开发和调试期间的详细信息。
+  - `Info`: 用于记录应用正常运行的关键事件。
+  - `Warn`: 用于表示潜在问题或非严重错误。
+  - `Error`: 用于记录导致操作失败的错误。
+- **日志内容**: 日志消息应清晰、简洁，并包含足够的上下文信息（如相关 ID、操作名称等），以便于问题排查。
+- **敏感信息**: 严禁在日志中记录任何敏感信息，如密码、API 密钥、个人身份信息等。
+
+## 2. 接口实现声明 (Interface Implementation)
+
+- **显式声明**: 为了在编译时验证结构体是否正确实现了接口，必须使用以下形式进行显式声明：
+  ```go
+  var _ InterfaceName = (*StructName)(nil)
+  // 或者，如果结构体是值类型且适用
+  // var _ InterfaceName = StructName{}
+  ```
+- **位置**: 此声明应紧跟在相关结构体正常方法（比如构造函数和其它非接口实现）之后, 跟该接口相关的方法之前。
+
+## 3. Go 文件布局与代码组织 (File Layout and Code Organization)
+
+Go 文件中的代码组织应遵循以下原则，以增强可读性和可维护性：
+
+1.  **常量与变量 (Constants and Variables)**: 包级别的常量 (`const`) 和变量 (`var`) 应分组声明，通常位于文件顶部，同时函数内的变量声明除非有社区事实标准，否则均使用 `:=` 声明并赋值。
+2.  **接口定义 (Interface Definitions)**: 接口定义通常应在使用它们之前或相关实现类型之前声明。`interface{}` 用 `any` 表示。
+3.  **结构体定义 (Struct Definitions)**:
+    - **主结构体优先**: 如果一个文件围绕一个核心结构体展开，该结构体应较早定义。
+    - **依赖结构体位置**: 如果结构体 `A` 内部依赖（包含）了结构体 `B`，并且它们都在同一个文件中定义，那么被依赖的结构体 `B` 的定义**应放在结构体 `A` 定义的下方**。
+      ```go
+      // 示例:
+      type A struct {
+          // ... 其他字段
+          bInternal B // A 依赖 B
+      }
+
+      // 构造函数和 A 的方法...
+
+      type B struct { // B 定义在 A 之后
+          // ... 字段
+      }
+      // B 的方法...
+      ```
+5.  **构造函数 (Constructors)**:
+    - 结构体的主要构造函数 (例如 `NewStructName(...)` 或 `New()`) 应紧随其结构体定义之后。
+6.  **方法顺序 (Method Order)**:
+    - **接收者分组**: 同一个接收者的所有方法应组织在一起。
+    - **可见性优先**: 公开方法 (`ExportedMethod`) 应在其所属接收者的私有方法 (`unexportedMethod`) 之前定义。
+    - **调用关系 (被依赖者在下)**: 在同一可见性级别内，若方法 `M1` 调用了方法 `M2`，则 `M2` (被依赖者) 通常应定义在 `M1` (依赖者) 的下方。这有助于自顶向下的代码阅读流程。
+      ```go
+      func (s *MyStruct) PublicMethodA() {
+          // ...
+          s.privateHelperForA()
+          // ...
+      }
+
+      // 其他 Public 方法...
+
+      func (s *MyStruct) privateHelperForA() { // 被 PublicMethodA 依赖，定义在下方
+          // ...
+      }
+      ```
+    - **逻辑相关性与常用性**:
+        - 功能上紧密相关的方法可以放在一起。
+        - 在满足上述规则的前提下，更常用或作为主要入口点的方法可以适当靠前。
+7. **函数 (Functions)**: 包级别函数（非方法）的组织可以遵循类似的逻辑相关性和调用关系原则。
+
+## 4. 命名规范 (Naming Conventions)
+
+- 遵循 Go 官方的命名约定。
+- **包名 (Package Names)**: 简短、小写、单个单词（若可能）。
+- **接口名 (Interface Names)**: 单个方法的接口通常以 "-er" 后缀命名 (例如 `Reader`, `Writer`)。多方法接口则根据其职责命名。
+- **变量名 (Variable Names)**: 简短但具有描述性。对于作用域较小的变量，可以使用更短的名称 (例如 `i` 用于循环索引, `buf` 用于缓冲区)。
+
+## 5. 错误处理 (Error Handling)
+
+- **显式处理**: 错误是 Go 中的一等公民，必须显式检查和处理，不得忽略。
+- **返回错误**: 函数或方法在遇到错误时应返回 `error` 类型的值作为其最后一个返回值。避免使用 `panic` 处理可预见的错误。
+- **错误信息**: 错误信息应提供足够的上下文，但避免暴露内部实现细节给上层调用者。可以使用 `fmt.Errorf` 来包装错误以添加上下文：`fmt.Errorf("operation X failed: %w", err)`。
+- **错误类型**: 对于需要特定处理的错误类型，可以定义自定义错误类型或使用 `errors.Is` 和 `errors.As` 进行判断。
+
+## 6. 可选值处理 (Optional Values)
+
+可选值应使用 `. "github.com/m4n5ter/another-me/pkg/option"` 进行 dot import 并使用 `Option[T]` 类型来表示。
+
+```go
+import (
+    . "github.com/m4n5ter/another-me/pkg/option"
+)
+
+type MyStruct struct {
+    Name Option[string]
+    Age  Option[int]
+}
+
+func (s *MyStruct) GetName() string {
+    return s.Name.Unwrap()
+}
+
+func (s *MyStruct) GetNamePtr() *string {
+    return s.Name.UnwrapAsPtr()
+}
+
+func (s *MyStruct) GetAge() int {
+    return s.Age.TakeOr(0)
+}
+```
+
+
+## 7. 代码注释 (Code Comments)
+
+- **Go Doc**: 所有导出的标识符 (类型、函数、常量、变量) 都必须有清晰的 Go Doc 注释，解释其用途、参数、返回值等。
+- **行内注释**: 对复杂的逻辑、算法或不直观的代码段使用行内注释 (`//`) 进行解释。避免对显而易见的代码进行注释。
+- **注释语言**: 尽可能使用中文进行注释。
+
 # 自定义工具编写规范
 
 ## 核心原则

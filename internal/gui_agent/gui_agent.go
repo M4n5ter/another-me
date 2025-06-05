@@ -423,6 +423,7 @@ func MustMarshalJSONWithoutPanic(v any) string {
 	json, err := json.MarshalToString(v)
 	if err != nil {
 		slog.Error("failed to marshal json", "error", err)
+		json = `{"error": "failed to marshal json"}`
 	}
 	return json
 }
