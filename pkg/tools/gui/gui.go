@@ -791,7 +791,6 @@ func stringSliceToAnySlice(s []string) []any {
 // Key 键盘按键类型
 type Key string
 
-//nolint:revive // 键盘按键常量
 const (
 	// 普通字符键 A-Z (大写), a-z (小写), 0-9
 	KeyA Key = "A" // 字母键 A
