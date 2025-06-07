@@ -1,12 +1,15 @@
 package toolcore
 
 import (
+	"fmt"
 	"slices"
 	"sort"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"google.golang.org/genai"
 
 	. "github.com/m4n5ter/another-me/pkg/option"
+	"github.com/m4n5ter/another-me/pkg/schema"
 )
 
 // ConvertMCPInputSchemaToParams 转换 MCP 的输入 schema 为 ParameterDefinition 列表
@@ -270,4 +273,259 @@ func convertSingleParamDefToRawSchema(paramDef *ParameterDefinition) map[string]
 		}
 	}
 	return propSchema
+}
+
+// ===== 转换层: genai.Schema 与 ParameterDefinition/ToolSchema 互相转换 =====
+
+// ConvertGenaiSchemaToParams 将 genai.Schema 转换为 ParameterDefinition 列表
+// schema: genai.Schema 对象，通常是 object 类型的根模式
+func ConvertGenaiSchemaToParams(genaiSchema *schema.Schema) []ParameterDefinition {
+	if genaiSchema == nil || string(genaiSchema.Type) != "OBJECT" {
+		return []ParameterDefinition{}
+	}
+
+	// 获取属性和必需字段
+	properties := genaiSchema.Properties
+	required := genaiSchema.Required
+
+	if properties == nil {
+		return []ParameterDefinition{}
+	}
+
+	// 获取所有属性名并排序
+	names := make([]string, 0, len(properties))
+	for name := range properties {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	params := make([]ParameterDefinition, 0, len(properties))
+	for _, name := range names {
+		propSchema := properties[name]
+		if propSchema == nil {
+			continue
+		}
+		param := convertGenaiSchemaToParamDef(name, propSchema, required)
+		params = append(params, param)
+	}
+	return params
+}
+
+// convertGenaiSchemaToParamDef 将单个 genai.Schema 转换为 ParameterDefinition
+func convertGenaiSchemaToParamDef(propName string, propSchema *schema.Schema, parentRequiredList []string) ParameterDefinition {
+	param := ParameterDefinition{
+		Name: propName,
+		Description: map[string]string{
+			"en": propSchema.Description,
+			"zh": propSchema.Description, // 默认使用英文描述作为中文
+		},
+		Required: isNameInList(propName, parentRequiredList),
+	}
+
+	// 转换类型
+	param.Type = convertGenaiTypeToParameterType(propSchema.Type)
+
+	// 处理枚举值
+	if len(propSchema.Enum) > 0 {
+		enumValues := make([]any, len(propSchema.Enum))
+		for i, v := range propSchema.Enum {
+			enumValues[i] = v
+		}
+		param.EnumValues = Some(enumValues)
+	}
+
+	// 处理默认值
+	if propSchema.Default != nil {
+		param.DefaultValue = Some(propSchema.Default)
+	}
+
+	switch param.Type {
+	case ParamTypeObject:
+		if propSchema.Properties != nil {
+			nestedParams := ConvertGenaiSchemaToParams(propSchema)
+			param.Properties = Some(nestedParams)
+		} else {
+			param.Properties = Some([]ParameterDefinition{})
+		}
+	case ParamTypeArray:
+		if propSchema.Items != nil {
+			itemParamDef := convertGenaiSchemaToParamDef("item", propSchema.Items, []string{})
+			param.Items = Some(itemParamDef)
+		}
+	}
+	return param
+}
+
+// convertGenaiTypeToParameterType 将 genai.Type 转换为 ParameterType
+func convertGenaiTypeToParameterType(genaiType genai.Type) ParameterType {
+	switch string(genaiType) {
+	case "STRING":
+		return ParamTypeString
+	case "NUMBER":
+		return ParamTypeNumber
+	case "INTEGER":
+		return ParamTypeInteger
+	case "BOOLEAN":
+		return ParamTypeBoolean
+	case "OBJECT":
+		return ParamTypeObject
+	case "ARRAY":
+		return ParamTypeArray
+	default:
+		return ParamTypeAny
+	}
+}
+
+// ConvertParamsToGenaiSchema 将 ParameterDefinition 列表转换为 genai.Schema
+// params: 参数定义列表
+// title: 模式标题
+// description: 模式描述
+func ConvertParamsToGenaiSchema(params []ParameterDefinition, title, description string) *schema.Schema {
+	genaiSchema := &schema.Schema{
+		Type:        genai.TypeObject,
+		Title:       title,
+		Description: description,
+		Properties:  make(map[string]*schema.Schema),
+	}
+
+	var requiredProps []string
+
+	for _, paramDef := range params {
+		propSchema := convertParamDefToGenaiSchema(&paramDef)
+		genaiSchema.Properties[paramDef.Name] = propSchema
+		if paramDef.Required {
+			requiredProps = append(requiredProps, paramDef.Name)
+		}
+	}
+
+	if len(requiredProps) > 0 {
+		sort.Strings(requiredProps)
+		genaiSchema.Required = requiredProps
+	}
+
+	return genaiSchema
+}
+
+// convertParamDefToGenaiSchema 将单个 ParameterDefinition 转换为 genai.Schema
+func convertParamDefToGenaiSchema(paramDef *ParameterDefinition) *schema.Schema {
+	propSchema := &schema.Schema{
+		Type: convertParameterTypeToGenaiType(paramDef.Type),
+	}
+
+	// 使用英文描述，如果没有则使用中文
+	if desc, ok := paramDef.Description["en"]; ok && desc != "" {
+		propSchema.Description = desc
+	} else if desc, ok := paramDef.Description["zh"]; ok && desc != "" {
+		propSchema.Description = desc
+	}
+
+	// 处理枚举值
+	if paramDef.EnumValues.IsSome() {
+		enumVals := paramDef.EnumValues.Unwrap()
+		enumStrings := make([]string, len(enumVals))
+		for i, v := range enumVals {
+			if str, ok := v.(string); ok {
+				enumStrings[i] = str
+			} else {
+				enumStrings[i] = fmt.Sprintf("%v", v)
+			}
+		}
+		propSchema.Enum = enumStrings
+	}
+
+	// 处理默认值
+	if paramDef.DefaultValue.IsSome() {
+		propSchema.Default = paramDef.DefaultValue.Unwrap()
+	}
+
+	switch paramDef.Type {
+	case ParamTypeObject:
+		propSchema.Properties = make(map[string]*schema.Schema)
+		var nestedRequired []string
+
+		if paramDef.Properties.IsSome() {
+			nestedParams := paramDef.Properties.Unwrap()
+			for _, nestedParam := range nestedParams {
+				propSchema.Properties[nestedParam.Name] = convertParamDefToGenaiSchema(&nestedParam)
+				if nestedParam.Required {
+					nestedRequired = append(nestedRequired, nestedParam.Name)
+				}
+			}
+		}
+
+		if len(nestedRequired) > 0 {
+			sort.Strings(nestedRequired)
+			propSchema.Required = nestedRequired
+		}
+
+	case ParamTypeArray:
+		if paramDef.Items.IsSome() {
+			itemDef := paramDef.Items.Unwrap()
+			propSchema.Items = convertParamDefToGenaiSchema(&itemDef)
+		}
+	}
+
+	return propSchema
+}
+
+// convertParameterTypeToGenaiType 将 ParameterType 转换为 genai.Type
+func convertParameterTypeToGenaiType(paramType ParameterType) genai.Type {
+	switch paramType {
+	case ParamTypeString:
+		return genai.TypeString
+	case ParamTypeNumber:
+		return genai.TypeNumber
+	case ParamTypeInteger:
+		return genai.TypeInteger
+	case ParamTypeBoolean:
+		return genai.TypeBoolean
+	case ParamTypeObject:
+		return genai.TypeObject
+	case ParamTypeArray:
+		return genai.TypeArray
+	default:
+		return genai.TypeUnspecified
+	}
+}
+
+// ConvertToolSchemaToGenaiSchema 将 ToolSchema 转换为 genai.Schema
+// toolSchema: 工具模式
+func ConvertToolSchemaToGenaiSchema(toolSchema *ToolSchema) *schema.Schema {
+	// 获取英文描述，如果没有则使用中文
+	description := ""
+	if desc, ok := toolSchema.Descriptions["en"]; ok && desc != "" {
+		description = desc
+	} else if desc, ok := toolSchema.Descriptions["zh"]; ok && desc != "" {
+		description = desc
+	}
+
+	// 获取英文名称，如果没有则使用中文
+	title := ""
+	if name, ok := toolSchema.LocalizedNames["en"]; ok && name != "" {
+		title = name
+	} else if name, ok := toolSchema.LocalizedNames["zh"]; ok && name != "" {
+		title = name
+	} else {
+		title = toolSchema.Name
+	}
+
+	return ConvertParamsToGenaiSchema(toolSchema.InputParameters, title, description)
+}
+
+// ConvertGenaiSchemaToToolSchema 将 genai.Schema 转换为 ToolSchema
+// genaiSchema: genai.Schema 对象
+// name: 工具名称
+// localizedNames: 本地化名称映射
+// descriptions: 本地化描述映射
+func ConvertGenaiSchemaToToolSchema(genaiSchema *schema.Schema, name string, localizedNames, descriptions map[string]string) *ToolSchema {
+	inputParams := ConvertGenaiSchemaToParams(genaiSchema)
+
+	return &ToolSchema{
+		Name:            name,
+		LocalizedNames:  localizedNames,
+		Descriptions:    descriptions,
+		InputParameters: inputParams,
+		// OutputParameters 需要单独处理，因为 genai.Schema 通常只描述输入
+		OutputParameters: []ParameterDefinition{},
+	}
 }

@@ -8,8 +8,10 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/genai"
 
 	. "github.com/m4n5ter/another-me/pkg/option"
+	"github.com/m4n5ter/another-me/pkg/schema"
 )
 
 func TestConvertJSONSchemaToParams_Simple(t *testing.T) {
@@ -532,4 +534,209 @@ func TestSchemaParamsRoundTrip(t *testing.T) {
 	require.NoError(t, err, "Failed to marshal reconstructedRawSchema to JSON")
 
 	assert.JSONEq(t, string(originalJSON), string(reconstructedJSON), "Full schema round trip should be equivalent as JSON")
+}
+
+func TestConvertGenaiSchemaToParams(t *testing.T) {
+	// 创建一个简单的 genai.Schema
+	genaiSchema := &schema.Schema{
+		Type:        genai.TypeObject,
+		Title:       "Test Schema",
+		Description: "A test schema for conversion",
+		Properties: map[string]*schema.Schema{
+			"name": {
+				Type:        genai.TypeString,
+				Description: "User name",
+			},
+			"age": {
+				Type:        genai.TypeInteger,
+				Description: "User age",
+			},
+			"is_active": {
+				Type:        genai.TypeBoolean,
+				Description: "Whether user is active",
+			},
+		},
+		Required: []string{"name", "age"},
+	}
+
+	// 转换为 ParameterDefinition
+	params := ConvertGenaiSchemaToParams(genaiSchema)
+
+	// 验证结果
+	assert.Len(t, params, 3)
+
+	// 验证 age 参数 (按字母顺序：age 在第 0 位)
+	ageParam := params[0]
+	assert.Equal(t, "age", ageParam.Name)
+	assert.Equal(t, ParamTypeInteger, ageParam.Type)
+	assert.True(t, ageParam.Required)
+	assert.Equal(t, "User age", ageParam.Description["en"])
+
+	// 验证 is_active 参数 (按字母顺序：is_active 在第 1 位)
+	isActiveParam := params[1]
+	assert.Equal(t, "is_active", isActiveParam.Name)
+	assert.Equal(t, ParamTypeBoolean, isActiveParam.Type)
+	assert.False(t, isActiveParam.Required)
+	assert.Equal(t, "Whether user is active", isActiveParam.Description["en"])
+
+	// 验证 name 参数 (按字母顺序：name 在第 2 位)
+	nameParam := params[2]
+	assert.Equal(t, "name", nameParam.Name)
+	assert.Equal(t, ParamTypeString, nameParam.Type)
+	assert.True(t, nameParam.Required)
+	assert.Equal(t, "User name", nameParam.Description["en"])
+}
+
+func TestConvertParamsToGenaiSchema(t *testing.T) {
+	// 创建 ParameterDefinition 列表
+	params := []ParameterDefinition{
+		{
+			Name: "name",
+			Type: ParamTypeString,
+			Description: map[string]string{
+				"en": "User name",
+				"zh": "用户名",
+			},
+			Required: true,
+		},
+		{
+			Name: "age",
+			Type: ParamTypeInteger,
+			Description: map[string]string{
+				"en": "User age",
+				"zh": "用户年龄",
+			},
+			Required: true,
+		},
+		{
+			Name: "tags",
+			Type: ParamTypeArray,
+			Description: map[string]string{
+				"en": "User tags",
+				"zh": "用户标签",
+			},
+			Required: false,
+			Items: Some(ParameterDefinition{
+				Name: "item",
+				Type: ParamTypeString,
+				Description: map[string]string{
+					"en": "Tag item",
+					"zh": "标签项",
+				},
+			}),
+		},
+	}
+
+	// 转换为 genai.Schema
+	genaiSchema := ConvertParamsToGenaiSchema(params, "Test Schema", "A test schema")
+
+	// 验证结果
+	assert.Equal(t, genai.TypeObject, genaiSchema.Type)
+	assert.Equal(t, "Test Schema", genaiSchema.Title)
+	assert.Equal(t, "A test schema", genaiSchema.Description)
+	assert.Len(t, genaiSchema.Properties, 3)
+	assert.ElementsMatch(t, []string{"name", "age"}, genaiSchema.Required)
+
+	// 验证 name 属性
+	nameSchema := genaiSchema.Properties["name"]
+	assert.NotNil(t, nameSchema)
+	assert.Equal(t, genai.TypeString, nameSchema.Type)
+	assert.Equal(t, "User name", nameSchema.Description)
+
+	// 验证 age 属性
+	ageSchema := genaiSchema.Properties["age"]
+	assert.NotNil(t, ageSchema)
+	assert.Equal(t, genai.TypeInteger, ageSchema.Type)
+	assert.Equal(t, "User age", ageSchema.Description)
+
+	// 验证 tags 属性
+	tagsSchema := genaiSchema.Properties["tags"]
+	assert.NotNil(t, tagsSchema)
+	assert.Equal(t, genai.TypeArray, tagsSchema.Type)
+	assert.Equal(t, "User tags", tagsSchema.Description)
+	assert.NotNil(t, tagsSchema.Items)
+	assert.Equal(t, genai.TypeString, tagsSchema.Items.Type)
+}
+
+func TestConvertToolSchemaToGenaiSchema(t *testing.T) {
+	// 创建 ToolSchema
+	toolSchema := &ToolSchema{
+		Name: "test_tool",
+		LocalizedNames: map[string]string{
+			"en": "Test Tool",
+			"zh": "测试工具",
+		},
+		Descriptions: map[string]string{
+			"en": "A test tool for conversion",
+			"zh": "用于转换的测试工具",
+		},
+		InputParameters: []ParameterDefinition{
+			{
+				Name: "input",
+				Type: ParamTypeString,
+				Description: map[string]string{
+					"en": "Input parameter",
+					"zh": "输入参数",
+				},
+				Required: true,
+			},
+		},
+	}
+
+	// 转换为 genai.Schema
+	genaiSchema := ConvertToolSchemaToGenaiSchema(toolSchema)
+
+	// 验证结果
+	assert.Equal(t, genai.TypeObject, genaiSchema.Type)
+	assert.Equal(t, "Test Tool", genaiSchema.Title)
+	assert.Equal(t, "A test tool for conversion", genaiSchema.Description)
+	assert.Len(t, genaiSchema.Properties, 1)
+	assert.Equal(t, []string{"input"}, genaiSchema.Required)
+
+	// 验证 input 属性
+	inputSchema := genaiSchema.Properties["input"]
+	assert.NotNil(t, inputSchema)
+	assert.Equal(t, genai.TypeString, inputSchema.Type)
+	assert.Equal(t, "Input parameter", inputSchema.Description)
+}
+
+func TestConvertGenaiSchemaToToolSchema(t *testing.T) {
+	// 创建 genai.Schema
+	genaiSchema := &schema.Schema{
+		Type:        genai.TypeObject,
+		Title:       "Test Tool",
+		Description: "A test tool for conversion",
+		Properties: map[string]*schema.Schema{
+			"input": {
+				Type:        genai.TypeString,
+				Description: "Input parameter",
+			},
+		},
+		Required: []string{"input"},
+	}
+
+	localizedNames := map[string]string{
+		"en": "Test Tool",
+		"zh": "测试工具",
+	}
+	descriptions := map[string]string{
+		"en": "A test tool for conversion",
+		"zh": "用于转换的测试工具",
+	}
+
+	// 转换为 ToolSchema
+	toolSchema := ConvertGenaiSchemaToToolSchema(genaiSchema, "test_tool", localizedNames, descriptions)
+
+	// 验证结果
+	assert.Equal(t, "test_tool", toolSchema.Name)
+	assert.Equal(t, localizedNames, toolSchema.LocalizedNames)
+	assert.Equal(t, descriptions, toolSchema.Descriptions)
+	assert.Len(t, toolSchema.InputParameters, 1)
+
+	// 验证 input 参数
+	inputParam := toolSchema.InputParameters[0]
+	assert.Equal(t, "input", inputParam.Name)
+	assert.Equal(t, ParamTypeString, inputParam.Type)
+	assert.True(t, inputParam.Required)
+	assert.Equal(t, "Input parameter", inputParam.Description["en"])
 }
