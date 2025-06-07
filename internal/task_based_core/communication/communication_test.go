@@ -3,6 +3,7 @@ package communication
 import (
 	"fmt"
 	"log/slog"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -71,10 +72,10 @@ func TestMessageBus(t *testing.T) {
 		bus := NewMessageBus(100, 2)
 		defer bus.Close()
 
-		eventCount := 0
+		var eventCount int32
 
 		bus.Subscribe(EventTypeTaskStarted, func(event Event) {
-			eventCount++
+			atomic.AddInt32(&eventCount, 1)
 		})
 
 		// 发布事件
@@ -84,8 +85,9 @@ func TestMessageBus(t *testing.T) {
 		// 等待处理完成
 		time.Sleep(100 * time.Millisecond)
 
-		if eventCount != 1 {
-			t.Fatalf("期望收到1个事件，实际收到 %d 个", eventCount)
+		count := atomic.LoadInt32(&eventCount)
+		if count != 1 {
+			t.Fatalf("期望收到1个事件，实际收到 %d 个", count)
 		}
 	})
 }
