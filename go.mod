@@ -8,6 +8,7 @@ require (
 	github.com/BurntSushi/toml v1.5.0
 	github.com/JohannesKaufmann/html-to-markdown v1.6.0
 	github.com/adshao/go-binance/v2 v2.8.2
+	github.com/anthropics/anthropic-sdk-go v1.4.0
 	github.com/chromedp/cdproto v0.0.0-20250530212709-4dcc110a7b92
 	github.com/chromedp/chromedp v0.13.6
 	github.com/cloudwego/eino v0.3.38
