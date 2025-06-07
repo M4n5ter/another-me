@@ -13,6 +13,7 @@ import (
 	"github.com/m4n5ter/another-me/pkg/i18n"
 	"github.com/m4n5ter/another-me/pkg/llminterface"
 	. "github.com/m4n5ter/another-me/pkg/option"
+	jsonSchema "github.com/m4n5ter/another-me/pkg/schema"
 	"github.com/m4n5ter/another-me/pkg/toolcore"
 )
 
@@ -42,6 +43,11 @@ var _ llminterface.ChatAdapter = (*ChatAdapter)(nil)
 // GetFrameworkName 返回此适配器实例所适配的底层框架的名称。
 func (a *ChatAdapter) GetFrameworkName() string {
 	return "eino"
+}
+
+// ProduceJSON 方法用于生成 JSON 格式的响应。
+func (a *ChatAdapter) ProduceJSON(ctx context.Context, input llminterface.ChatInput, jsonSchema Option[jsonSchema.Schema]) (string, error) {
+	panic("ProduceJSON is not implemented for eino adapter")
 }
 
 // Chat 方法用于向 LLM 发起一次对话交互。

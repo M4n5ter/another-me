@@ -3,6 +3,8 @@ package llminterface
 import (
 	"context"
 
+	. "github.com/m4n5ter/another-me/pkg/option"
+	"github.com/m4n5ter/another-me/pkg/schema"
 	"github.com/m4n5ter/another-me/pkg/toolcore"
 )
 
@@ -36,6 +38,13 @@ type ChatAdapter interface {
 	//   - 流处理过程中的错误: 通过 ChatOutputChunk.Error 字段在 channel 中传递。
 	//                     通常，当 chunk.Error 非 nil 时，表示流中出现问题，channel 随后会被关闭。
 	Chat(ctx context.Context, input ChatInput) (<-chan ChatOutputChunk, error)
+
+	// ProduceJSON 方法用于生成 JSON 格式的响应。
+	// 输入 ChatInput 包含要发送给 LLM 的消息序列以及可选的会话ID。
+	// JSONSchema 是可选的，如果提供，则表示需要返回的 JSON 格式，不提供的话，则需要在提示词中明确返回的 JSON 格式。
+	//
+	// 返回值是一个 JSON 字符串，如果发生错误，则返回一个非 nil 的 error。
+	ProduceJSON(ctx context.Context, input ChatInput, JSONSchema Option[schema.Schema]) (string, error)
 
 	// RegisterTools 方法用于向适配器注册一组工具。
 	// 这允许适配器在底层框架中使用工具。

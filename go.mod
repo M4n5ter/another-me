@@ -20,6 +20,7 @@ require (
 	github.com/json-iterator/go v1.1.12
 	github.com/m4n5ter/mindscape v0.0.0-20250528053507-3082210e9ea3
 	github.com/mark3labs/mcp-go v0.31.0
+	github.com/openai/openai-go v1.3.0
 	github.com/stretchr/testify v1.10.0
 	github.com/temoto/robotstxt v1.1.2
 	google.golang.org/genai v1.8.0
@@ -91,6 +92,10 @@ require (
 	github.com/spf13/cast v1.7.1 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/tailscale/win v0.0.0-20250213223159-5992cb43ca35 // indirect
+	github.com/tidwall/gjson v1.14.4 // indirect
+	github.com/tidwall/match v1.1.1 // indirect
+	github.com/tidwall/pretty v1.2.1 // indirect
+	github.com/tidwall/sjson v1.2.5 // indirect
 	github.com/tklauser/go-sysconf v0.3.15 // indirect
 	github.com/tklauser/numcpus v0.10.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect

@@ -8,6 +8,7 @@ import (
 
 	"github.com/m4n5ter/another-me/pkg/llminterface"
 	. "github.com/m4n5ter/another-me/pkg/option"
+	"github.com/m4n5ter/another-me/pkg/schema"
 	"github.com/m4n5ter/another-me/pkg/toolcore"
 )
 
@@ -52,8 +53,14 @@ func NewGeminiAdapter(ctx context.Context, client *genai.Client, registry *toolc
 		config: config,
 	}
 
-	err := adapter.RegisterTools(ctx, registry)
-	return adapter, err
+	if registry != nil {
+		err := adapter.RegisterTools(ctx, registry)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return adapter, nil
 }
 
 var _ llminterface.ChatAdapter = (*GeminiAdapter)(nil)
@@ -89,6 +96,26 @@ func (g *GeminiAdapter) Chat(ctx context.Context, input llminterface.ChatInput) 
 	}()
 
 	return outputChan, nil
+}
+
+// ProduceJSON implements llminterface.ChatAdapter.
+func (g *GeminiAdapter) ProduceJSON(ctx context.Context, input llminterface.ChatInput, jsonSchema Option[schema.Schema]) (string, error) {
+	genaiMsgs := ChatInputToGenaiMsgs(input)
+
+	response, err := g.client.Models.GenerateContent(ctx, g.config.Model, genaiMsgs, &genai.GenerateContentConfig{
+		SystemInstruction: ExtractSystemPromptAsGenaiContent(input),
+		Tools:             g.config.Tools.Unwrap(),
+		Temperature:       g.config.Temperature.UnwrapAsPtr(),
+		TopP:              g.config.TopP.UnwrapAsPtr(),
+		TopK:              g.config.TopK.UnwrapAsPtr(),
+		MaxOutputTokens:   g.config.MaxOutputTokens.Unwrap(),
+		StopSequences:     g.config.StopSequences.Unwrap(),
+		ThinkingConfig:    g.config.ThinkingConfig.UnwrapAsPtr().ToGenaiThinkingConfig(),
+		ResponseMIMEType:  "application/json",
+		ResponseSchema:    jsonSchema.UnwrapAsPtr(),
+	})
+
+	return response.Text(), err
 }
 
 // GetFrameworkName implements llminterface.ChatAdapter.

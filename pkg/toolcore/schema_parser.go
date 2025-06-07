@@ -358,18 +358,18 @@ func convertGenaiSchemaToParamDef(propName string, propSchema *schema.Schema, pa
 
 // convertGenaiTypeToParameterType 将 genai.Type 转换为 ParameterType
 func convertGenaiTypeToParameterType(genaiType genai.Type) ParameterType {
-	switch string(genaiType) {
-	case "STRING":
+	switch genaiType {
+	case genai.TypeString:
 		return ParamTypeString
-	case "NUMBER":
+	case genai.TypeNumber:
 		return ParamTypeNumber
-	case "INTEGER":
+	case genai.TypeInteger:
 		return ParamTypeInteger
-	case "BOOLEAN":
+	case genai.TypeBoolean:
 		return ParamTypeBoolean
-	case "OBJECT":
+	case genai.TypeObject:
 		return ParamTypeObject
-	case "ARRAY":
+	case genai.TypeArray:
 		return ParamTypeArray
 	default:
 		return ParamTypeAny

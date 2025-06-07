@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	. "github.com/m4n5ter/another-me/pkg/option"
+	"github.com/m4n5ter/another-me/pkg/schema"
 	"github.com/m4n5ter/another-me/pkg/toolcore"
 )
 
@@ -33,6 +34,11 @@ func (b *BaseChatAdapter) GetFrameworkName() string {
 		return b.FrameworkName
 	}
 	return "base-adapter"
+}
+
+// ProduceJSON 实现ChatAdapter接口的ProduceJSON方法，
+func (b *BaseChatAdapter) ProduceJSON(ctx context.Context, input ChatInput, jsonSchema Option[schema.Schema]) (string, error) {
+	panic("ProduceJSON is not implemented for base-adapter")
 }
 
 // Chat 实现ChatAdapter接口的Chat方法
