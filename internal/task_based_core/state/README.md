@@ -43,6 +43,138 @@
 已终止  已终止  已终止  已终止    已终止
 ```
 
+#### 状态转换图
+
+```mermaid
+graph TD
+    subgraph "系统状态机"
+        SystemIdle["空闲<br/>SystemStateIdle"]
+        SystemAnalyzing["分析中<br/>SystemStateAnalyzing"]
+        SystemPlanning["规划中<br/>SystemStatePlanning"]
+        SystemExecuting["执行中<br/>SystemStateExecuting"]
+        SystemEvaluating["评估中<br/>SystemStateEvaluating"]
+        SystemLearning["学习中<br/>SystemStateLearning"]
+        SystemError["错误<br/>SystemStateError"]
+        SystemMaintenance["维护中<br/>SystemStateMaintenance"]
+        SystemShutdown["关闭中<br/>SystemStateShuttingDown"]
+        
+        SystemIdle --> SystemAnalyzing
+        SystemIdle --> SystemMaintenance
+        SystemIdle --> SystemShutdown
+        
+        SystemAnalyzing --> SystemPlanning
+        SystemAnalyzing --> SystemIdle
+        SystemAnalyzing --> SystemError
+        
+        SystemPlanning --> SystemExecuting
+        SystemPlanning --> SystemAnalyzing
+        SystemPlanning --> SystemError
+        
+        SystemExecuting --> SystemEvaluating
+        SystemExecuting --> SystemError
+        SystemExecuting --> SystemPlanning
+        
+        SystemEvaluating --> SystemLearning
+        SystemEvaluating --> SystemIdle
+        SystemEvaluating --> SystemError
+        
+        SystemLearning --> SystemIdle
+        SystemLearning --> SystemError
+        
+        SystemError --> SystemIdle
+        SystemError --> SystemMaintenance
+        SystemError --> SystemShutdown
+        
+        SystemMaintenance --> SystemIdle
+        SystemMaintenance --> SystemShutdown
+    end
+    
+    subgraph "任务状态机"
+        TaskPending["等待执行<br/>TaskStatePending"]
+        TaskAnalyzing["分析任务<br/>TaskStateAnalyzing"]
+        TaskDecomposing["分解子任务<br/>TaskStateDecomposing"]
+        TaskScheduling["调度Worker<br/>TaskStateScheduling"]
+        TaskRunning["运行中<br/>TaskStateRunning"]
+        TaskSuspended["暂停<br/>TaskStateSuspended"]
+        TaskCompleted["已完成<br/>TaskStateCompleted"]
+        TaskFailed["执行失败<br/>TaskStateFailed"]
+        TaskCancelled["已取消<br/>TaskStateCancelled"]
+        TaskRetrying["重试中<br/>TaskStateRetrying"]
+        
+        TaskPending --> TaskAnalyzing
+        TaskPending --> TaskCancelled
+        
+        TaskAnalyzing --> TaskDecomposing
+        TaskAnalyzing --> TaskFailed
+        TaskAnalyzing --> TaskCancelled
+        
+        TaskDecomposing --> TaskScheduling
+        TaskDecomposing --> TaskFailed
+        TaskDecomposing --> TaskCancelled
+        
+        TaskScheduling --> TaskRunning
+        TaskScheduling --> TaskFailed
+        TaskScheduling --> TaskCancelled
+        
+        TaskRunning --> TaskCompleted
+        TaskRunning --> TaskFailed
+        TaskRunning --> TaskSuspended
+        TaskRunning --> TaskCancelled
+        
+        TaskSuspended --> TaskRunning
+        TaskSuspended --> TaskCancelled
+        
+        TaskFailed --> TaskRetrying
+        TaskFailed --> TaskCancelled
+        
+        TaskRetrying --> TaskRunning
+        TaskRetrying --> TaskFailed
+        TaskRetrying --> TaskCancelled
+    end
+    
+    subgraph "Worker状态机"
+        WorkerIdle["空闲<br/>WorkerStateIdle"]
+        WorkerInit["初始化中<br/>WorkerStateInitializing"]
+        WorkerRunning["运行中<br/>WorkerStateRunning"]
+        WorkerBusy["忙碌<br/>WorkerStateBusy"]
+        WorkerWaiting["等待资源<br/>WorkerStateWaiting"]
+        WorkerCompleted["任务完成<br/>WorkerStateCompleted"]
+        WorkerError["错误状态<br/>WorkerStateError"]
+        WorkerTerminating["终止中<br/>WorkerStateTerminating"]
+        WorkerTerminated["已终止<br/>WorkerStateTerminated"]
+        
+        WorkerIdle --> WorkerRunning
+        WorkerIdle --> WorkerTerminating
+        
+        WorkerInit --> WorkerIdle
+        WorkerInit --> WorkerError
+        WorkerInit --> WorkerTerminating
+        
+        WorkerRunning --> WorkerBusy
+        WorkerRunning --> WorkerCompleted
+        WorkerRunning --> WorkerError
+        WorkerRunning --> WorkerTerminating
+        
+        WorkerBusy --> WorkerRunning
+        WorkerBusy --> WorkerWaiting
+        WorkerBusy --> WorkerCompleted
+        WorkerBusy --> WorkerError
+        WorkerBusy --> WorkerTerminating
+        
+        WorkerWaiting --> WorkerRunning
+        WorkerWaiting --> WorkerError
+        WorkerWaiting --> WorkerTerminating
+        
+        WorkerCompleted --> WorkerIdle
+        WorkerCompleted --> WorkerTerminating
+        
+        WorkerError --> WorkerIdle
+        WorkerError --> WorkerTerminating
+        
+        WorkerTerminating --> WorkerTerminated
+    end
+```
+
 ### 🚀 主要功能
 
 #### 状态管理

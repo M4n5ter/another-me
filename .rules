@@ -300,9 +300,9 @@ func NewYourTools(i18nMgr *i18n.Manager) []toolcore.Tool {
 - 使用枚举限制参数值范围
 
 ### 测试
-- 为核心功能编写单元测试
+- 为核心功能编写单元测试，使用 "github.com/stretchr/testify/assert" 进行断言
 - 使用依赖注入便于测试（如提供带自定义依赖的构造函数）
-- 模拟外部依赖
+- 模拟外部依赖，使用 "github.com/stretchr/testify/mock" 进行模拟
 
 ### 性能考虑
 - 合理使用上下文进行超时控制
