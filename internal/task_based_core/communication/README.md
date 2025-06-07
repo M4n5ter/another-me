@@ -40,17 +40,17 @@
                          │               │
                 ┌────────▼───────────────▼────────┐
                 │      MessageBus (Event Hub)     │
-                │  ┌─────────────────────────────┐ │
-                │  │    Event Distribution       │ │
-                │  │    Priority Handling        │ │
-                │  │    Subscription Management  │ │
-                │  └─────────────────────────────┘ │
+                │ ┌─────────────────────────────┐ │
+                │ │    Event Distribution       │ │
+                │ │    Priority Handling        │ │
+                │ │    Subscription Management  │ │
+                │ └─────────────────────────────┘ │
                 └─────────────┬───────────────────┘
                               │
           ┌───────────────────┼───────────────────┐
           │                   │                   │
-  ┌───────▼────────┐ ┌────────▼────────┐ ┌───────▼────────┐
-  │ ComponentRegistry│ │   TaskDAG      │ │ Event Types   │
+  ┌───────▼─────────┐ ┌───────▼─────────┐ ┌───────▼─────────┐
+  │ComponentRegistry│ │    TaskDAG      │ │   Event Types   │
   │ ┌─────────────┐ │ │ ┌─────────────┐ │ │ ┌─────────────┐ │
   │ │ Registration│ │ │ │ Dependency  │ │ │ │ Task Events │ │
   │ │ Heartbeat   │ │ │ │ Management  │ │ │ │ Component   │ │
@@ -316,25 +316,6 @@ func executeWorkflow(eventBus *communication.MessageBus, registry *communication
 }
 ```
 
-## 性能特征
-
-### 吞吐量
-- 消息总线支持 10,000+ 事件/秒
-- 组件查询延迟 < 1ms
-- DAG操作延迟 < 5ms
-
-### 并发性
-- 支持数千个并发组件
-- 无锁读操作优化
-- 线程安全的状态管理
-
-### 内存效率
-- 事件缓冲区动态调整
-- 组件信息按需加载
-- 历史记录限制机制
-
-## 监控和调试
-
 ### 统计信息
 
 ```go
@@ -350,15 +331,6 @@ fmt.Printf("活跃组件数: %d\n", registryStats["total_components"])
 // DAG统计
 dagStats := dag.GetDAGStats()
 fmt.Printf("任务完成进度: %.1f%%\n", dagStats.Progress)
-```
-
-### 日志记录
-
-系统使用结构化日志记录，支持按组件分组：
-
-```go
-logger := slog.Default().WithGroup("communication")
-logger.Info("事件处理", "event_type", eventType, "latency", latency)
 ```
 
 ## 最佳实践
@@ -417,9 +389,3 @@ for _, component := range registry.ListComponents() {
     fmt.Printf("组件: %s, 状态: %s\n", component.ID, component.Status)
 }
 ```
-
-## 总结
-
-这个通信模块提供了一个完整的、生产就绪的解决方案，用于构建复杂的多代理系统。通过事件驱动的架构、灵活的组件管理和强大的任务依赖处理，它能够满足各种复杂的业务场景需求。
-
-模块的设计遵循了松耦合、高内聚的原则，提供了良好的可扩展性和可维护性，是构建大规模分布式系统的理想基础设施。 

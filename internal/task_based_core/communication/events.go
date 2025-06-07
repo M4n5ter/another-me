@@ -182,6 +182,8 @@ type PriorityEvent struct {
 	Priority EventPriority `json:"priority"` // 事件优先级
 }
 
+var _ Event = (*PriorityEvent)(nil)
+
 // EventType 实现Event接口
 func (p *PriorityEvent) EventType() EventType {
 	return p.Event.EventType()
