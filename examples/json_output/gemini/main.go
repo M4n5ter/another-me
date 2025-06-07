@@ -73,6 +73,7 @@ func main() {
 				"model_provider_url":  {Type: "string"},
 				"model_provider_logo": {Type: "string"},
 			},
+			Required: []string{"model_name", "time_created", "time_updated", "model_type", "model_version", "model_provider", "model_provider_url", "model_provider_logo"},
 		})) // 指定JSONSchema，则返回的JSON格式为指定的格式，不需要在提示词中明确返回的JSON格式
 	if err != nil {
 		slog.Error("ProduceJSON failed", "error", err)
