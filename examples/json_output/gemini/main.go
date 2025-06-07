@@ -56,9 +56,24 @@ func main() {
 
 	output, err := chatAdapter.ProduceJSON(ctx, llminterface.ChatInput{
 		Messages: []llminterface.InputMessage{
-			llminterface.UserInputMessageText("你好，请告诉我你的名字和年龄，并返回一个JSON对象。格式为：{name: string, age: number}"),
+			llminterface.UserInputMessageText("你好，请告诉我你详情。"),
 		},
-	}, None[schema.Schema]()) // 不指定JSONSchema，则需要在提示词中明确返回的JSON格式
+	}, Some(
+		schema.Schema{
+			Title:       "Model Card",
+			Description: "大模型卡片",
+			Type:        "object",
+			Properties: map[string]*schema.Schema{
+				"model_name":          {Type: "string"},
+				"time_created":        {Type: "string"},
+				"time_updated":        {Type: "string"},
+				"model_type":          {Type: "string"},
+				"model_version":       {Type: "string"},
+				"model_provider":      {Type: "string"},
+				"model_provider_url":  {Type: "string"},
+				"model_provider_logo": {Type: "string"},
+			},
+		})) // 指定JSONSchema，则返回的JSON格式为指定的格式，不需要在提示词中明确返回的JSON格式
 	if err != nil {
 		slog.Error("ProduceJSON failed", "error", err)
 		return
