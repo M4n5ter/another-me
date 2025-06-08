@@ -179,6 +179,7 @@ type TaskInfo struct {
 	Error       Option[string]    `json:"error"`        // 错误信息
 	Metadata    map[string]any    `json:"metadata"`     // 任务元数据
 	SubTasks    []string          `json:"sub_tasks"`    // 子任务ID列表
+	TaskResult  Option[any]       `json:"task_result"`  // 任务结果，如果当前任务是末端任务，则保存结果
 	ParentTask  Option[string]    `json:"parent_task"`  // 父任务ID
 }
 
@@ -273,7 +274,7 @@ type StateManagerInterface interface {
 	CreateTask(task *TaskInfo) error
 	GetTask(taskID string) (*TaskInfo, error)
 	UpdateTaskState(taskID string, state TaskState, reason string) error
-	UpdateTaskProgress(taskID string, progress float64) error
+	UpdateTaskProgress(taskID string, progress float64, result Option[any], errorMsg Option[string]) error
 	DeleteTask(taskID string) error
 	ListTasks() []*TaskInfo
 	ListTasksByState(state TaskState) []*TaskInfo
@@ -474,7 +475,7 @@ func (sm *StateManager) UpdateTaskState(taskID string, state TaskState, reason s
 }
 
 // UpdateTaskProgress 更新任务进度
-func (sm *StateManager) UpdateTaskProgress(taskID string, progress float64) error {
+func (sm *StateManager) UpdateTaskProgress(taskID string, progress float64, result Option[any], errorMsg Option[string]) error {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
@@ -491,7 +492,8 @@ func (sm *StateManager) UpdateTaskProgress(taskID string, progress float64) erro
 	}
 
 	task.Progress = progress
-
+	task.TaskResult = result
+	task.Error = errorMsg
 	sm.logger.Debug("任务进度更新",
 		"task_id", taskID,
 		"progress", progress)

@@ -569,7 +569,7 @@ func executeTask(workerID, taskID string, eventBus *MessageBus, registry *Compon
 	// 发布任务完成事件
 	taskEvent := NewTaskEvent(EventTypeTaskCompleted, workerID, taskID, task.Name)
 	taskEvent.WorkerID = Some(workerID)
-	taskEvent.Result = Some("任务执行成功")
+	taskEvent.Result = Some(any(output))
 	eventBus.Publish(taskEvent)
 
 	logger.Info("任务执行完成",

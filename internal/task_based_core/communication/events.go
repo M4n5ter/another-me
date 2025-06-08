@@ -96,7 +96,7 @@ type TaskEvent struct {
 	TaskName     string         `json:"task_name"`    // 任务名称
 	WorkerID     Option[string] `json:"worker_id"`    // 执行Worker ID
 	Progress     float64        `json:"progress"`     // 任务进度 (0-100)
-	Result       Option[string] `json:"result"`       // 任务结果
+	Result       Option[any]    `json:"result"`       // 任务结果
 	ErrorMsg     Option[string] `json:"error_msg"`    // 错误信息
 	RetryCount   int            `json:"retry_count"`  // 重试次数
 	Dependencies []string       `json:"dependencies"` // 依赖任务ID列表

@@ -2,102 +2,314 @@ package worker
 
 import (
 	"context"
+	"fmt"
+	"log/slog"
 	"time"
 
+	"github.com/m4n5ter/another-me/internal/task_based_core/communication"
+	"github.com/m4n5ter/another-me/internal/task_based_core/state"
 	. "github.com/m4n5ter/another-me/pkg/option"
 )
 
-// Worker 接口定义
+// Worker 工作器接口 - 执行具体任务的智能体
 type Worker interface {
+	// Start 启动Worker
+	Start(ctx context.Context) error
+
+	// Stop 停止Worker
+	Stop() error
+
 	// GetID 获取Worker ID
 	GetID() string
+
 	// GetType 获取Worker类型
-	GetType() WorkerType
+	GetType() string
+
 	// GetCapabilities 获取Worker能力列表
 	GetCapabilities() []string
-	// Execute 执行任务
-	Execute(ctx context.Context, task *Task) (*TaskResult, error)
-	// IsReady 检查Worker是否就绪
-	IsReady() bool
-	// Shutdown 关闭Worker
-	Shutdown(ctx context.Context) error
+
+	// ExecuteTask 执行任务
+	ExecuteTask(ctx context.Context, taskID string, taskData map[string]any) error
+
+	// GetStatus 获取Worker状态
+	GetStatus() WorkerStatus
 }
 
-// WorkerType Worker类型
-type WorkerType string
-
-const (
-	WorkerTypeWebUI        WorkerType = "web_ui"
-	WorkerTypeDataAnalysis WorkerType = "data_analysis"
-	WorkerTypeFileSystem   WorkerType = "file_system"
-	WorkerTypeTemporary    WorkerType = "temporary"
-)
-
-// String 返回Worker类型的字符串表示
-func (wt WorkerType) String() string {
-	return string(wt)
+// WorkerStatus Worker状态信息
+type WorkerStatus struct {
+	ID          string            `json:"id"`
+	Type        string            `json:"type"`
+	State       state.WorkerState `json:"state"`
+	CurrentTask Option[string]    `json:"current_task"`
+	Uptime      time.Duration     `json:"uptime"`
+	TasksRun    int               `json:"tasks_run"`
+	LastTask    Option[time.Time] `json:"last_task"`
 }
 
-// Task 任务结构
-type Task struct {
-	ID         string                `json:"id"`         // 任务ID
-	Name       string                `json:"name"`       // 任务名称
-	Type       string                `json:"type"`       // 任务类型
-	Parameters map[string]any        `json:"parameters"` // 任务参数
-	Timeout    Option[time.Duration] `json:"timeout"`    // 超时时间
-	Priority   int                   `json:"priority"`   // 优先级
-	Metadata   map[string]any        `json:"metadata"`   // 元数据
-}
-
-// TaskResult 任务执行结果
 type TaskResult struct {
-	TaskID   string         `json:"task_id"`  // 任务ID
-	Success  bool           `json:"success"`  // 执行是否成功
-	Result   map[string]any `json:"result"`   // 执行结果
-	Error    Option[string] `json:"error"`    // 错误信息
-	Duration time.Duration  `json:"duration"` // 执行时长
-	Metadata map[string]any `json:"metadata"` // 结果元数据
+	Result any
+	Error  error
 }
 
-// BaseWorker 基础Worker实现
+// BaseWorker Worker基础实现
 type BaseWorker struct {
 	id           string
-	workerType   WorkerType
+	workerType   string
 	capabilities []string
-	ready        bool
+	logger       *slog.Logger
+
+	// 核心组件引用
+	stateManager state.StateManagerInterface
+	eventBus     *communication.MessageBus
+	registry     *communication.ComponentRegistry
+
+	// 运行状态
+	ctx         context.Context
+	cancel      context.CancelFunc
+	startTime   time.Time
+	tasksRun    int
+	currentTask Option[string]
 }
 
 // NewBaseWorker 创建基础Worker
-func NewBaseWorker(id string, workerType WorkerType, capabilities ...string) *BaseWorker {
+func NewBaseWorker(
+	id string,
+	workerType string,
+	capabilities []string,
+	stateManager state.StateManagerInterface,
+	eventBus *communication.MessageBus,
+	registry *communication.ComponentRegistry,
+) *BaseWorker {
 	return &BaseWorker{
 		id:           id,
 		workerType:   workerType,
 		capabilities: capabilities,
-		ready:        true,
+		logger:       slog.Default().WithGroup("worker").With("id", id, "type", workerType),
+		stateManager: stateManager,
+		eventBus:     eventBus,
+		registry:     registry,
+		currentTask:  None[string](),
 	}
 }
 
-// GetID 实现Worker接口
-func (bw *BaseWorker) GetID() string {
-	return bw.id
+var _ Worker = (*BaseWorker)(nil)
+
+// Start 启动Worker
+func (w *BaseWorker) Start(ctx context.Context) error {
+	w.logger.Info("启动Worker")
+
+	// 创建取消上下文
+	w.ctx, w.cancel = context.WithCancel(ctx)
+	w.startTime = time.Now()
+
+	// 注册到组件注册表
+	if err := w.registerSelf(); err != nil {
+		return err
+	}
+
+	// 订阅相关事件
+	w.subscribeToEvents()
+
+	// 启动主处理循环
+	go w.mainLoop()
+
+	w.logger.Info("Worker启动完成")
+	return nil
 }
 
-// GetType 实现Worker接口
-func (bw *BaseWorker) GetType() WorkerType {
-	return bw.workerType
+// Stop 停止Worker
+func (w *BaseWorker) Stop() error {
+	w.logger.Info("停止Worker")
+
+	if w.cancel != nil {
+		w.cancel()
+	}
+
+	// 注销组件
+	if err := w.registry.UnregisterComponent(w.id); err != nil {
+		w.logger.Error("注销Worker失败", "error", err)
+	}
+
+	w.logger.Info("Worker已停止")
+	return nil
 }
 
-// GetCapabilities 实现Worker接口
-func (bw *BaseWorker) GetCapabilities() []string {
-	return bw.capabilities
+// GetID 获取Worker ID
+func (w *BaseWorker) GetID() string {
+	return w.id
 }
 
-// IsReady 实现Worker接口
-func (bw *BaseWorker) IsReady() bool {
-	return bw.ready
+// GetType 获取Worker类型
+func (w *BaseWorker) GetType() string {
+	return w.workerType
 }
 
-// SetReady 设置Worker就绪状态
-func (bw *BaseWorker) SetReady(ready bool) {
-	bw.ready = ready
+// GetCapabilities 获取Worker能力列表
+func (w *BaseWorker) GetCapabilities() []string {
+	return w.capabilities
+}
+
+// ExecuteTask 执行任务（基础实现，子类可重写）
+func (w *BaseWorker) ExecuteTask(ctx context.Context, taskID string, taskData map[string]any) error {
+	w.logger.Info("开始执行任务", "task_id", taskID)
+
+	// 设置当前任务
+	w.currentTask = Some(taskID)
+
+	// 更新Worker状态
+	if err := w.stateManager.UpdateWorkerState(w.id, state.WorkerStateRunning, "开始执行任务"); err != nil {
+		w.logger.Error("更新Worker状态失败", "error", err)
+	}
+
+	// 模拟任务执行时间
+	select {
+	case <-time.After(5 * time.Second):
+		// 任务执行完成
+		w.tasksRun++
+		w.currentTask = None[string]()
+
+		// 更新Worker状态
+		if err := w.stateManager.UpdateWorkerState(w.id, state.WorkerStateIdle, "任务执行完成"); err != nil {
+			w.logger.Error("更新Worker状态失败", "error", err)
+		}
+
+		// 发布任务完成事件
+		taskEvent := communication.NewTaskEvent(
+			communication.EventTypeTaskCompleted,
+			w.id,
+			taskID,
+			"基础任务",
+		)
+		taskEvent.WorkerID = Some(w.id)
+		err := w.eventBus.Publish(taskEvent)
+		if err != nil {
+			w.logger.Error("发布任务完成事件失败", "error", err)
+			return fmt.Errorf("发布任务完成事件失败: %w", err)
+		}
+
+		w.logger.Info("任务执行完成", "task_id", taskID)
+		return nil
+
+	case <-ctx.Done():
+		// 任务被取消
+		w.currentTask = None[string]()
+		w.logger.Info("任务被取消", "task_id", taskID)
+		return fmt.Errorf("任务被取消: %w", ctx.Err())
+	}
+}
+
+// GetStatus 获取Worker状态
+func (w *BaseWorker) GetStatus() WorkerStatus {
+	var lastTask Option[time.Time]
+	if w.tasksRun > 0 {
+		lastTask = Some(time.Now()) // 简化版本
+	}
+
+	return WorkerStatus{
+		ID:          w.id,
+		Type:        w.workerType,
+		State:       state.WorkerStateIdle, // 简化版本，实际应从状态管理器获取
+		CurrentTask: w.currentTask,
+		Uptime:      time.Since(w.startTime),
+		TasksRun:    w.tasksRun,
+		LastTask:    lastTask,
+	}
+}
+
+// 内部方法
+
+// registerSelf 注册自己到组件注册表
+func (w *BaseWorker) registerSelf() error {
+	component := &communication.ComponentInfo{
+		ID:           w.id,
+		Type:         communication.ComponentTypeWorker,
+		Name:         w.workerType + " Worker",
+		Version:      "1.0.0",
+		Capabilities: w.capabilities,
+		Config: map[string]any{
+			"worker_type": w.workerType,
+			"max_tasks":   100,
+		},
+	}
+
+	err := w.registry.RegisterComponent(component)
+	if err != nil {
+		return fmt.Errorf("注册Worker失败: %w", err)
+	}
+	return nil
+}
+
+// subscribeToEvents 订阅相关事件
+func (w *BaseWorker) subscribeToEvents() {
+	// 订阅任务开始事件
+	w.eventBus.Subscribe(communication.EventTypeTaskStarted, func(event communication.Event) {
+		if taskEvent, ok := event.(*communication.TaskEvent); ok {
+			// 检查任务是否分配给此Worker
+			if taskEvent.WorkerID.IsSome() && taskEvent.WorkerID.Unwrap() == w.id {
+				// 执行任务
+				go func() {
+					if err := w.ExecuteTask(w.ctx, taskEvent.TaskID, make(map[string]any)); err != nil {
+						w.logger.Error("任务执行失败", "task_id", taskEvent.TaskID, "error", err)
+
+						// 发布任务失败事件
+						failedEvent := communication.NewTaskEvent(
+							communication.EventTypeTaskFailed,
+							w.id,
+							taskEvent.TaskID,
+							taskEvent.TaskName,
+						)
+						failedEvent.WorkerID = Some(w.id)
+						failedEvent.ErrorMsg = Some(err.Error())
+						err := w.eventBus.Publish(failedEvent)
+						if err != nil {
+							w.logger.Error("发布任务失败事件失败", "error", err)
+						}
+
+						// 更新任务状态
+						if err := w.stateManager.UpdateTaskState(taskEvent.TaskID, state.TaskStateFailed, "任务执行失败"); err != nil {
+							w.logger.Error("更新任务状态失败", "error", err)
+						}
+					}
+				}()
+			}
+		}
+	})
+}
+
+// mainLoop 主处理循环
+func (w *BaseWorker) mainLoop() {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-w.ctx.Done():
+			w.logger.Info("Worker主循环退出")
+			return
+		case <-ticker.C:
+			w.performPeriodicTasks()
+		}
+	}
+}
+
+// performPeriodicTasks 执行周期性任务
+func (w *BaseWorker) performPeriodicTasks() {
+	// 发送心跳
+	w.sendHeartbeat()
+
+	// 检查健康状态
+	w.checkHealth()
+}
+
+// sendHeartbeat 发送心跳
+func (w *BaseWorker) sendHeartbeat() {
+	if err := w.registry.Heartbeat(w.id); err != nil {
+		w.logger.Error("发送心跳失败", "error", err)
+	}
+}
+
+// checkHealth 检查健康状态
+func (w *BaseWorker) checkHealth() {
+	// 基础实现：检查是否正常运行
+	w.logger.Debug("Worker健康检查", "uptime", time.Since(w.startTime), "tasks_run", w.tasksRun)
 }

@@ -3,6 +3,8 @@ package state
 import (
 	"fmt"
 	"testing"
+
+	. "github.com/m4n5ter/another-me/pkg/option"
 )
 
 // TestStateManager 测试状态管理器的基本功能
@@ -62,7 +64,7 @@ func TestStateManager(t *testing.T) {
 		}
 
 		// 更新任务进度
-		err = sm.UpdateTaskProgress("task-001", 50.0)
+		err = sm.UpdateTaskProgress("task-001", 50.0, None[any](), None[string]())
 		if err != nil {
 			t.Errorf("更新任务进度失败: %v", err)
 		}

@@ -157,7 +157,7 @@ func demonstrateSystemWorkflow(sm *StateManager, logger *slog.Logger) {
 		progress := float64(i * 10)
 		for _, pair := range taskWorkerPairs {
 			taskID := pair[0]
-			sm.UpdateTaskProgress(taskID, progress)
+			sm.UpdateTaskProgress(taskID, progress, None[any](), None[string]())
 		}
 		time.Sleep(50 * time.Millisecond)
 
