@@ -1,10 +1,37 @@
 package orchestrator
 
 import (
+	"time"
+
 	"google.golang.org/genai"
 
+	"github.com/m4n5ter/another-me/internal/task_based_core/state"
 	"github.com/m4n5ter/another-me/pkg/schema"
 )
+
+// TaskPlan 任务计划 - 用于内部规划阶段的简化任务定义
+type TaskPlan struct {
+	ID                   string         `json:"id"`
+	Name                 string         `json:"name"`
+	Type                 string         `json:"type"`
+	Priority             state.Priority `json:"priority"`
+	Description          string         `json:"description"`
+	RequiredCapabilities []string       `json:"required_capabilities"`
+	EstimatedDuration    time.Duration  `json:"estimated_duration"`
+	Metadata             map[string]any `json:"metadata,omitempty"`
+
+	// 依赖关系和并行执行支持
+	DependsOn    []string `json:"depends_on,omitempty"` // 依赖的任务ID列表
+	CanParallel  bool     `json:"can_parallel"`         // 是否可以并行执行
+	SubTaskIndex int      `json:"sub_task_index"`       // 在原始子任务列表中的索引
+}
+
+// WorkerSelectionRequest Worker选择请求
+type WorkerSelectionRequest struct {
+	TaskInfo         TaskAnalysisRequest  `json:"task_info"`
+	AnalysisResult   TaskAnalysisResponse `json:"analysis_result"`
+	AvailableWorkers []AvailableWorker    `json:"available_workers"`
+}
 
 // TaskAnalysisRequest 任务分析请求
 type TaskAnalysisRequest struct {
@@ -81,13 +108,6 @@ type RiskAssessment struct {
 	Mitigation []string `json:"mitigation,omitempty"`
 }
 
-// WorkerSelectionRequest Worker选择请求
-type WorkerSelectionRequest struct {
-	TaskInfo         TaskAnalysisRequest  `json:"task_info"`
-	AnalysisResult   TaskAnalysisResponse `json:"analysis_result"`
-	AvailableWorkers []AvailableWorker    `json:"available_workers"`
-}
-
 // AvailableWorker 可用的Worker信息
 type AvailableWorker struct {
 	ID           string                   `json:"id"`
@@ -137,97 +157,73 @@ type ExpectedPerformance struct {
 	QualityScore float64 `json:"quality_score"`
 }
 
-// TaskExecutionPlan 任务执行计划
-type TaskExecutionPlan struct {
-	// TaskID 任务ID
-	TaskID string `json:"task_id"`
-
-	// ExecutionStrategy 执行策略
-	ExecutionStrategy string `json:"execution_strategy"`
-
-	// Steps 执行步骤
-	Steps []ExecutionStep `json:"steps"`
-
-	// TotalEstimatedDuration 总估计时间（分钟）
-	TotalEstimatedDuration int `json:"total_estimated_duration_minutes"`
-
-	// ResourceRequirements 资源需求
-	ResourceRequirements ResourceRequirements `json:"resource_requirements"`
-
-	// MonitoringPoints 监控点
-	MonitoringPoints []MonitoringPoint `json:"monitoring_points"`
+// TaskRequestEnrichmentRequest 任务请求丰富化请求
+type TaskRequestEnrichmentRequest struct {
+	UserInput       string         `json:"user_input"`
+	Context         map[string]any `json:"context,omitempty"`
+	PreviousTasks   []string       `json:"previous_tasks,omitempty"`
+	AvailableAssets []string       `json:"available_assets,omitempty"`
 }
 
-// ExecutionStep 执行步骤
-type ExecutionStep struct {
-	// StepID 步骤ID
-	StepID string `json:"step_id"`
-
-	// Name 步骤名称
-	Name string `json:"name"`
-
-	// Description 步骤描述
-	Description string `json:"description"`
-
-	// WorkerID 执行Worker
-	WorkerID string `json:"worker_id"`
-
-	// DependsOn 依赖的步骤
-	DependsOn []string `json:"depends_on,omitempty"`
-
-	// EstimatedDuration 估计时间（分钟）
-	EstimatedDuration int `json:"estimated_duration_minutes"`
-
-	// Parallel 是否可以并行执行
-	Parallel bool `json:"parallel"`
-
-	// RetryPolicy 重试策略
-	RetryPolicy RetryPolicy `json:"retry_policy"`
+// TaskRequestEnrichmentResponse 任务请求丰富化响应
+type TaskRequestEnrichmentResponse struct {
+	EnrichedDescription string            `json:"enriched_description"`
+	IdentifiedGoals     []string          `json:"identified_goals"`
+	MissingInformation  []string          `json:"missing_information,omitempty"`
+	Assumptions         []string          `json:"assumptions,omitempty"`
+	Scope               string            `json:"scope"`
+	Constraints         []string          `json:"constraints,omitempty"`
+	SuccessCriteria     []string          `json:"success_criteria"`
+	Metadata            map[string]any    `json:"metadata,omitempty"`
 }
 
-// ResourceRequirements 资源需求
-type ResourceRequirements struct {
-	// MinWorkers 最少Worker数量
-	MinWorkers int `json:"min_workers"`
-
-	// MaxWorkers 最多Worker数量
-	MaxWorkers int `json:"max_workers"`
-
-	// PreferredWorkerTypes 偏好的Worker类型
-	PreferredWorkerTypes []string `json:"preferred_worker_types"`
-
-	// ExcludedWorkerTypes 排除的Worker类型
-	ExcludedWorkerTypes []string `json:"excluded_worker_types,omitempty"`
+// WorkerTaskMappingRequest Worker任务映射请求
+type WorkerTaskMappingRequest struct {
+	EnrichmentResult TaskRequestEnrichmentResponse `json:"enrichment_result"`
+	AnalysisResult   TaskAnalysisResponse          `json:"analysis_result"`
+	AvailableWorkers []AvailableWorker             `json:"available_workers"`
 }
 
-// MonitoringPoint 监控点
-type MonitoringPoint struct {
-	// StepID 关联的步骤ID
-	StepID string `json:"step_id"`
-
-	// CheckType 检查类型
-	CheckType string `json:"check_type"`
-
-	// Condition 检查条件
-	Condition string `json:"condition"`
-
-	// Action 触发动作
-	Action string `json:"action"`
+// WorkerTaskMappingResponse Worker任务映射响应
+type WorkerTaskMappingResponse struct {
+	TaskAssignments      []TaskAssignment      `json:"task_assignments"`
+	RequiredNewWorkers   []NewWorkerRequest    `json:"required_new_workers,omitempty"`
+	UnassignedTasks      []UnassignedTask      `json:"unassigned_tasks,omitempty"`
+	MappingReasoning     string                `json:"mapping_reasoning"`
+	OverallStrategy      string                `json:"overall_strategy"`
+	EstimatedCompletion  int                   `json:"estimated_completion_minutes"`
 }
 
-// RetryPolicy 重试策略
-type RetryPolicy struct {
-	// MaxRetries 最大重试次数
-	MaxRetries int `json:"max_retries"`
+// TaskAssignment 任务分配
+type TaskAssignment struct {
+	TaskID           string   `json:"task_id"`
+	TaskName         string   `json:"task_name"`
+	AssignedWorkerID string   `json:"assigned_worker_id"`
+	WorkerType       string   `json:"worker_type"`
+	Priority         string   `json:"priority"`
+	Dependencies     []string `json:"dependencies,omitempty"`
+	EstimatedTime    int      `json:"estimated_time_minutes"`
+	AssignmentReason string   `json:"assignment_reason"`
+}
 
-	// RetryDelay 重试延迟（秒）
-	RetryDelay int `json:"retry_delay_seconds"`
+// NewWorkerRequest 新Worker请求
+type NewWorkerRequest struct {
+	WorkerType          string         `json:"worker_type"`
+	WorkerName          string         `json:"worker_name"`
+	RequiredCapabilities []string      `json:"required_capabilities"`
+	SystemPrompt        string         `json:"system_prompt"`
+	TasksToHandle       []string       `json:"tasks_to_handle"`
+	SpecialInstructions string         `json:"special_instructions,omitempty"`
+	EstimatedLifetime   int            `json:"estimated_lifetime_minutes"`
+	Metadata            map[string]any `json:"metadata,omitempty"`
+}
 
-	// BackoffMultiplier 退避倍数
-	BackoffMultiplier float64 `json:"backoff_multiplier"`
-
-	// RetryableErrors 可重试的错误类型
-	RetryableErrors []string `json:"retryable_errors,omitempty"`
+// UnassignedTask 未分配任务
+type UnassignedTask struct {
+	TaskID     string   `json:"task_id"`
+	TaskName   string   `json:"task_name"`
+	Reason     string   `json:"reason"`
+	Suggestions []string `json:"suggestions,omitempty"`
 }
 
 // 创建任务分析的JSON Schema
@@ -403,5 +399,204 @@ func CreateWorkerSelectionSchema() *schema.Schema {
 			},
 		},
 		Required: []string{"selected_worker_id", "selection_reason", "confidence", "expected_performance"},
+	}
+}
+
+// CreateTaskRequestEnrichmentSchema 创建任务请求丰富化的JSON Schema
+func CreateTaskRequestEnrichmentSchema() *schema.Schema {
+	return &schema.Schema{
+		Type: genai.TypeObject,
+		Properties: map[string]*schema.Schema{
+			"enriched_description": {
+				Type:        genai.TypeString,
+				Description: "丰富和详细化后的任务描述",
+			},
+			"identified_goals": {
+				Type:        genai.TypeArray,
+				Description: "识别出的具体目标列表",
+				Items:       &schema.Schema{Type: genai.TypeString},
+			},
+			"missing_information": {
+				Type:        genai.TypeArray,
+				Description: "缺失的重要信息列表",
+				Items:       &schema.Schema{Type: genai.TypeString},
+			},
+			"assumptions": {
+				Type:        genai.TypeArray,
+				Description: "基于上下文做出的合理假设",
+				Items:       &schema.Schema{Type: genai.TypeString},
+			},
+			"scope": {
+				Type:        genai.TypeString,
+				Description: "任务范围的明确定义",
+			},
+			"constraints": {
+				Type:        genai.TypeArray,
+				Description: "识别出的约束条件",
+				Items:       &schema.Schema{Type: genai.TypeString},
+			},
+			"success_criteria": {
+				Type:        genai.TypeArray,
+				Description: "成功标准列表",
+				Items:       &schema.Schema{Type: genai.TypeString},
+			},
+			"metadata": {
+				Type:        genai.TypeObject,
+				Description: "其他相关元数据",
+			},
+		},
+		Required: []string{
+			"enriched_description",
+			"identified_goals",
+			"scope",
+			"success_criteria",
+		},
+	}
+}
+
+// CreateWorkerTaskMappingSchema 创建Worker任务映射的JSON Schema
+func CreateWorkerTaskMappingSchema() *schema.Schema {
+	min1 := 1.0
+
+	return &schema.Schema{
+		Type: genai.TypeObject,
+		Properties: map[string]*schema.Schema{
+			"task_assignments": {
+				Type:        genai.TypeArray,
+				Description: "任务分配列表",
+				Items: &schema.Schema{
+					Type: genai.TypeObject,
+					Properties: map[string]*schema.Schema{
+						"task_id": {
+							Type:        genai.TypeString,
+							Description: "任务ID",
+						},
+						"task_name": {
+							Type:        genai.TypeString,
+							Description: "任务名称",
+						},
+						"assigned_worker_id": {
+							Type:        genai.TypeString,
+							Description: "分配的Worker ID",
+						},
+						"worker_type": {
+							Type:        genai.TypeString,
+							Description: "Worker类型",
+						},
+						"priority": {
+							Type:        genai.TypeString,
+							Description: "任务优先级",
+							Enum:        []string{"low", "normal", "high", "critical"},
+						},
+						"dependencies": {
+							Type:        genai.TypeArray,
+							Description: "依赖的任务ID列表",
+							Items:       &schema.Schema{Type: genai.TypeString},
+						},
+						"estimated_time_minutes": {
+							Type:        genai.TypeInteger,
+							Description: "估计执行时间（分钟）",
+							Minimum:     &min1,
+						},
+						"assignment_reason": {
+							Type:        genai.TypeString,
+							Description: "分配原因",
+						},
+					},
+					Required: []string{"task_id", "task_name", "assigned_worker_id", "worker_type", "priority", "estimated_time_minutes", "assignment_reason"},
+				},
+			},
+			"required_new_workers": {
+				Type:        genai.TypeArray,
+				Description: "需要创建的新Worker列表",
+				Items: &schema.Schema{
+					Type: genai.TypeObject,
+					Properties: map[string]*schema.Schema{
+						"worker_type": {
+							Type:        genai.TypeString,
+							Description: "Worker类型",
+						},
+						"worker_name": {
+							Type:        genai.TypeString,
+							Description: "Worker名称",
+						},
+						"required_capabilities": {
+							Type:        genai.TypeArray,
+							Description: "所需能力列表",
+							Items:       &schema.Schema{Type: genai.TypeString},
+						},
+						"system_prompt": {
+							Type:        genai.TypeString,
+							Description: "为此Worker精心设计的系统提示词",
+						},
+						"tasks_to_handle": {
+							Type:        genai.TypeArray,
+							Description: "此Worker要处理的任务ID列表",
+							Items:       &schema.Schema{Type: genai.TypeString},
+						},
+						"special_instructions": {
+							Type:        genai.TypeString,
+							Description: "特殊指令",
+						},
+						"estimated_lifetime_minutes": {
+							Type:        genai.TypeInteger,
+							Description: "估计生命周期（分钟）",
+							Minimum:     &min1,
+						},
+						"metadata": {
+							Type:        genai.TypeObject,
+							Description: "Worker元数据",
+						},
+					},
+					Required: []string{"worker_type", "worker_name", "required_capabilities", "system_prompt", "tasks_to_handle", "estimated_lifetime_minutes"},
+				},
+			},
+			"unassigned_tasks": {
+				Type:        genai.TypeArray,
+				Description: "无法分配的任务列表",
+				Items: &schema.Schema{
+					Type: genai.TypeObject,
+					Properties: map[string]*schema.Schema{
+						"task_id": {
+							Type:        genai.TypeString,
+							Description: "任务ID",
+						},
+						"task_name": {
+							Type:        genai.TypeString,
+							Description: "任务名称",
+						},
+						"reason": {
+							Type:        genai.TypeString,
+							Description: "无法分配的原因",
+						},
+						"suggestions": {
+							Type:        genai.TypeArray,
+							Description: "解决建议",
+							Items:       &schema.Schema{Type: genai.TypeString},
+						},
+					},
+					Required: []string{"task_id", "task_name", "reason"},
+				},
+			},
+			"mapping_reasoning": {
+				Type:        genai.TypeString,
+				Description: "任务映射的推理过程",
+			},
+			"overall_strategy": {
+				Type:        genai.TypeString,
+				Description: "整体执行策略",
+			},
+			"estimated_completion_minutes": {
+				Type:        genai.TypeInteger,
+				Description: "估计总完成时间（分钟）",
+				Minimum:     &min1,
+			},
+		},
+		Required: []string{
+			"task_assignments",
+			"mapping_reasoning",
+			"overall_strategy",
+			"estimated_completion_minutes",
+		},
 	}
 }

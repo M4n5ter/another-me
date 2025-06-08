@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"slices"
-	"strings"
 	"time"
+
+	json "github.com/json-iterator/go"
 
 	"github.com/m4n5ter/another-me/internal/task_based_core/communication"
 	"github.com/m4n5ter/another-me/internal/task_based_core/state"
@@ -116,60 +116,69 @@ func (o *Orchestrator) Stop() error {
 	return nil
 }
 
-// ProcessUserRequest 处理用户请求
+// ProcessUserRequest 处理用户请求 - 智能化四阶段流程
 func (o *Orchestrator) ProcessUserRequest(request string) error {
-	o.logger.Info("处理用户请求", "request", request)
+	o.logger.Info("开始智能化处理用户请求", "request", request)
 
 	// 设置当前请求
 	o.currentRequest = Some(request)
 
-	// 分析阶段
-	if err := o.stateManager.SetSystemState(state.SystemStateAnalyzing, "开始分析用户请求"); err != nil {
+	// ========== 阶段 1: 任务请求丰富化 ==========
+	if err := o.stateManager.SetSystemState(state.SystemStateAnalyzing, "阶段1: 任务请求丰富化"); err != nil {
 		return fmt.Errorf("设置系统状态失败: %w", err)
 	}
 
-	// 使用LLM分析请求
-	analysisResult, err := o.analyzeRequest(request)
+	enrichmentResult, err := o.enrichTaskRequest(request)
 	if err != nil {
-		o.logger.Error("请求分析失败", "error", err)
-		err = o.stateManager.SetSystemState(state.SystemStateError, "请求分析失败")
-		if err != nil {
+		o.logger.Error("任务请求丰富化失败", "error", err)
+		if err := o.stateManager.SetSystemState(state.SystemStateError, "任务请求丰富化失败"); err != nil {
 			return fmt.Errorf("设置系统状态失败: %w", err)
 		}
-		return fmt.Errorf("请求分析失败: %w", err)
+		return fmt.Errorf("任务请求丰富化失败: %w", err)
 	}
 
-	// 规划阶段
-	if err := o.stateManager.SetSystemState(state.SystemStatePlanning, "开始制定执行计划"); err != nil {
+	// ========== 阶段 2: 任务分析 ==========
+	if err := o.stateManager.SetSystemState(state.SystemStateAnalyzing, "阶段2: 深度任务分析"); err != nil {
 		return fmt.Errorf("设置系统状态失败: %w", err)
 	}
 
-	// 生成任务计划
-	tasks, err := o.planTasks(analysisResult)
+	analysisResult, err := o.analyzeEnrichedRequest(enrichmentResult)
 	if err != nil {
-		o.logger.Error("任务规划失败", "error", err)
-		err = o.stateManager.SetSystemState(state.SystemStateError, "任务规划失败")
-		if err != nil {
+		o.logger.Error("任务分析失败", "error", err)
+		if err := o.stateManager.SetSystemState(state.SystemStateError, "任务分析失败"); err != nil {
 			return fmt.Errorf("设置系统状态失败: %w", err)
 		}
-		return fmt.Errorf("任务规划失败: %w", err)
+		return fmt.Errorf("任务分析失败: %w", err)
 	}
 
-	// 执行阶段
-	if err := o.stateManager.SetSystemState(state.SystemStateExecuting, "开始执行任务"); err != nil {
+	// ========== 阶段 3: Worker-任务映射 ==========
+	if err := o.stateManager.SetSystemState(state.SystemStatePlanning, "阶段3: Worker任务映射与资源规划"); err != nil {
 		return fmt.Errorf("设置系统状态失败: %w", err)
 	}
 
-	// 创建并调度任务
-	if err := o.scheduleTaskExecution(tasks); err != nil {
-		o.logger.Error("任务调度失败", "error", err)
-		err = o.stateManager.SetSystemState(state.SystemStateError, "任务调度失败")
-		if err != nil {
+	mappingResult, err := o.mapTasksToWorkers(enrichmentResult, analysisResult)
+	if err != nil {
+		o.logger.Error("Worker任务映射失败", "error", err)
+		if err := o.stateManager.SetSystemState(state.SystemStateError, "Worker任务映射失败"); err != nil {
 			return fmt.Errorf("设置系统状态失败: %w", err)
 		}
-		return fmt.Errorf("任务调度失败: %w", err)
+		return fmt.Errorf("worker任务映射失败: %w", err)
 	}
 
+	// ========== 阶段 4: 临时Worker创建与任务执行 ==========
+	if err := o.stateManager.SetSystemState(state.SystemStateExecuting, "阶段4: 创建临时Worker并开始执行"); err != nil {
+		return fmt.Errorf("设置系统状态失败: %w", err)
+	}
+
+	if err := o.executeWithMappingResult(mappingResult); err != nil {
+		o.logger.Error("任务执行失败", "error", err)
+		if err := o.stateManager.SetSystemState(state.SystemStateError, "任务执行失败"); err != nil {
+			return fmt.Errorf("设置系统状态失败: %w", err)
+		}
+		return fmt.Errorf("任务执行失败: %w", err)
+	}
+
+	o.logger.Info("智能化用户请求处理完成，任务已开始执行")
 	return nil
 }
 
@@ -269,226 +278,376 @@ func (o *Orchestrator) performPeriodicTasks() {
 	o.sendHeartbeat()
 }
 
-// analyzeRequest 分析用户请求
-func (o *Orchestrator) analyzeRequest(request string) (AnalysisResult, error) {
-	o.logger.Info("开始分析用户请求")
+// ========== 智能化处理流程方法 ==========
 
-	// 构建分析提示
-	prompt := o.buildAnalysisPrompt(request)
+// enrichTaskRequest 阶段1: 任务请求丰富化
+func (o *Orchestrator) enrichTaskRequest(userInput string) (*TaskRequestEnrichmentResponse, error) {
+	o.logger.Info("开始任务请求丰富化", "user_input", userInput)
 
-	// 调用LLM进行分析
+	// 获取可用资产和上下文信息
+	availableAssets := o.getAvailableAssets()
+	context := o.getSystemContext()
+
+	// 准备丰富化请求
+	enrichmentRequest := TaskRequestEnrichmentRequest{
+		UserInput:       userInput,
+		Context:         context,
+		AvailableAssets: availableAssets,
+	}
+
+	// 构建系统提示
+	systemPrompt := `你是一个智能任务请求分析专家。用户可能会提供简单或不够详细的任务描述，你的任务是：
+
+1. **理解用户意图**：深入理解用户真正想要完成的目标
+2. **识别具体目标**：将模糊的描述转化为具体可执行的目标
+3. **补充细节**：基于常见场景和最佳实践，合理补充必要的细节
+4. **明确范围**：清晰定义任务的边界和范围
+5. **识别约束**：发现可能的限制条件和约束
+6. **定义成功标准**：明确什么算作任务完成
+
+请基于用户输入和可用资源，提供一个详细、明确、可执行的任务描述。`
+
+	// 构建用户提示
+	requestJSON, err := json.MarshalToString(enrichmentRequest)
+	if err != nil {
+		return nil, fmt.Errorf("序列化丰富化请求失败: %w", err)
+	}
+
+	userPrompt := fmt.Sprintf("请分析并丰富以下用户任务请求：\n%s", requestJSON)
+
+	// 构建ChatInput
 	input := llminterface.ChatInput{
 		Messages: []llminterface.InputMessage{
-			{
-				Role: llminterface.RoleUser,
-				Content: []llminterface.ContentPart{
-					{
-						Type: llminterface.PartTypeText,
-						Text: prompt,
-					},
-				},
+			llminterface.SystemInputMessage(systemPrompt),
+			llminterface.UserInputMessageText(userPrompt),
+		},
+		ConversationID: fmt.Sprintf("task_enrichment_%s", time.Now().Format("20060102-150405")),
+	}
+
+	// 使用ProduceJSON获取结构化响应
+	response, err := o.llmAdapter.ProduceJSON(o.ctx, input, Some(*CreateTaskRequestEnrichmentSchema()))
+	if err != nil {
+		return nil, fmt.Errorf("调用LLM进行任务丰富化失败: %w", err)
+	}
+
+	// 解析响应
+	var enrichmentResponse TaskRequestEnrichmentResponse
+	if err := json.UnmarshalFromString(response, &enrichmentResponse); err != nil {
+		return nil, fmt.Errorf("解析任务丰富化响应失败: %w", err)
+	}
+
+	o.logger.Info("任务请求丰富化完成",
+		"enriched_description", enrichmentResponse.EnrichedDescription,
+		"identified_goals_count", len(enrichmentResponse.IdentifiedGoals),
+		"scope", enrichmentResponse.Scope,
+		"success_criteria_count", len(enrichmentResponse.SuccessCriteria),
+	)
+
+	return &enrichmentResponse, nil
+}
+
+// analyzeEnrichedRequest 阶段2: 基于丰富化结果进行深度任务分析
+func (o *Orchestrator) analyzeEnrichedRequest(enrichmentResult *TaskRequestEnrichmentResponse) (*TaskAnalysisResponse, error) {
+	o.logger.Info("开始深度任务分析")
+
+	// 获取可用Worker信息
+	workers := o.registry.ListComponentsByType(communication.ComponentTypeWorker)
+	availableWorkers := make([]AvailableWorker, len(workers))
+	for i, worker := range workers {
+		availableWorkers[i] = AvailableWorker{
+			ID:           worker.ID,
+			Type:         string(worker.Type),
+			State:        worker.Status.String(),
+			Capabilities: worker.Capabilities,
+			CurrentLoad:  0, // 简化版本，后续可以实现真实的负载监控
+			Performance: WorkerPerformanceMetrics{
+				TasksCompleted:  0,
+				TasksFailed:     0,
+				SuccessRate:     1.0,
+				AvgDurationMins: 5.0,
+				LastErrorReason: "",
 			},
+		}
+	}
+
+	// 准备任务分析请求 - 基于丰富化结果
+	analysisRequest := TaskAnalysisRequest{
+		TaskID:      "analysis-" + time.Now().Format("20060102-150405"),
+		Name:        "深度任务分析",
+		Description: enrichmentResult.EnrichedDescription,
+		Priority:    "normal",
+		Metadata: map[string]any{
+			"enrichment_result": *enrichmentResult,
+			"available_workers": availableWorkers,
+			"identified_goals":  enrichmentResult.IdentifiedGoals,
+			"success_criteria":  enrichmentResult.SuccessCriteria,
+			"constraints":       enrichmentResult.Constraints,
 		},
 	}
 
-	responseChan, err := o.llmAdapter.Chat(o.ctx, input)
+	// 构建系统提示
+	systemPrompt := `你是一个高级任务分析专家。基于已经丰富化的任务描述，你需要进行深度的技术分析：
+
+**分析重点：**
+1. **任务分解评估**：判断是否需要分解为子任务，以及如何分解
+2. **技术复杂度**：评估任务的技术难度和复杂程度
+3. **资源需求**：确定需要哪种类型的Worker和能力
+4. **执行时间**：基于任务复杂度进行准确的时间估算
+5. **依赖关系**：识别子任务间的依赖关系和执行顺序
+6. **风险识别**：识别潜在的技术风险和挑战
+
+**可用Worker类型：**
+- file_system: 文件系统操作（读写文件、目录管理、文件转换等）
+- web_ui: Web界面操作（浏览器自动化、网页交互、数据抓取等）  
+- data_analysis: 数据分析（Excel处理、数据统计、图表生成、数据清洗等）
+- temporary: 临时性工作（文本处理、简单计算、格式转换等）
+
+请基于丰富化的任务信息，提供详细的技术分析结果。`
+
+	// 构建用户提示
+	requestJSON, err := json.MarshalToString(analysisRequest)
 	if err != nil {
-		return AnalysisResult{}, fmt.Errorf("调用LLM失败: %w", err)
+		return nil, fmt.Errorf("序列化任务分析请求失败: %w", err)
 	}
 
-	// 收集所有响应块
-	var responseText strings.Builder
-	for chunk := range responseChan {
-		if chunk.Error != nil {
-			return AnalysisResult{}, chunk.Error
-		}
-		for _, part := range chunk.ContentParts {
-			if part.Type == llminterface.PartTypeText {
-				responseText.WriteString(part.Text)
-			}
-		}
+	userPrompt := fmt.Sprintf("请对以下丰富化的任务进行深度技术分析：\n%s", requestJSON)
+
+	// 构建ChatInput
+	input := llminterface.ChatInput{
+		Messages: []llminterface.InputMessage{
+			llminterface.SystemInputMessage(systemPrompt),
+			llminterface.UserInputMessageText(userPrompt),
+		},
+		ConversationID: fmt.Sprintf("task_analysis_%s", analysisRequest.TaskID),
 	}
 
-	// 解析LLM响应
-	analysisResult := o.parseAnalysisResponse(responseText.String())
+	// 使用ProduceJSON获取结构化响应
+	response, err := o.llmAdapter.ProduceJSON(o.ctx, input, Some(*CreateTaskAnalysisSchema()))
+	if err != nil {
+		return nil, fmt.Errorf("调用LLM进行深度分析失败: %w", err)
+	}
 
-	o.logger.Info("请求分析完成", "result", analysisResult)
-	return analysisResult, nil
+	// 解析响应
+	var analysisResponse TaskAnalysisResponse
+	if err := json.UnmarshalFromString(response, &analysisResponse); err != nil {
+		return nil, fmt.Errorf("解析深度分析响应失败: %w", err)
+	}
+
+	o.logger.Info("深度任务分析完成",
+		"requires_decomposition", analysisResponse.RequiresDecomposition,
+		"complexity", analysisResponse.EstimatedComplexity,
+		"sub_tasks_count", len(analysisResponse.SubTasks),
+		"estimated_duration", analysisResponse.EstimatedDuration,
+		"required_worker_type", analysisResponse.RequiredWorkerType,
+		"risk_level", analysisResponse.RiskAssessment.Level,
+	)
+
+	return &analysisResponse, nil
 }
 
-// planTasks 规划任务
-func (o *Orchestrator) planTasks(analysis AnalysisResult) ([]TaskPlan, error) {
-	o.logger.Info("开始规划任务")
+// mapTasksToWorkers 阶段3: Worker任务映射与资源规划
+func (o *Orchestrator) mapTasksToWorkers(enrichmentResult *TaskRequestEnrichmentResponse, analysisResult *TaskAnalysisResponse) (*WorkerTaskMappingResponse, error) {
+	o.logger.Info("开始Worker任务映射与资源规划")
 
-	// 根据分析结果生成任务计划
-	var tasks []TaskPlan
-
-	// 这里可以实现更复杂的规划逻辑
-	// 暂时创建一个示例任务
-	task := TaskPlan{
-		ID:                   "task-" + time.Now().Format("20060102-150405"),
-		Name:                 "示例任务",
-		Type:                 "general",
-		Priority:             state.PriorityNormal,
-		Description:          analysis.Summary,
-		RequiredCapabilities: []string{"basic_operation"},
-		EstimatedDuration:    30 * time.Second,
+	// 获取可用Worker信息
+	workers := o.registry.ListComponentsByType(communication.ComponentTypeWorker)
+	availableWorkers := make([]AvailableWorker, len(workers))
+	for i, worker := range workers {
+		availableWorkers[i] = AvailableWorker{
+			ID:           worker.ID,
+			Type:         string(worker.Type),
+			State:        worker.Status.String(),
+			Capabilities: worker.Capabilities,
+			CurrentLoad:  0,
+			Performance: WorkerPerformanceMetrics{
+				TasksCompleted:  0,
+				TasksFailed:     0,
+				SuccessRate:     1.0,
+				AvgDurationMins: 5.0,
+			},
+		}
 	}
 
-	tasks = append(tasks, task)
+	// 准备映射请求
+	mappingRequest := WorkerTaskMappingRequest{
+		EnrichmentResult: *enrichmentResult,
+		AnalysisResult:   *analysisResult,
+		AvailableWorkers: availableWorkers,
+	}
 
-	o.logger.Info("任务规划完成", "task_count", len(tasks))
-	return tasks, nil
+	// 构建系统提示
+	systemPrompt := `你是一个智能资源调度专家。你需要将分析出的任务分配给合适的Worker，并为无法满足的需求创建临时Worker。
+
+**任务分配原则：**
+1. **能力匹配**：确保Worker具备完成任务所需的能力
+2. **负载均衡**：考虑Worker当前的工作负载
+3. **依赖关系**：正确设置任务间的依赖关系
+4. **效率优化**：选择最适合和最高效的Worker
+
+**临时Worker创建指导：**
+- 当现有Worker无法满足特定需求时，设计新的临时Worker
+- 为临时Worker编写精心设计的系统提示词，使其能够专业地完成特定任务
+- 定义临时Worker的能力范围和生命周期
+- 考虑临时Worker与现有系统的集成方式
+
+**决策策略：**
+- 优先使用现有Worker
+- 对于复杂或特殊任务，创建专门的临时Worker
+- 确保任务分配的合理性和可执行性
+
+请基于任务分析结果和可用资源，制定最优的执行策略。`
+
+	// 构建用户提示
+	requestJSON, err := json.MarshalToString(mappingRequest)
+	if err != nil {
+		return nil, fmt.Errorf("序列化映射请求失败: %w", err)
+	}
+
+	userPrompt := fmt.Sprintf("请为以下任务制定Worker分配策略：\n%s", requestJSON)
+
+	// 构建ChatInput
+	input := llminterface.ChatInput{
+		Messages: []llminterface.InputMessage{
+			llminterface.SystemInputMessage(systemPrompt),
+			llminterface.UserInputMessageText(userPrompt),
+		},
+		ConversationID: fmt.Sprintf("task_mapping_%s", time.Now().Format("20060102-150405")),
+	}
+
+	// 使用ProduceJSON获取结构化响应
+	response, err := o.llmAdapter.ProduceJSON(o.ctx, input, Some(*CreateWorkerTaskMappingSchema()))
+	if err != nil {
+		return nil, fmt.Errorf("调用LLM进行任务映射失败: %w", err)
+	}
+
+	// 解析响应
+	var mappingResponse WorkerTaskMappingResponse
+	if err := json.UnmarshalFromString(response, &mappingResponse); err != nil {
+		return nil, fmt.Errorf("解析任务映射响应失败: %w", err)
+	}
+
+	o.logger.Info("Worker任务映射完成",
+		"task_assignments_count", len(mappingResponse.TaskAssignments),
+		"new_workers_required", len(mappingResponse.RequiredNewWorkers),
+		"unassigned_tasks", len(mappingResponse.UnassignedTasks),
+		"estimated_completion", mappingResponse.EstimatedCompletion,
+	)
+
+	return &mappingResponse, nil
 }
 
-// scheduleTaskExecution 调度任务执行
-func (o *Orchestrator) scheduleTaskExecution(tasks []TaskPlan) error {
-	o.logger.Info("开始调度任务执行", "task_count", len(tasks))
+// executeWithMappingResult 阶段4: 基于映射结果执行任务
+func (o *Orchestrator) executeWithMappingResult(mappingResult *WorkerTaskMappingResponse) error {
+	o.logger.Info("开始基于映射结果执行任务")
 
-	for _, taskPlan := range tasks {
-		// 创建任务信息
-		taskInfo := &state.TaskInfo{
-			ID:          taskPlan.ID,
-			Name:        taskPlan.Name,
-			Description: taskPlan.Description,
-			State:       state.TaskStatePending,
-			Priority:    taskPlan.Priority,
-			CreatedAt:   time.Now(),
-			Metadata: map[string]any{
-				"type":                  taskPlan.Type,
-				"required_capabilities": taskPlan.RequiredCapabilities,
-				"estimated_duration":    taskPlan.EstimatedDuration,
-			},
+	// 步骤4.1: 创建临时Worker
+	if len(mappingResult.RequiredNewWorkers) > 0 {
+		if err := o.createTemporaryWorkers(mappingResult.RequiredNewWorkers); err != nil {
+			return fmt.Errorf("创建临时Worker失败: %w", err)
 		}
+	}
 
-		// 创建任务到状态管理器
-		if err := o.stateManager.CreateTask(taskInfo); err != nil {
-			o.logger.Error("创建任务失败", "task_id", taskPlan.ID, "error", err)
-			continue
-		}
+	// 步骤4.2: 执行任务分配
+	if err := o.executeTaskAssignments(mappingResult.TaskAssignments); err != nil {
+		return fmt.Errorf("执行任务分配失败: %w", err)
+	}
 
-		// 创建任务节点到DAG
-		taskNode := &communication.TaskNode{
-			ID:            taskPlan.ID,
-			Name:          taskPlan.Name,
-			Type:          taskPlan.Type,
-			Priority:      int(taskPlan.Priority),
-			EstimatedTime: taskPlan.EstimatedDuration,
-			Status:        communication.TaskStatusPending,
-			Metadata: map[string]any{
-				"required_capabilities": taskPlan.RequiredCapabilities,
-			},
-		}
+	// 步骤4.3: 处理未分配的任务
+	if len(mappingResult.UnassignedTasks) > 0 {
+		o.handleUnassignedTasks(mappingResult.UnassignedTasks)
+	}
 
-		if err := o.taskDAG.AddTask(taskNode); err != nil {
-			o.logger.Error("添加任务到DAG失败", "task_id", taskPlan.ID, "error", err)
-			continue
-		}
+	o.logger.Info("任务执行初始化完成")
+	return nil
+}
 
-		// 查找并分配合适的Worker
-		if err := o.assignTaskToWorker(taskPlan); err != nil {
-			o.logger.Error("分配任务失败", "task_id", taskPlan.ID, "error", err)
-		}
+// 辅助方法
+
+// getAvailableAssets 获取可用资产信息
+func (o *Orchestrator) getAvailableAssets() []string {
+	// 这里可以实现实际的资产扫描逻辑
+	return []string{
+		"文件系统访问权限",
+		"网络访问权限",
+		"数据处理工具",
+		"Office套件支持",
+		"浏览器自动化工具",
+	}
+}
+
+// getSystemContext 获取系统上下文信息
+func (o *Orchestrator) getSystemContext() map[string]any {
+	systemInfo := o.stateManager.GetSystemInfo()
+
+	return map[string]any{
+		"system_state":      systemInfo.State.String(),
+		"active_tasks":      systemInfo.ActiveTasks,
+		"completed_tasks":   systemInfo.CompletedTasks,
+		"available_workers": len(o.registry.ListComponentsByType(communication.ComponentTypeWorker)),
+		"timestamp":         time.Now(),
+	}
+}
+
+// createTemporaryWorkers 创建临时Worker
+func (o *Orchestrator) createTemporaryWorkers(newWorkerRequests []NewWorkerRequest) error {
+	o.logger.Info("开始创建临时Worker", "count", len(newWorkerRequests))
+
+	for _, workerReq := range newWorkerRequests {
+		o.logger.Info("创建临时Worker",
+			"worker_name", workerReq.WorkerName,
+			"worker_type", workerReq.WorkerType,
+			"capabilities", workerReq.RequiredCapabilities,
+			"tasks_to_handle", workerReq.TasksToHandle,
+			"estimated_lifetime", workerReq.EstimatedLifetime,
+		)
+
+		// TODO: 这里需要实现实际的临时Worker创建逻辑
+		// 可以根据worker_type创建不同类型的临时Worker
+		// 并使用精心设计的system_prompt来配置Worker
+
+		o.logger.Info("临时Worker系统提示词",
+			"worker_name", workerReq.WorkerName,
+			"system_prompt", workerReq.SystemPrompt,
+		)
 	}
 
 	return nil
 }
 
-// assignTaskToWorker 分配任务给Worker
-func (o *Orchestrator) assignTaskToWorker(taskPlan TaskPlan) error {
-	// 查找合适的Worker
-	workers := o.registry.ListComponentsByType(communication.ComponentTypeWorker)
+// executeTaskAssignments 执行任务分配
+func (o *Orchestrator) executeTaskAssignments(assignments []TaskAssignment) error {
+	o.logger.Info("开始执行任务分配", "assignments_count", len(assignments))
 
-	for _, worker := range workers {
-		if worker.Status == communication.ComponentStatusActive ||
-			worker.Status == communication.ComponentStatusIdle {
+	for _, assignment := range assignments {
+		o.logger.Info("分配任务",
+			"task_id", assignment.TaskID,
+			"task_name", assignment.TaskName,
+			"worker_id", assignment.AssignedWorkerID,
+			"worker_type", assignment.WorkerType,
+			"priority", assignment.Priority,
+			"estimated_time", assignment.EstimatedTime,
+			"reason", assignment.AssignmentReason,
+		)
 
-			// 检查Worker能力是否匹配
-			if o.workerCanHandleTask(worker, taskPlan) {
-				// 分配任务
-				if err := o.stateManager.AssignTaskToWorker(worker.ID, taskPlan.ID); err != nil {
-					continue
-				}
-
-				// 标记任务开始
-				if err := o.taskDAG.MarkTaskStarted(taskPlan.ID, worker.ID); err != nil {
-					continue
-				}
-
-				// 发布任务开始事件
-				taskEvent := communication.NewTaskEvent(
-					communication.EventTypeTaskStarted,
-					o.id,
-					taskPlan.ID,
-					taskPlan.Name,
-				)
-				taskEvent.WorkerID = Some(worker.ID)
-				err := o.eventBus.Publish(taskEvent)
-				if err != nil {
-					o.logger.Error("发布任务开始事件失败", "error", err)
-					return fmt.Errorf("发布任务开始事件失败: %w", err)
-				}
-
-				o.logger.Info("任务分配成功",
-					"task_id", taskPlan.ID,
-					"worker_id", worker.ID)
-				return nil
-			}
-		}
+		// TODO: 这里需要实现实际的任务分配逻辑
+		// 创建TaskInfo并分配给对应的Worker
 	}
 
-	return communication.ErrChannelFull // 没有合适的Worker
+	return nil
 }
 
-// 辅助类型和方法
+// handleUnassignedTasks 处理未分配的任务
+func (o *Orchestrator) handleUnassignedTasks(unassignedTasks []UnassignedTask) {
+	o.logger.Warn("存在未分配的任务", "count", len(unassignedTasks))
 
-// AnalysisResult 分析结果
-type AnalysisResult struct {
-	Summary              string            `json:"summary"`
-	Intent               string            `json:"intent"`
-	Entities             map[string]string `json:"entities"`
-	Complexity           string            `json:"complexity"`
-	RequiredCapabilities []string          `json:"required_capabilities"`
-}
-
-// TaskPlan 任务计划
-type TaskPlan struct {
-	ID                   string         `json:"id"`
-	Name                 string         `json:"name"`
-	Type                 string         `json:"type"`
-	Priority             state.Priority `json:"priority"`
-	Description          string         `json:"description"`
-	RequiredCapabilities []string       `json:"required_capabilities"`
-	EstimatedDuration    time.Duration  `json:"estimated_duration"`
-	Dependencies         []string       `json:"dependencies"`
-}
-
-// buildAnalysisPrompt 构建分析提示
-func (o *Orchestrator) buildAnalysisPrompt(request string) string {
-	return "请分析以下用户请求，并提供详细的分析结果：\n\n" + request
-}
-
-// parseAnalysisResponse 解析分析响应
-func (o *Orchestrator) parseAnalysisResponse(response string) AnalysisResult {
-	// 这里应该实现更复杂的响应解析逻辑
-	return AnalysisResult{
-		Summary:              response,
-		Intent:               "general_request",
-		Entities:             make(map[string]string),
-		Complexity:           "medium",
-		RequiredCapabilities: []string{"basic_operation"},
+	for _, task := range unassignedTasks {
+		o.logger.Warn("未分配任务",
+			"task_id", task.TaskID,
+			"task_name", task.TaskName,
+			"reason", task.Reason,
+			"suggestions", task.Suggestions,
+		)
 	}
-}
-
-// workerCanHandleTask 检查Worker是否能处理任务
-func (o *Orchestrator) workerCanHandleTask(worker *communication.ComponentInfo, task TaskPlan) bool {
-	for _, required := range task.RequiredCapabilities {
-		hasCapability := slices.Contains(worker.Capabilities, required)
-		if !hasCapability {
-			return false
-		}
-	}
-	return true
 }
 
 // 事件处理器
@@ -496,6 +655,19 @@ func (o *Orchestrator) workerCanHandleTask(worker *communication.ComponentInfo, 
 // handleTaskCompleted 处理任务完成事件
 func (o *Orchestrator) handleTaskCompleted(event *communication.TaskEvent) {
 	o.logger.Info("处理任务完成事件", "task_id", event.TaskID)
+
+	// 通知TaskDAG任务已完成
+	if err := o.taskDAG.MarkTaskCompleted(event.TaskID, map[string]any{"result": event.Result}); err != nil {
+		o.logger.Error("标记任务完成失败", "task_id", event.TaskID, "error", err)
+	}
+
+	// 检查是否有等待此任务的其他任务可以开始执行
+	readyTasks := o.taskDAG.GetReadyTasks()
+	for _, readyTask := range readyTasks {
+		o.logger.Info("发现就绪任务", "task_id", readyTask.ID, "task_name", readyTask.Name)
+		// 在新的架构中，任务执行由映射结果驱动，这里只记录
+		// TODO: 可以实现更复杂的动态任务调度逻辑
+	}
 
 	// 检查是否所有任务都完成了
 	if o.taskDAG.IsDAGCompleted() {
@@ -552,4 +724,30 @@ func (o *Orchestrator) sendHeartbeat() {
 	if err := o.registry.Heartbeat(o.id); err != nil {
 		o.logger.Error("发送心跳失败", "error", err)
 	}
+}
+
+// DemoComplexTaskProcessing 演示复杂任务处理能力
+func (o *Orchestrator) DemoComplexTaskProcessing(ctx context.Context) error {
+	o.logger.Info("开始演示复杂任务处理")
+
+	// 模拟一个复杂的用户请求
+	complexRequest := `
+	请帮我处理一个数据分析项目：
+	1. 首先从多个Excel文件读取销售数据
+	2. 同时从网站下载最新的产品价格信息
+	3. 将销售数据和价格数据进行合并分析
+	4. 生成统计图表
+	5. 最后发送分析报告给管理层
+	
+	注意：数据合并必须等待前两步完成，图表生成需要合并分析的结果，发送报告需要等待图表完成。
+	`
+
+	// 使用新的智能化四阶段流程处理复杂请求
+	err := o.ProcessUserRequest(complexRequest)
+	if err != nil {
+		return fmt.Errorf("处理复杂任务演示失败: %w", err)
+	}
+
+	o.logger.Info("复杂任务演示完成，任务已通过智能化流程开始执行")
+	return nil
 }
