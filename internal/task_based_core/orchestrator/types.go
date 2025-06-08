@@ -167,14 +167,14 @@ type TaskRequestEnrichmentRequest struct {
 
 // TaskRequestEnrichmentResponse 任务请求丰富化响应
 type TaskRequestEnrichmentResponse struct {
-	EnrichedDescription string            `json:"enriched_description"`
-	IdentifiedGoals     []string          `json:"identified_goals"`
-	MissingInformation  []string          `json:"missing_information,omitempty"`
-	Assumptions         []string          `json:"assumptions,omitempty"`
-	Scope               string            `json:"scope"`
-	Constraints         []string          `json:"constraints,omitempty"`
-	SuccessCriteria     []string          `json:"success_criteria"`
-	Metadata            map[string]any    `json:"metadata,omitempty"`
+	EnrichedDescription string         `json:"enriched_description"`
+	IdentifiedGoals     []string       `json:"identified_goals"`
+	MissingInformation  []string       `json:"missing_information,omitempty"`
+	Assumptions         []string       `json:"assumptions,omitempty"`
+	Scope               string         `json:"scope"`
+	Constraints         []string       `json:"constraints,omitempty"`
+	SuccessCriteria     []string       `json:"success_criteria"`
+	Metadata            map[string]any `json:"metadata,omitempty"`
 }
 
 // WorkerTaskMappingRequest Worker任务映射请求
@@ -186,12 +186,12 @@ type WorkerTaskMappingRequest struct {
 
 // WorkerTaskMappingResponse Worker任务映射响应
 type WorkerTaskMappingResponse struct {
-	TaskAssignments      []TaskAssignment      `json:"task_assignments"`
-	RequiredNewWorkers   []NewWorkerRequest    `json:"required_new_workers,omitempty"`
-	UnassignedTasks      []UnassignedTask      `json:"unassigned_tasks,omitempty"`
-	MappingReasoning     string                `json:"mapping_reasoning"`
-	OverallStrategy      string                `json:"overall_strategy"`
-	EstimatedCompletion  int                   `json:"estimated_completion_minutes"`
+	TaskAssignments     []TaskAssignment   `json:"task_assignments"`
+	RequiredNewWorkers  []NewWorkerRequest `json:"required_new_workers,omitempty"`
+	UnassignedTasks     []UnassignedTask   `json:"unassigned_tasks,omitempty"`
+	MappingReasoning    string             `json:"mapping_reasoning"`
+	OverallStrategy     string             `json:"overall_strategy"`
+	EstimatedCompletion int                `json:"estimated_completion_minutes"`
 }
 
 // TaskAssignment 任务分配
@@ -208,21 +208,21 @@ type TaskAssignment struct {
 
 // NewWorkerRequest 新Worker请求
 type NewWorkerRequest struct {
-	WorkerType          string         `json:"worker_type"`
-	WorkerName          string         `json:"worker_name"`
-	RequiredCapabilities []string      `json:"required_capabilities"`
-	SystemPrompt        string         `json:"system_prompt"`
-	TasksToHandle       []string       `json:"tasks_to_handle"`
-	SpecialInstructions string         `json:"special_instructions,omitempty"`
-	EstimatedLifetime   int            `json:"estimated_lifetime_minutes"`
-	Metadata            map[string]any `json:"metadata,omitempty"`
+	WorkerType           string         `json:"worker_type"`
+	WorkerName           string         `json:"worker_name"`
+	RequiredCapabilities []string       `json:"required_capabilities"`
+	SystemPrompt         string         `json:"system_prompt"`
+	TasksToHandle        []string       `json:"tasks_to_handle"`
+	SpecialInstructions  string         `json:"special_instructions,omitempty"`
+	EstimatedLifetime    int            `json:"estimated_lifetime_minutes"`
+	Metadata             map[string]any `json:"metadata,omitempty"`
 }
 
 // UnassignedTask 未分配任务
 type UnassignedTask struct {
-	TaskID     string   `json:"task_id"`
-	TaskName   string   `json:"task_name"`
-	Reason     string   `json:"reason"`
+	TaskID      string   `json:"task_id"`
+	TaskName    string   `json:"task_name"`
+	Reason      string   `json:"reason"`
 	Suggestions []string `json:"suggestions,omitempty"`
 }
 
