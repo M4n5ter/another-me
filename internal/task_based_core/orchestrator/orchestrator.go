@@ -10,6 +10,7 @@ import (
 
 	"github.com/m4n5ter/another-me/internal/task_based_core/communication"
 	"github.com/m4n5ter/another-me/internal/task_based_core/state"
+	"github.com/m4n5ter/another-me/internal/task_based_core/worker"
 	"github.com/m4n5ter/another-me/pkg/llminterface"
 	. "github.com/m4n5ter/another-me/pkg/option"
 )
@@ -284,15 +285,9 @@ func (o *Orchestrator) performPeriodicTasks() {
 func (o *Orchestrator) enrichTaskRequest(userInput string) (*TaskRequestEnrichmentResponse, error) {
 	o.logger.Info("开始任务请求丰富化", "user_input", userInput)
 
-	// 获取可用资产和上下文信息
-	availableAssets := o.getAvailableAssets()
-	context := o.getSystemContext()
-
-	// 准备丰富化请求
+	// 准备丰富请求
 	enrichmentRequest := TaskRequestEnrichmentRequest{
-		UserInput:       userInput,
-		Context:         context,
-		AvailableAssets: availableAssets,
+		UserInput: userInput,
 	}
 
 	// 构建系统提示
@@ -351,24 +346,7 @@ func (o *Orchestrator) analyzeEnrichedRequest(enrichmentResult *TaskRequestEnric
 	o.logger.Info("开始深度任务分析")
 
 	// 获取可用Worker信息
-	workers := o.registry.ListComponentsByType(communication.ComponentTypeWorker)
-	availableWorkers := make([]AvailableWorker, len(workers))
-	for i, worker := range workers {
-		availableWorkers[i] = AvailableWorker{
-			ID:           worker.ID,
-			Type:         string(worker.Type),
-			State:        worker.Status.String(),
-			Capabilities: worker.Capabilities,
-			CurrentLoad:  0, // 简化版本，后续可以实现真实的负载监控
-			Performance: WorkerPerformanceMetrics{
-				TasksCompleted:  0,
-				TasksFailed:     0,
-				SuccessRate:     1.0,
-				AvgDurationMins: 5.0,
-				LastErrorReason: "",
-			},
-		}
-	}
+	availableWorkers := o.getAvailableWorkers()
 
 	// 准备任务分析请求 - 基于丰富化结果
 	analysisRequest := TaskAnalysisRequest{
@@ -395,12 +373,6 @@ func (o *Orchestrator) analyzeEnrichedRequest(enrichmentResult *TaskRequestEnric
 4. **执行时间**：基于任务复杂度进行准确的时间估算
 5. **依赖关系**：识别子任务间的依赖关系和执行顺序
 6. **风险识别**：识别潜在的技术风险和挑战
-
-**可用Worker类型：**
-- file_system: 文件系统操作（读写文件、目录管理、文件转换等）
-- web_ui: Web界面操作（浏览器自动化、网页交互、数据抓取等）  
-- data_analysis: 数据分析（Excel处理、数据统计、图表生成、数据清洗等）
-- temporary: 临时性工作（文本处理、简单计算、格式转换等）
 
 请基于丰富化的任务信息，提供详细的技术分析结果。`
 
@@ -450,23 +422,7 @@ func (o *Orchestrator) mapTasksToWorkers(enrichmentResult *TaskRequestEnrichment
 	o.logger.Info("开始Worker任务映射与资源规划")
 
 	// 获取可用Worker信息
-	workers := o.registry.ListComponentsByType(communication.ComponentTypeWorker)
-	availableWorkers := make([]AvailableWorker, len(workers))
-	for i, worker := range workers {
-		availableWorkers[i] = AvailableWorker{
-			ID:           worker.ID,
-			Type:         string(worker.Type),
-			State:        worker.Status.String(),
-			Capabilities: worker.Capabilities,
-			CurrentLoad:  0,
-			Performance: WorkerPerformanceMetrics{
-				TasksCompleted:  0,
-				TasksFailed:     0,
-				SuccessRate:     1.0,
-				AvgDurationMins: 5.0,
-			},
-		}
-	}
+	availableWorkers := o.getAvailableWorkers()
 
 	// 准备映射请求
 	mappingRequest := WorkerTaskMappingRequest{
@@ -563,31 +519,6 @@ func (o *Orchestrator) executeWithMappingResult(mappingResult *WorkerTaskMapping
 
 // 辅助方法
 
-// getAvailableAssets 获取可用资产信息
-func (o *Orchestrator) getAvailableAssets() []string {
-	// 这里可以实现实际的资产扫描逻辑
-	return []string{
-		"文件系统访问权限",
-		"网络访问权限",
-		"数据处理工具",
-		"Office套件支持",
-		"浏览器自动化工具",
-	}
-}
-
-// getSystemContext 获取系统上下文信息
-func (o *Orchestrator) getSystemContext() map[string]any {
-	systemInfo := o.stateManager.GetSystemInfo()
-
-	return map[string]any{
-		"system_state":      systemInfo.State.String(),
-		"active_tasks":      systemInfo.ActiveTasks,
-		"completed_tasks":   systemInfo.CompletedTasks,
-		"available_workers": len(o.registry.ListComponentsByType(communication.ComponentTypeWorker)),
-		"timestamp":         time.Now(),
-	}
-}
-
 // createTemporaryWorkers 创建临时Worker
 func (o *Orchestrator) createTemporaryWorkers(newWorkerRequests []NewWorkerRequest) error {
 	o.logger.Info("开始创建临时Worker", "count", len(newWorkerRequests))
@@ -648,6 +579,29 @@ func (o *Orchestrator) handleUnassignedTasks(unassignedTasks []UnassignedTask) {
 			"suggestions", task.Suggestions,
 		)
 	}
+}
+
+// getAvailableWorkers 获取可用Worker
+func (o *Orchestrator) getAvailableWorkers() []AvailableWorker {
+	workersComp := o.registry.ListComponentsByType(communication.ComponentTypeWorker)
+	workers := make([]worker.Worker, 0, len(workersComp))
+	for _, workerComp := range workersComp {
+		worker, ok := workerComp.Metadata["instance"].(worker.Worker)
+		if !ok {
+			continue
+		}
+		workers = append(workers, worker)
+	}
+	availableWorkers := make([]AvailableWorker, len(workers))
+	for i, worker := range workers {
+		availableWorkers[i] = AvailableWorker{
+			ID:           worker.GetID(),
+			Type:         worker.GetType(),
+			State:        worker.GetStatus().State.String(),
+			Capabilities: worker.GetCapabilities(),
+		}
+	}
+	return availableWorkers
 }
 
 // 事件处理器

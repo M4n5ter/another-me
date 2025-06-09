@@ -232,6 +232,11 @@ func (w *BaseWorker) registerSelf() error {
 		},
 	}
 
+	// 添加Worker实例到元数据中，可以方便在其他组件中获取Worker实例
+	component.Metadata = map[string]any{
+		"instance": w,
+	}
+
 	err := w.registry.RegisterComponent(component)
 	if err != nil {
 		return fmt.Errorf("注册Worker失败: %w", err)

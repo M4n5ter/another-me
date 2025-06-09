@@ -110,12 +110,10 @@ type RiskAssessment struct {
 
 // AvailableWorker 可用的Worker信息
 type AvailableWorker struct {
-	ID           string                   `json:"id"`
-	Type         string                   `json:"type"`
-	State        string                   `json:"state"`
-	Capabilities []string                 `json:"capabilities"`
-	CurrentLoad  float64                  `json:"current_load"`
-	Performance  WorkerPerformanceMetrics `json:"performance"`
+	ID           string   `json:"id"`
+	Type         string   `json:"type"`
+	State        string   `json:"state"`
+	Capabilities []string `json:"capabilities"`
 }
 
 // WorkerPerformanceMetrics Worker性能指标
