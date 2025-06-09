@@ -92,11 +92,14 @@ func NewBaseWorker(
 	}
 }
 
-var _ Worker = (*BaseWorker)(nil)
+var (
+	_ Worker            = (*BaseWorker)(nil)
+	_ WorkerTaskHandler = (*BaseWorker)(nil)
+)
 
 // Start 启动Worker
 func (w *BaseWorker) Start(ctx context.Context) error {
-	w.logger.Info("启动Worker")
+	w.logger.Info("start worker")
 
 	// 创建取消上下文
 	w.ctx, w.cancel = context.WithCancel(ctx)
@@ -113,13 +116,13 @@ func (w *BaseWorker) Start(ctx context.Context) error {
 	// 启动主处理循环
 	go w.mainLoop()
 
-	w.logger.Info("Worker启动完成")
+	w.logger.Info("worker started")
 	return nil
 }
 
 // Stop 停止Worker
 func (w *BaseWorker) Stop() error {
-	w.logger.Info("停止Worker")
+	w.logger.Info("stop worker")
 
 	if w.cancel != nil {
 		w.cancel()
@@ -127,10 +130,10 @@ func (w *BaseWorker) Stop() error {
 
 	// 注销组件
 	if err := w.registry.UnregisterComponent(w.id); err != nil {
-		w.logger.Error("注销Worker失败", "error", err)
+		w.logger.Error("failed to unregister worker", "error", err)
 	}
 
-	w.logger.Info("Worker已停止")
+	w.logger.Info("worker stopped")
 	return nil
 }
 
@@ -151,14 +154,14 @@ func (w *BaseWorker) GetCapabilities() []string {
 
 // ExecuteTask 执行任务（基础实现，子类可重写）
 func (w *BaseWorker) ExecuteTask(ctx context.Context, taskID string, taskData map[string]any) error {
-	w.logger.Info("开始执行任务", "task_id", taskID)
+	w.logger.Info("start to execute task", "task_id", taskID)
 
 	// 设置当前任务
 	w.currentTask = Some(taskID)
 
 	// 更新Worker状态
 	if err := w.stateManager.UpdateWorkerState(w.id, state.WorkerStateRunning, "开始执行任务"); err != nil {
-		w.logger.Error("更新Worker状态失败", "error", err)
+		w.logger.Error("failed to update worker state", "error", err)
 	}
 
 	// 模拟任务执行时间
@@ -169,8 +172,8 @@ func (w *BaseWorker) ExecuteTask(ctx context.Context, taskID string, taskData ma
 		w.currentTask = None[string]()
 
 		// 更新Worker状态
-		if err := w.stateManager.UpdateWorkerState(w.id, state.WorkerStateIdle, "任务执行完成"); err != nil {
-			w.logger.Error("更新Worker状态失败", "error", err)
+		if err := w.stateManager.UpdateWorkerState(w.id, state.WorkerStateIdle, "task execution completed"); err != nil {
+			w.logger.Error("failed to update worker state", "error", err)
 		}
 
 		// 发布任务完成事件
@@ -183,18 +186,18 @@ func (w *BaseWorker) ExecuteTask(ctx context.Context, taskID string, taskData ma
 		taskEvent.WorkerID = Some(w.id)
 		err := w.eventBus.Publish(taskEvent)
 		if err != nil {
-			w.logger.Error("发布任务完成事件失败", "error", err)
-			return fmt.Errorf("发布任务完成事件失败: %w", err)
+			w.logger.Error("failed to publish task completed event", "error", err)
+			return fmt.Errorf("failed to publish task completed event: %w", err)
 		}
 
-		w.logger.Info("任务执行完成", "task_id", taskID)
+		w.logger.Info("task execution completed", "task_id", taskID)
 		return nil
 
 	case <-ctx.Done():
 		// 任务被取消
 		w.currentTask = None[string]()
-		w.logger.Info("任务被取消", "task_id", taskID)
-		return fmt.Errorf("任务被取消: %w", ctx.Err())
+		w.logger.Info("task is cancelled", "task_id", taskID)
+		return fmt.Errorf("task is cancelled: %w", ctx.Err())
 	}
 }
 
@@ -239,7 +242,7 @@ func (w *BaseWorker) registerSelf() error {
 
 	err := w.registry.RegisterComponent(component)
 	if err != nil {
-		return fmt.Errorf("注册Worker失败: %w", err)
+		return fmt.Errorf("failed to register worker: %w", err)
 	}
 	return nil
 }
@@ -254,7 +257,7 @@ func (w *BaseWorker) subscribeToEvents() {
 				// 执行任务
 				go func() {
 					if err := w.ExecuteTask(w.ctx, taskEvent.TaskID, make(map[string]any)); err != nil {
-						w.logger.Error("任务执行失败", "task_id", taskEvent.TaskID, "error", err)
+						w.logger.Error("failed to execute task", "task_id", taskEvent.TaskID, "error", err)
 
 						// 发布任务失败事件
 						failedEvent := communication.NewTaskEvent(
@@ -267,12 +270,12 @@ func (w *BaseWorker) subscribeToEvents() {
 						failedEvent.ErrorMsg = Some(err.Error())
 						err := w.eventBus.Publish(failedEvent)
 						if err != nil {
-							w.logger.Error("发布任务失败事件失败", "error", err)
+							w.logger.Error("failed to publish task failed event", "error", err)
 						}
 
 						// 更新任务状态
 						if err := w.stateManager.UpdateTaskState(taskEvent.TaskID, state.TaskStateFailed, "任务执行失败"); err != nil {
-							w.logger.Error("更新任务状态失败", "error", err)
+							w.logger.Error("failed to update task state", "error", err)
 						}
 					}
 				}()
@@ -289,7 +292,7 @@ func (w *BaseWorker) mainLoop() {
 	for {
 		select {
 		case <-w.ctx.Done():
-			w.logger.Info("Worker主循环退出")
+			w.logger.Info("worker main loop exited")
 			return
 		case <-ticker.C:
 			w.performPeriodicTasks()
@@ -309,12 +312,22 @@ func (w *BaseWorker) performPeriodicTasks() {
 // sendHeartbeat 发送心跳
 func (w *BaseWorker) sendHeartbeat() {
 	if err := w.registry.Heartbeat(w.id); err != nil {
-		w.logger.Error("发送心跳失败", "error", err)
+		w.logger.Error("failed to send heartbeat", "error", err)
 	}
 }
 
 // checkHealth 检查健康状态
 func (w *BaseWorker) checkHealth() {
 	// 基础实现：检查是否正常运行
-	w.logger.Debug("Worker健康检查", "uptime", time.Since(w.startTime), "tasks_run", w.tasksRun)
+	w.logger.Debug("worker health check", "uptime", time.Since(w.startTime), "tasks_run", w.tasksRun)
+}
+
+// SetCurrentTask 实现 WorkerTaskHandler 接口
+func (w *BaseWorker) SetCurrentTask(taskID Option[string]) {
+	w.currentTask = taskID
+}
+
+// IncrementTasksRun 实现 WorkerTaskHandler 接口
+func (w *BaseWorker) IncrementTasksRun() {
+	w.tasksRun++
 }

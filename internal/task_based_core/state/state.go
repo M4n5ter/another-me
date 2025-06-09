@@ -3,6 +3,7 @@ package state
 import (
 	"context"
 	"log/slog"
+	"slices"
 	"sync"
 	"time"
 
@@ -324,7 +325,7 @@ func (sm *StateManager) SetSystemState(state SystemState, reason string) error {
 	}
 	sm.addTransition(transition)
 
-	sm.logger.Info("系统状态转换",
+	sm.logger.Info("system state transition",
 		"from", oldState.String(),
 		"to", state.String(),
 		"reason", reason)
@@ -379,7 +380,7 @@ func (sm *StateManager) CreateTask(task *TaskInfo) error {
 	defer sm.mu.Unlock()
 
 	if _, exists := sm.tasks[task.ID]; exists {
-		return NewStateError(ErrorTypeTaskExists, "任务已存在", task.ID)
+		return NewStateError(ErrorTypeTaskExists, "task already exists", task.ID)
 	}
 
 	// 设置创建时间
@@ -407,7 +408,7 @@ func (sm *StateManager) CreateTask(task *TaskInfo) error {
 	}
 	sm.addTransition(transition)
 
-	sm.logger.Info("任务创建",
+	sm.logger.Info("task created",
 		"task_id", task.ID,
 		"name", task.Name,
 		"priority", task.Priority.String())
@@ -422,7 +423,7 @@ func (sm *StateManager) GetTask(taskID string) (*TaskInfo, error) {
 
 	task, exists := sm.tasks[taskID]
 	if !exists {
-		return nil, NewStateError(ErrorTypeTaskNotFound, "任务不存在", taskID)
+		return nil, NewStateError(ErrorTypeTaskNotFound, "task not found", taskID)
 	}
 
 	// 返回任务的副本
@@ -437,7 +438,7 @@ func (sm *StateManager) UpdateTaskState(taskID string, state TaskState, reason s
 
 	task, exists := sm.tasks[taskID]
 	if !exists {
-		return NewStateError(ErrorTypeTaskNotFound, "任务不存在", taskID)
+		return NewStateError(ErrorTypeTaskNotFound, "task not found", taskID)
 	}
 
 	oldState := task.State
@@ -465,7 +466,7 @@ func (sm *StateManager) UpdateTaskState(taskID string, state TaskState, reason s
 	}
 	sm.addTransition(transition)
 
-	sm.logger.Info("任务状态更新",
+	sm.logger.Info("task state updated",
 		"task_id", taskID,
 		"from", oldState.String(),
 		"to", state.String(),
@@ -481,7 +482,7 @@ func (sm *StateManager) UpdateTaskProgress(taskID string, progress float64, resu
 
 	task, exists := sm.tasks[taskID]
 	if !exists {
-		return NewStateError(ErrorTypeTaskNotFound, "任务不存在", taskID)
+		return NewStateError(ErrorTypeTaskNotFound, "task not found", taskID)
 	}
 
 	// 限制进度在0-100之间
@@ -494,7 +495,7 @@ func (sm *StateManager) UpdateTaskProgress(taskID string, progress float64, resu
 	task.Progress = progress
 	task.TaskResult = result
 	task.Error = errorMsg
-	sm.logger.Debug("任务进度更新",
+	sm.logger.Debug("task progress updated",
 		"task_id", taskID,
 		"progress", progress)
 
@@ -507,12 +508,12 @@ func (sm *StateManager) DeleteTask(taskID string) error {
 	defer sm.mu.Unlock()
 
 	if _, exists := sm.tasks[taskID]; !exists {
-		return NewStateError(ErrorTypeTaskNotFound, "任务不存在", taskID)
+		return NewStateError(ErrorTypeTaskNotFound, "task not found", taskID)
 	}
 
 	delete(sm.tasks, taskID)
 
-	sm.logger.Info("任务删除", "task_id", taskID)
+	sm.logger.Info("task deleted", "task_id", taskID)
 	return nil
 }
 
@@ -550,7 +551,7 @@ func (sm *StateManager) RegisterWorker(worker *WorkerInfo) error {
 	defer sm.mu.Unlock()
 
 	if _, exists := sm.workers[worker.ID]; exists {
-		return NewStateError(ErrorTypeWorkerExists, "Worker已存在", worker.ID)
+		return NewStateError(ErrorTypeWorkerExists, "worker already exists", worker.ID)
 	}
 
 	// 设置创建时间和最后活跃时间
@@ -579,7 +580,7 @@ func (sm *StateManager) RegisterWorker(worker *WorkerInfo) error {
 	}
 	sm.addTransition(transition)
 
-	sm.logger.Info("Worker注册",
+	sm.logger.Info("worker registered",
 		"worker_id", worker.ID,
 		"type", worker.Type,
 		"tools", len(worker.Tools))
@@ -594,7 +595,7 @@ func (sm *StateManager) GetWorker(workerID string) (*WorkerInfo, error) {
 
 	worker, exists := sm.workers[workerID]
 	if !exists {
-		return nil, NewStateError(ErrorTypeWorkerNotFound, "Worker不存在", workerID)
+		return nil, NewStateError(ErrorTypeWorkerNotFound, "worker not found", workerID)
 	}
 
 	// 返回Worker的副本
@@ -609,7 +610,7 @@ func (sm *StateManager) UpdateWorkerState(workerID string, state WorkerState, re
 
 	worker, exists := sm.workers[workerID]
 	if !exists {
-		return NewStateError(ErrorTypeWorkerNotFound, "Worker不存在", workerID)
+		return NewStateError(ErrorTypeWorkerNotFound, "worker not found", workerID)
 	}
 
 	oldState := worker.State
@@ -629,7 +630,7 @@ func (sm *StateManager) UpdateWorkerState(workerID string, state WorkerState, re
 	}
 	sm.addTransition(transition)
 
-	sm.logger.Info("Worker状态更新",
+	sm.logger.Info("worker state updated",
 		"worker_id", workerID,
 		"from", oldState.String(),
 		"to", state.String(),
@@ -645,17 +646,17 @@ func (sm *StateManager) AssignTaskToWorker(workerID, taskID string) error {
 
 	worker, exists := sm.workers[workerID]
 	if !exists {
-		return NewStateError(ErrorTypeWorkerNotFound, "Worker不存在", workerID)
+		return NewStateError(ErrorTypeWorkerNotFound, "worker not found", workerID)
 	}
 
 	if _, exists := sm.tasks[taskID]; !exists {
-		return NewStateError(ErrorTypeTaskNotFound, "任务不存在", taskID)
+		return NewStateError(ErrorTypeTaskNotFound, "task not found", taskID)
 	}
 
 	worker.CurrentTask = Some(taskID)
 	worker.LastActive = time.Now()
 
-	sm.logger.Info("任务分配",
+	sm.logger.Info("task assigned",
 		"worker_id", workerID,
 		"task_id", taskID)
 
@@ -668,7 +669,7 @@ func (sm *StateManager) UnregisterWorker(workerID, reason string) error {
 	defer sm.mu.Unlock()
 
 	if _, exists := sm.workers[workerID]; !exists {
-		return NewStateError(ErrorTypeWorkerNotFound, "Worker不存在", workerID)
+		return NewStateError(ErrorTypeWorkerNotFound, "worker not found", workerID)
 	}
 
 	delete(sm.workers, workerID)
@@ -686,7 +687,7 @@ func (sm *StateManager) UnregisterWorker(workerID, reason string) error {
 	}
 	sm.addTransition(transition)
 
-	sm.logger.Info("Worker注销", "worker_id", workerID, "reason", reason)
+	sm.logger.Info("worker unregistered", "worker_id", workerID, "reason", reason)
 	return nil
 }
 
@@ -835,19 +836,19 @@ const (
 func (e ErrorType) String() string {
 	switch e {
 	case ErrorTypeTaskNotFound:
-		return "任务不存在"
+		return "task not found"
 	case ErrorTypeTaskExists:
-		return "任务已存在"
+		return "task already exists"
 	case ErrorTypeWorkerNotFound:
-		return "Worker不存在"
+		return "worker not found"
 	case ErrorTypeWorkerExists:
-		return "Worker已存在"
+		return "worker already exists"
 	case ErrorTypeInvalidState:
-		return "无效状态"
+		return "invalid state"
 	case ErrorTypeOperationFailed:
-		return "操作失败"
+		return "operation failed"
 	default:
-		return "未知错误"
+		return "unknown error"
 	}
 }
 
@@ -900,12 +901,7 @@ func CanTransition(from, to SystemState) bool {
 		return false
 	}
 
-	for _, allowedState := range allowedStates {
-		if allowedState == to {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(allowedStates, to)
 }
 
 // CanTransitionTask 检查任务状态转换是否合法
@@ -958,12 +954,7 @@ func CanTransitionTask(from, to TaskState) bool {
 		return false
 	}
 
-	for _, allowedState := range allowedStates {
-		if allowedState == to {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(allowedStates, to)
 }
 
 // CanTransitionWorker 检查Worker状态转换是否合法
@@ -1015,12 +1006,7 @@ func CanTransitionWorker(from, to WorkerState) bool {
 		return false
 	}
 
-	for _, allowedState := range allowedStates {
-		if allowedState == to {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(allowedStates, to)
 }
 
 // GetGlobalStateManager 获取全局状态管理器单例

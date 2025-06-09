@@ -108,23 +108,23 @@ func NewMultiAgentSystem(ctx context.Context, logger *slog.Logger) (*MultiAgentS
 
 // Start 启动多智能体系统
 func (mas *MultiAgentSystem) Start(ctx context.Context) error {
-	mas.logger.Info("启动多智能体系统")
+	mas.logger.Info("start multi agent system")
 
 	// 设置系统状态
 	err := mas.stateManager.SetSystemState(state.SystemStateAnalyzing, "系统启动初始化")
 	if err != nil {
-		return fmt.Errorf("设置系统状态失败: %w", err)
+		return fmt.Errorf("failed to set system state: %w", err)
 	}
 
 	// 初始化集成控制器
 	err = mas.stateController.Initialize()
 	if err != nil {
-		return fmt.Errorf("初始化状态控制器失败: %w", err)
+		return fmt.Errorf("failed to initialize state controller: %w", err)
 	}
 
 	err = mas.stateBridge.Initialize()
 	if err != nil {
-		return fmt.Errorf("初始化状态桥接器失败: %w", err)
+		return fmt.Errorf("failed to initialize state bridge: %w", err)
 	}
 
 	// 创建并启动Orchestrator
@@ -140,7 +140,7 @@ func (mas *MultiAgentSystem) Start(ctx context.Context) error {
 
 	err = mas.orchestrator.Start(mas.ctx)
 	if err != nil {
-		return fmt.Errorf("启动orchestrator失败: %w", err)
+		return fmt.Errorf("failed to start orchestrator: %w", err)
 	}
 
 	// 创建并启动Workers
@@ -152,21 +152,21 @@ func (mas *MultiAgentSystem) Start(ctx context.Context) error {
 	// 设置系统为执行状态
 	err = mas.stateManager.SetSystemState(state.SystemStateExecuting, "系统组件启动完成")
 	if err != nil {
-		return fmt.Errorf("设置系统状态失败: %w", err)
+		return fmt.Errorf("failed to set system state: %w", err)
 	}
 
-	mas.logger.Info("多智能体系统启动完成")
+	mas.logger.Info("multi agent system started")
 	return nil
 }
 
 // Stop 停止多智能体系统
 func (mas *MultiAgentSystem) Stop() error {
-	mas.logger.Info("停止多智能体系统")
+	mas.logger.Info("stop multi agent system")
 
 	// 设置系统状态为关闭中
 	err := mas.stateManager.SetSystemState(state.SystemStateShuttingDown, "系统准备关闭")
 	if err != nil {
-		return fmt.Errorf("设置系统状态失败: %w", err)
+		return fmt.Errorf("failed to set system state: %w", err)
 	}
 
 	// 取消context
@@ -176,7 +176,7 @@ func (mas *MultiAgentSystem) Stop() error {
 	for _, w := range mas.workers {
 		err := w.Stop()
 		if err != nil {
-			mas.logger.Error("停止worker失败", "error", err)
+			mas.logger.Error("failed to stop worker", "error", err)
 		}
 	}
 
@@ -184,7 +184,7 @@ func (mas *MultiAgentSystem) Stop() error {
 	if mas.orchestrator != nil {
 		err := mas.orchestrator.Stop()
 		if err != nil {
-			mas.logger.Error("停止orchestrator失败", "error", err)
+			mas.logger.Error("failed to stop orchestrator", "error", err)
 		}
 	}
 
@@ -192,7 +192,7 @@ func (mas *MultiAgentSystem) Stop() error {
 	mas.registry.Close()
 	mas.eventBus.Close()
 
-	mas.logger.Info("多智能体系统已停止")
+	mas.logger.Info("multi agent system stopped")
 	return nil
 }
 
@@ -203,7 +203,7 @@ func (mas *MultiAgentSystem) ProcessUserRequest(request string) error {
 	}
 	err := mas.orchestrator.ProcessUserRequest(request)
 	if err != nil {
-		return fmt.Errorf("处理用户请求失败: %w", err)
+		return fmt.Errorf("failed to process user request: %w", err)
 	}
 	return nil
 }
@@ -254,14 +254,14 @@ func NewStateController(sm *state.StateManager, eventBus *communication.MessageB
 
 // Initialize 初始化状态控制器
 func (sc *StateController) Initialize() error {
-	sc.logger.Info("初始化状态控制器")
+	sc.logger.Info("initialize state controller")
 
 	// 订阅任务相关事件，自动更新状态
 	sc.eventBus.Subscribe(communication.EventTypeTaskStarted, func(event communication.Event) {
 		if taskEvent, ok := event.(*communication.TaskEvent); ok {
 			err := sc.stateManager.UpdateTaskState(taskEvent.TaskID, state.TaskStateRunning, "任务开始执行")
 			if err != nil {
-				sc.logger.Error("更新任务状态失败", "error", err)
+				sc.logger.Error("failed to update task state", "error", err)
 			}
 		}
 	})
@@ -270,7 +270,7 @@ func (sc *StateController) Initialize() error {
 		if taskEvent, ok := event.(*communication.TaskEvent); ok {
 			err := sc.stateManager.UpdateTaskState(taskEvent.TaskID, state.TaskStateCompleted, "任务执行完成")
 			if err != nil {
-				sc.logger.Error("更新任务状态失败", "error", err)
+				sc.logger.Error("failed to update task state", "error", err)
 			}
 		}
 	})
@@ -279,7 +279,7 @@ func (sc *StateController) Initialize() error {
 		if taskEvent, ok := event.(*communication.TaskEvent); ok {
 			err := sc.stateManager.UpdateTaskState(taskEvent.TaskID, state.TaskStateFailed, "任务执行失败")
 			if err != nil {
-				sc.logger.Error("更新任务状态失败", "error", err)
+				sc.logger.Error("failed to update task state", "error", err)
 			}
 		}
 	})
@@ -288,7 +288,7 @@ func (sc *StateController) Initialize() error {
 		if taskEvent, ok := event.(*communication.TaskEvent); ok {
 			err := sc.stateManager.UpdateTaskState(taskEvent.TaskID, state.TaskStateCancelled, "任务被取消")
 			if err != nil {
-				sc.logger.Error("更新任务状态失败", "error", err)
+				sc.logger.Error("failed to update task state", "error", err)
 			}
 		}
 	})
@@ -297,7 +297,7 @@ func (sc *StateController) Initialize() error {
 		if taskEvent, ok := event.(*communication.TaskEvent); ok {
 			err := sc.stateManager.UpdateTaskState(taskEvent.TaskID, state.TaskStateRetrying, "任务重试")
 			if err != nil {
-				sc.logger.Error("更新任务状态失败", "error", err)
+				sc.logger.Error("failed to update task state", "error", err)
 			}
 		}
 	})
@@ -306,7 +306,7 @@ func (sc *StateController) Initialize() error {
 		if taskEvent, ok := event.(*communication.TaskEvent); ok {
 			err := sc.stateManager.UpdateTaskProgress(taskEvent.TaskID, taskEvent.Progress, taskEvent.Result, taskEvent.ErrorMsg)
 			if err != nil {
-				sc.logger.Error("更新任务进度失败", "error", err)
+				sc.logger.Error("failed to update task progress", "error", err)
 			}
 		}
 	})
@@ -323,7 +323,7 @@ func (sc *StateController) Initialize() error {
 				}
 				err := sc.stateManager.RegisterWorker(workerInfo)
 				if err != nil {
-					sc.logger.Error("注册worker失败", "error", err)
+					sc.logger.Error("failed to register worker", "error", err)
 				}
 			}
 		}
@@ -335,7 +335,7 @@ func (sc *StateController) Initialize() error {
 			if componentEvent.ComponentType == communication.ComponentTypeWorker {
 				err := sc.stateManager.UnregisterWorker(componentEvent.ComponentID, "Worker 注销事件触发")
 				if err != nil {
-					sc.logger.Error("注销worker失败", "error", err)
+					sc.logger.Error("failed to unregister worker", "error", err)
 				}
 			}
 		}
@@ -365,7 +365,7 @@ func NewStateBridge(sm *state.StateManager, registry *communication.ComponentReg
 
 // Initialize 初始化状态桥接器
 func (sb *StateBridge) Initialize() error {
-	sb.logger.Info("初始化状态桥接器")
+	sb.logger.Info("initialize state bridge")
 
 	// 同步任务状态
 	go sb.syncTaskStates()
@@ -397,7 +397,7 @@ func createLLMAdapter(ctx context.Context, logger *slog.Logger) (llminterface.Ch
 	})
 	if err != nil {
 		logger.Error("NewClient of gemini failed", "error", err)
-		return nil, fmt.Errorf("创建google genai客户端失败: %w", err)
+		return nil, fmt.Errorf("failed to create google genai client: %w", err)
 	}
 
 	// 设置 google genai 适配器
@@ -411,7 +411,7 @@ func createLLMAdapter(ctx context.Context, logger *slog.Logger) (llminterface.Ch
 	})
 	if err != nil {
 		logger.Error("Failed to create google genai adapter", "error", err)
-		return nil, fmt.Errorf("创建google genai适配器失败: %w", err)
+		return nil, fmt.Errorf("failed to create google genai adapter: %w", err)
 	}
 
 	return chatAdapter, nil
@@ -419,7 +419,7 @@ func createLLMAdapter(ctx context.Context, logger *slog.Logger) (llminterface.Ch
 
 // createAndStartWorkers 创建并启动Workers
 func (mas *MultiAgentSystem) createAndStartWorkers() error {
-	mas.logger.Info("创建并启动Workers")
+	mas.logger.Info("create and start workers")
 
 	// 创建 FileSystem Worker
 	fileSystemWorker, err := worker.NewFileSystemOperationWorker(
@@ -431,15 +431,15 @@ func (mas *MultiAgentSystem) createAndStartWorkers() error {
 		Some(mas.chatAdapter),
 	)
 	if err != nil {
-		return fmt.Errorf("创建FileSystem Worker失败: %w", err)
+		return fmt.Errorf("failed to create file system worker: %w", err)
 	}
 	err = fileSystemWorker.Start(mas.ctx)
 	if err != nil {
-		return fmt.Errorf("启动FileSystem Worker失败: %w", err)
+		return fmt.Errorf("failed to start file system worker: %w", err)
 	}
 	mas.workers = append(mas.workers, fileSystemWorker)
 
-	mas.logger.Info("Workers创建完成", "count", len(mas.workers))
+	mas.logger.Info("workers created", "count", len(mas.workers))
 	return nil
 }
 
@@ -447,7 +447,7 @@ func (mas *MultiAgentSystem) createAndStartWorkers() error {
 var (
 	ErrOrchestratorNotReady = &SystemError{
 		Type:    ErrorTypeOrchestratorNotReady,
-		Message: "Orchestrator尚未准备就绪",
+		Message: "orchestrator is not ready",
 	}
 )
 
@@ -475,12 +475,12 @@ const (
 func (e ErrorType) String() string {
 	switch e {
 	case ErrorTypeOrchestratorNotReady:
-		return "Orchestrator未准备就绪"
+		return "orchestrator is not ready"
 	case ErrorTypeSystemNotStarted:
-		return "系统未启动"
+		return "system is not started"
 	case ErrorTypeInvalidRequest:
-		return "无效请求"
+		return "invalid request"
 	default:
-		return "未知错误"
+		return "unknown error"
 	}
 }

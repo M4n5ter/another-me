@@ -66,153 +66,17 @@ func NewFileSystemOperationWorker(
 }
 
 func (w *FileSystemOperationWorker) ExecuteTask(ctx context.Context, taskID string, taskData map[string]any) error {
-	w.logger.Info("FileSystemOperationWorker开始执行任务", "task_id", taskID)
-
-	task, err := w.stateManager.GetTask(taskID)
-	if err != nil {
-		w.logger.Error("获取任务失败", "error", err)
-		return fmt.Errorf("获取任务失败: %w", err)
+	params := ExecuteTaskParams{
+		WorkerID:     w.id,
+		WorkerType:   "FileSystemOperationWorker",
+		TaskID:       taskID,
+		StateManager: w.stateManager,
+		EventBus:     w.eventBus,
+		React:        w.react,
+		Logger:       w.logger,
+		RunningMsg:   "文件系统操作任务执行中",
+		CompletedMsg: "file system operation task completed",
 	}
 
-	if task.State != state.TaskStateRunning {
-		w.logger.Error("任务状态不正确", "task_id", taskID, "task_name", task.Name, "state", task.State)
-		return fmt.Errorf("任务状态不正确: %w", err)
-	}
-
-	// 设置当前任务
-	w.currentTask = Some(taskID)
-
-	// 更新Worker状态
-	err = w.stateManager.UpdateWorkerState(w.id, state.WorkerStateRunning, "文件系统操作任务执行中")
-	if err != nil {
-		w.logger.Error("更新Worker状态失败", "error", err)
-	}
-
-	w.logger.Info("文件系统操作任务执行中", "task_id", taskID, "task_name", task.Name, "worker_id", w.id)
-	ch := w.handleTask(ctx, task)
-
-	// 这里应该实现具体的数据分析逻辑
-	select {
-	case result := <-ch:
-		// 任务执行完成
-		w.tasksRun++
-		w.currentTask = None[string]()
-
-		// 更新Worker状态
-		err = w.stateManager.UpdateWorkerState(w.id, state.WorkerStateIdle, "数据分析任务完成")
-		if err != nil {
-			w.logger.Error("更新Worker状态失败", "error", err)
-		}
-
-		if result.Error != nil {
-			w.logger.Error("任务执行失败", "error", result.Error)
-
-			// 发布任务更新进度事件
-			taskEvent := communication.NewTaskEvent(
-				communication.EventTypeTaskProgress,
-				w.id,
-				taskID,
-				task.Name,
-			)
-			taskEvent.WorkerID = Some(w.id)
-			taskEvent.Progress = 100 // TODO: 进度应该定多少？
-			taskEvent.ErrorMsg = Some(result.Error.Error())
-			err = w.eventBus.Publish(taskEvent)
-			if err != nil {
-				w.logger.Error("发布任务更新进度事件失败", "error", err)
-				return fmt.Errorf("发布任务更新进度事件失败: %w", err)
-			}
-
-			return fmt.Errorf("任务执行失败: %w", result.Error)
-		}
-
-		// 发布任务完成事件
-		taskEvent := communication.NewTaskEvent(
-			communication.EventTypeTaskCompleted,
-			w.id,
-			taskID,
-			task.Name,
-		)
-		taskEvent.WorkerID = Some(w.id)
-		taskEvent.Result = Some(result.Result)
-		err = w.eventBus.Publish(taskEvent)
-		if err != nil {
-			w.logger.Error("发布任务完成事件失败", "error", err)
-			return fmt.Errorf("发布任务完成事件失败: %w", err)
-		}
-
-		w.logger.Info("任务执行完成", "task_id", taskID, "task_name", task.Name, "result", result.Result)
-
-		// 发布更新任务进度事件
-		taskEvent = communication.NewTaskEvent(
-			communication.EventTypeTaskProgress,
-			w.id,
-			taskID,
-			task.Name,
-		)
-		taskEvent.WorkerID = Some(w.id)
-		taskEvent.Progress = 100
-		taskEvent.Result = Some(result.Result)
-		err = w.eventBus.Publish(taskEvent)
-		if err != nil {
-			w.logger.Error("发布更新任务进度事件失败", "error", err)
-			return fmt.Errorf("发布更新任务进度事件失败: %w", err)
-		}
-
-		return nil
-
-	case <-ctx.Done():
-		// 任务被取消
-		w.currentTask = None[string]()
-		w.logger.Info("任务被取消", "task_id", taskID, "task_name", task.Name)
-
-		// 发布任务取消事件
-		taskEvent := communication.NewTaskEvent(
-			communication.EventTypeTaskCancelled,
-			w.id,
-			taskID,
-			task.Name,
-		)
-		taskEvent.WorkerID = Some(w.id)
-		err = w.eventBus.Publish(taskEvent)
-		if err != nil {
-			w.logger.Error("发布任务取消事件失败", "error", err)
-			return fmt.Errorf("发布任务取消事件失败: %w", err)
-		}
-
-		// 更新Worker状态
-		err = w.stateManager.UpdateWorkerState(w.id, state.WorkerStateIdle, "任务被取消")
-		if err != nil {
-			w.logger.Error("更新Worker状态失败", "error", err)
-		}
-
-		return nil
-	}
-}
-
-func (w *FileSystemOperationWorker) handleTask(ctx context.Context, task *state.TaskInfo) <-chan TaskResult {
-	ch := make(chan TaskResult)
-	go func() {
-		defer close(ch)
-		chunks, err := w.react.Run(ctx, task.Description, task.ID)
-		if err != nil {
-			w.logger.Error("执行任务失败", "error", err)
-			return
-		}
-
-		for chunk := range chunks {
-			if chunk.IsLast {
-				switch chunk.Type {
-				case reactagent.AgentChunkTypeFinish, reactagent.AgentChunkTypeMaxIter:
-					ch <- TaskResult{Result: chunk.FinalResponse, Error: nil}
-				case reactagent.AgentChunkTypeError:
-					ch <- TaskResult{Result: chunk.Error, Error: nil}
-				default:
-					ch <- TaskResult{Result: chunk.FinalResponse, Error: nil}
-				}
-			}
-		}
-	}()
-
-	return ch
+	return executeTaskWithReAct(ctx, params, w)
 }

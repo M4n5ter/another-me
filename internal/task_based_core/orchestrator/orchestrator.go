@@ -532,9 +532,26 @@ func (o *Orchestrator) createTemporaryWorkers(newWorkerRequests []NewWorkerReque
 			"estimated_lifetime", workerReq.EstimatedLifetime,
 		)
 
-		// TODO: 这里需要实现实际的临时Worker创建逻辑
-		// 可以根据worker_type创建不同类型的临时Worker
-		// 并使用精心设计的system_prompt来配置Worker
+		tempWorker, err := worker.NewTemporaryWorker(
+			workerReq.WorkerID,
+			o.stateManager,
+			o.eventBus,
+			o.registry,
+			workerReq.SystemPrompt,
+			workerReq.RequiredCapabilities,
+			o.llmAdapter,
+			nil,
+		)
+		if err != nil {
+			o.logger.Error("failed to create temporary worker", "error", err)
+			return fmt.Errorf("failed to create temporary worker: %w", err)
+		}
+
+		err = tempWorker.Start(o.ctx)
+		if err != nil {
+			o.logger.Error("failed to start temporary worker", "error", err)
+			return fmt.Errorf("failed to start temporary worker: %w", err)
+		}
 
 		o.logger.Info("临时Worker系统提示词",
 			"worker_name", workerReq.WorkerName,
@@ -560,8 +577,40 @@ func (o *Orchestrator) executeTaskAssignments(assignments []TaskAssignment) erro
 			"reason", assignment.AssignmentReason,
 		)
 
-		// TODO: 这里需要实现实际的任务分配逻辑
-		// 创建TaskInfo并分配给对应的Worker
+		taskInfo := state.TaskInfo{
+			ID:          assignment.TaskID,
+			Name:        assignment.TaskName,
+			Description: o.currentRequest.TakeOr("Unknown Task"), // TODO: 可能需要改进
+			State:       state.TaskStatePending,
+			CreatedAt:   time.Now(),
+		}
+
+		err := o.stateManager.CreateTask(&taskInfo)
+		if err != nil {
+			o.logger.Error("failed to create task", "error", err)
+			return fmt.Errorf("failed to create task: %w", err)
+		}
+
+		err = o.stateManager.AssignTaskToWorker(assignment.AssignedWorkerID, assignment.TaskID)
+		if err != nil {
+			o.logger.Error("failed to assign task to worker", "error", err)
+			return fmt.Errorf("failed to assign task to worker: %w", err)
+		}
+
+		taskEvent := communication.NewTaskEvent(
+			communication.EventTypeTaskStarted,
+			o.id,
+			assignment.TaskID,
+			assignment.TaskName,
+		)
+
+		err = o.eventBus.Publish(taskEvent)
+		if err != nil {
+			o.logger.Error("failed to publish task event", "error", err)
+			return fmt.Errorf("failed to publish task event: %w", err)
+		}
+
+		o.logger.Info("task assigned to worker", "task_id", assignment.TaskID, "worker_id", assignment.AssignedWorkerID)
 	}
 
 	return nil

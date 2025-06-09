@@ -206,6 +206,7 @@ type TaskAssignment struct {
 
 // NewWorkerRequest 新Worker请求
 type NewWorkerRequest struct {
+	WorkerID             string         `json:"worker_id"`
 	WorkerType           string         `json:"worker_type"`
 	WorkerName           string         `json:"worker_name"`
 	RequiredCapabilities []string       `json:"required_capabilities"`
@@ -475,7 +476,7 @@ func CreateWorkerTaskMappingSchema() *schema.Schema {
 						},
 						"assigned_worker_id": {
 							Type:        genai.TypeString,
-							Description: "分配的Worker ID",
+							Description: "分配的Worker ID。如果分配的是临时Worker，则需要使用临时Worker的ID",
 						},
 						"worker_type": {
 							Type:        genai.TypeString,
@@ -510,6 +511,11 @@ func CreateWorkerTaskMappingSchema() *schema.Schema {
 				Items: &schema.Schema{
 					Type: genai.TypeObject,
 					Properties: map[string]*schema.Schema{
+						"worker_id": {
+							Type:        genai.TypeString,
+							Description: "Worker ID, 需要全局唯一",
+							Example:     "temp_worker_1_{timestamp}",
+						},
 						"worker_type": {
 							Type:        genai.TypeString,
 							Description: "Worker类型",

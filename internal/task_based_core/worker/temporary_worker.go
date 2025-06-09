@@ -39,23 +39,17 @@ func NewTemporaryWorker(id string, stateManager state.StateManagerInterface, eve
 }
 
 func (w *TemporaryWorker) ExecuteTask(ctx context.Context, taskID string, taskData map[string]any) error {
-	task, err := w.stateManager.GetTask(taskID)
-	if err != nil {
-		return fmt.Errorf("failed to get task: %w", err)
+	params := ExecuteTaskParams{
+		WorkerID:     w.id,
+		WorkerType:   "TemporaryWorker",
+		TaskID:       taskID,
+		StateManager: w.stateManager,
+		EventBus:     w.eventBus,
+		React:        w.react,
+		Logger:       w.logger,
+		RunningMsg:   "临时任务执行中",
+		CompletedMsg: "temporary task completed",
 	}
 
-	chunks, err := w.react.Run(ctx, taskID, task.Description)
-	if err != nil {
-		return fmt.Errorf("failed to execute task: %w", err)
-	}
-
-	for chunk := range chunks {
-		switch chunk.Type {
-		case reactagent.AgentChunkTypeError:
-			w.logger.Error("temporary worker", "chunk", chunk.Error)
-		case reactagent.AgentChunkTypeFinish, reactagent.AgentChunkTypeMaxIter:
-			w.logger.Info("temporary worker", "chunk", chunk.FinalResponse)
-		}
-	}
-	return nil
+	return executeTaskWithReAct(ctx, params, w)
 }
