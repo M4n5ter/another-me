@@ -13,6 +13,7 @@ import (
 	"github.com/m4n5ter/another-me/internal/task_based_core/worker"
 	"github.com/m4n5ter/another-me/pkg/llminterface"
 	. "github.com/m4n5ter/another-me/pkg/option"
+	"github.com/m4n5ter/another-me/pkg/toolcore"
 )
 
 // Orchestrator 主脑编排器 - 负责任务分析、规划和调度
@@ -28,6 +29,9 @@ type Orchestrator struct {
 
 	// LLM适配器
 	llmAdapter llminterface.ChatAdapter
+
+	// 工具注册表，一般用来给临时Worker提供工具
+	toolRegistry *toolcore.Registry
 
 	// 运行状态
 	ctx    context.Context
@@ -45,6 +49,7 @@ func NewOrchestrator(
 	registry *communication.ComponentRegistry,
 	taskDAG *communication.TaskDAG,
 	llmAdapter llminterface.ChatAdapter,
+	toolRegistry *toolcore.Registry,
 ) *Orchestrator {
 	return &Orchestrator{
 		id:           id,
@@ -54,6 +59,7 @@ func NewOrchestrator(
 		registry:     registry,
 		taskDAG:      taskDAG,
 		llmAdapter:   llmAdapter,
+		toolRegistry: toolRegistry,
 	}
 }
 

@@ -16,6 +16,7 @@ import (
 	"github.com/m4n5ter/another-me/pkg/llminterface"
 	"github.com/m4n5ter/another-me/pkg/llminterface/google"
 	. "github.com/m4n5ter/another-me/pkg/option"
+	"github.com/m4n5ter/another-me/pkg/toolcore"
 )
 
 // MultiAgentSystem 多智能体系统集成
@@ -135,6 +136,7 @@ func (mas *MultiAgentSystem) Start(ctx context.Context) error {
 		mas.registry,
 		mas.taskDAG,
 		mas.chatAdapter,
+		toolcore.NewRegistry(), // TODO: 需要一个工具注册表
 	)
 	mas.orchestrator = orchestratorComp
 
