@@ -40,6 +40,9 @@ func main() {
 	chatAdapter := openai.NewOpenAIChatAdapter(apiKey, Some(baseURL), &openai.OpenAIAdapterConfig{
 		Model:    model,
 		Registry: registry,
+		ReasoningConfig: Some(openai.OpenAIReasoningConfig{
+			Effort: Some("low"),
+		}),
 	})
 
 	// --- ReAct Agent 测试 ---

@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 
+	json "github.com/json-iterator/go"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
 	"github.com/openai/openai-go/shared"
@@ -24,12 +26,41 @@ type OpenAIChatAdapter struct {
 
 // OpenAIAdapterConfig 是 OpenAI 适配器的配置
 type OpenAIAdapterConfig struct {
-	Model       string
-	MaxTokens   Option[int64]
-	Temperature Option[float64]
-	TopP        Option[float64]
-	Registry    *toolcore.Registry
-	Tools       Option[[]openai.ChatCompletionToolParam]
+	Model           string
+	MaxTokens       Option[int64]
+	Temperature     Option[float64]
+	TopP            Option[float64]
+	Registry        *toolcore.Registry
+	Tools           Option[[]openai.ChatCompletionToolParam]
+	ReasoningConfig Option[OpenAIReasoningConfig]
+}
+
+// OpenAIReasoningConfig 是 OpenAI 推理模式的配置
+type OpenAIReasoningConfig struct {
+	// 推理努力程度，可以是 "low", "medium", "high"
+	// 仅适用于 o1 系列模型
+	Effort Option[string]
+}
+
+// ToOpenAIReasoningEffort 将 OpenAIReasoningConfig 转换为 shared.ReasoningEffort
+func (c *OpenAIReasoningConfig) ToOpenAIReasoningEffort() *shared.ReasoningEffort {
+	if c.Effort.IsNone() {
+		return nil
+	}
+
+	var effort shared.ReasoningEffort
+	switch c.Effort.Unwrap() {
+	case "low":
+		effort = shared.ReasoningEffortLow
+	case "medium":
+		effort = shared.ReasoningEffortMedium
+	case "high":
+		effort = shared.ReasoningEffortHigh
+	default:
+		effort = shared.ReasoningEffortMedium // 默认使用 medium
+	}
+
+	return &effort
 }
 
 // NewOpenAIChatAdapter 创建一个新的 OpenAI 聊天适配器
@@ -70,8 +101,8 @@ func (o *OpenAIChatAdapter) Chat(ctx context.Context, input llminterface.ChatInp
 
 	openaiMsgs, err := o.convertChatInputToOpenAIMsgs(input)
 	if err != nil {
-		o.logger.Error("转换消息失败", "error", err)
-		return nil, fmt.Errorf("转换消息失败: %w", err)
+		o.logger.Error("failed to convert chat input to openai msgs", "error", err)
+		return nil, fmt.Errorf("failed to convert chat input to openai msgs: %w", err)
 	}
 
 	outputChan := make(chan llminterface.ChatOutputChunk, 10)
@@ -98,6 +129,13 @@ func (o *OpenAIChatAdapter) Chat(ctx context.Context, input llminterface.ChatInp
 		if o.config.Tools.IsSome() {
 			params.Tools = o.config.Tools.Unwrap()
 		}
+		// 设置推理参数
+		if o.config.ReasoningConfig.IsSome() {
+			config := o.config.ReasoningConfig.Unwrap()
+			if reasoningEffort := config.ToOpenAIReasoningEffort(); reasoningEffort != nil {
+				params.ReasoningEffort = *reasoningEffort
+			}
+		}
 
 		// 创建流式响应
 		stream := o.client.Chat.Completions.NewStreaming(ctx, params)
@@ -109,9 +147,9 @@ func (o *OpenAIChatAdapter) Chat(ctx context.Context, input llminterface.ChatInp
 		}
 
 		if err := stream.Err(); err != nil {
-			o.logger.Error("OpenAI 流式响应错误", "error", err)
+			o.logger.Error("openai streaming response error", "error", err)
 			outputChan <- llminterface.ChatOutputChunk{
-				Error: fmt.Errorf("OpenAI 流式响应错误: %w", err),
+				Error: fmt.Errorf("openai streaming response error: %w", err),
 			}
 		}
 	}()
@@ -123,8 +161,8 @@ func (o *OpenAIChatAdapter) Chat(ctx context.Context, input llminterface.ChatInp
 func (o *OpenAIChatAdapter) ProduceJSON(ctx context.Context, input llminterface.ChatInput, jsonSchema Option[schema.Schema]) (string, error) {
 	openaiMsgs, err := o.convertChatInputToOpenAIMsgs(input)
 	if err != nil {
-		o.logger.Error("转换消息失败", "error", err)
-		return "", fmt.Errorf("转换消息失败: %w", err)
+		o.logger.Error("failed to convert chat input to openai msgs", "error", err)
+		return "", fmt.Errorf("failed to convert chat input to openai msgs: %w", err)
 	}
 
 	// 构建请求参数
@@ -157,16 +195,23 @@ func (o *OpenAIChatAdapter) ProduceJSON(ctx context.Context, input llminterface.
 	if o.config.Temperature.IsSome() {
 		params.Temperature = openai.Float(o.config.Temperature.Unwrap())
 	}
+	// 设置推理参数
+	if o.config.ReasoningConfig.IsSome() {
+		config := o.config.ReasoningConfig.Unwrap()
+		if reasoningEffort := config.ToOpenAIReasoningEffort(); reasoningEffort != nil {
+			params.ReasoningEffort = *reasoningEffort
+		}
+	}
 
 	// 发起请求
 	response, err := o.client.Chat.Completions.New(ctx, params)
 	if err != nil {
-		o.logger.Error("OpenAI JSON 生成请求失败", "error", err)
-		return "", fmt.Errorf("OpenAI JSON 生成请求失败: %w", err)
+		o.logger.Error("failed to request openai", "error", err)
+		return "", fmt.Errorf("failed to request openai: %w", err)
 	}
 
 	if len(response.Choices) == 0 {
-		return "", fmt.Errorf("OpenAI 响应中没有选择项")
+		return "", fmt.Errorf("no choices in openai response")
 	}
 
 	return response.Choices[0].Message.Content, nil
@@ -183,8 +228,8 @@ func (o *OpenAIChatAdapter) RegisterTools(ctx context.Context, registry *toolcor
 	for _, tool := range tools {
 		toolSchema, err := tool.Schema(ctx)
 		if err != nil {
-			o.logger.Error("获取工具模式失败", "tool", toolSchema.Name, "error", err)
-			return fmt.Errorf("获取工具模式失败: %w", err)
+			o.logger.Error("failed to get tool schema", "tool", toolSchema.Name, "error", err)
+			return fmt.Errorf("failed to get tool schema: %w", err)
 		}
 
 		openaiTool := o.convertToolSchemaToOpenAITool(&toolSchema)
@@ -246,7 +291,7 @@ func (o *OpenAIChatAdapter) convertChatInputToOpenAIMsgs(input llminterface.Chat
 		case llminterface.RoleToolResult:
 			// 工具结果消息必须包含 tool_call_id
 			if msg.ToolCallID.IsNone() {
-				return nil, fmt.Errorf("工具结果消息缺少 tool_call_id")
+				return nil, fmt.Errorf("tool result message missing tool_call_id")
 			}
 
 			messages = append(messages, openai.ChatCompletionMessageParamUnion{
@@ -258,7 +303,7 @@ func (o *OpenAIChatAdapter) convertChatInputToOpenAIMsgs(input llminterface.Chat
 				},
 			})
 		default:
-			return nil, fmt.Errorf("不支持的消息角色: %s", msg.Role)
+			return nil, fmt.Errorf("unsupported message role: %s", msg.Role)
 		}
 	}
 
@@ -308,11 +353,49 @@ func (o *OpenAIChatAdapter) convertOpenAIChunkToOutputChunk(chunk openai.ChatCom
 
 	// 创建内容部分
 	var contentParts []llminterface.ContentPart
+	outputChunk := llminterface.ChatOutputChunk{}
+
+	// 处理推理内容（如果存在）
+	// 注意：真正的OpenAI 模型不会直接暴露推理内容
+	// 但是对于DeepSeek等兼容模型，可能会通过reasoning_content字段返回
 	if choice.Delta.Content != "" {
 		contentParts = append(contentParts, llminterface.ContentPart{
 			Type: llminterface.PartTypeText,
 			Text: choice.Delta.Content,
 		})
+	}
+
+	//nolint:nestif // 这里需要嵌套if，没办法
+	if extraChoice := chunk.JSON.Choices; extraChoice.Valid() {
+		extraChoiceStr := extraChoice.Raw()
+		var extraChoiceMap []map[string]any
+		err := json.UnmarshalFromString(extraChoiceStr, &extraChoiceMap)
+		if err != nil {
+			o.logger.Error("parse extra choice failed", "error", err)
+			return outputChunk
+		}
+
+		if len(extraChoiceMap) > 0 {
+			if delta, ok := extraChoiceMap[0]["delta"]; ok {
+				deltaMap, ok := delta.(map[string]any)
+				if ok {
+					if reasoningContent, ok := deltaMap["reasoning_content"]; ok {
+						if reasoningContentStr, ok := reasoningContent.(string); ok && reasoningContentStr != "" {
+							outputChunk.Reasoning = Some(reasoningContentStr)
+						}
+					} else {
+						// 看看有没有跟思考相关的字段
+						for key, value := range deltaMap {
+							if strings.Contains(key, "reason") || strings.Contains(key, "think") {
+								if reasoningContentStr, ok := value.(string); ok && reasoningContentStr != "" {
+									outputChunk.Reasoning = Some(reasoningContentStr)
+								}
+							}
+						}
+					}
+				}
+			}
+		}
 	}
 
 	// 处理工具调用
@@ -334,9 +417,7 @@ func (o *OpenAIChatAdapter) convertOpenAIChunkToOutputChunk(chunk openai.ChatCom
 		})
 	}
 
-	outputChunk := llminterface.ChatOutputChunk{
-		ContentParts: contentParts,
-	}
+	outputChunk.ContentParts = contentParts
 
 	// 设置结束原因
 	if choice.FinishReason != "" {
