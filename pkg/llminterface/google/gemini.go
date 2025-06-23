@@ -115,7 +115,7 @@ func (g *GeminiAdapter) ProduceJSON(ctx context.Context, input llminterface.Chat
 		ResponseSchema:    jsonSchema.UnwrapAsPtr(),
 	})
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to generate content: %w", err)
 	}
 
 	return response.Text(), nil
