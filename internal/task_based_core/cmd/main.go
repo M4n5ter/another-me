@@ -39,7 +39,10 @@ func main() {
 	// 3 秒后发送一个任务请求
 	go func() {
 		time.Sleep(3 * time.Second)
-		system.ProcessUserRequest("调查一下当前文件系统布局")
+		err = system.ProcessUserRequest("调查一下当前文件系统布局")
+		if err != nil {
+			logger.Error("发送任务请求失败", "error", err)
+		}
 	}()
 
 	// 等待信号
