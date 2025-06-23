@@ -32,6 +32,9 @@ go.work.sum
 # IntelliJ IDEA
 .idea/
 
+# .DS_Store
+.DS_Store
+
 # temp
 temp/
 tmp/

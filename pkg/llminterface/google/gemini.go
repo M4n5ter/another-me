@@ -114,8 +114,11 @@ func (g *GeminiAdapter) ProduceJSON(ctx context.Context, input llminterface.Chat
 		ResponseMIMEType:  "application/json",
 		ResponseSchema:    jsonSchema.UnwrapAsPtr(),
 	})
+	if err != nil {
+		return "", err
+	}
 
-	return response.Text(), err
+	return response.Text(), nil
 }
 
 // GetFrameworkName implements llminterface.ChatAdapter.

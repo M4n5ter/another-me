@@ -279,10 +279,6 @@ func CreateTaskAnalysisSchema() *schema.Schema {
 							Description: "估计执行时间（分钟）",
 							Minimum:     &min1,
 						},
-						"metadata": {
-							Type:        genai.TypeObject,
-							Description: "子任务元数据",
-						},
 					},
 					Required: []string{"name", "description", "worker_type", "priority", "estimated_duration_minutes"},
 				},
@@ -439,10 +435,6 @@ func CreateTaskRequestEnrichmentSchema() *schema.Schema {
 				Description: "成功标准列表",
 				Items:       &schema.Schema{Type: genai.TypeString},
 			},
-			"metadata": {
-				Type:        genai.TypeObject,
-				Description: "其他相关元数据",
-			},
 		},
 		Required: []string{
 			"enriched_description",
@@ -546,10 +538,6 @@ func CreateWorkerTaskMappingSchema() *schema.Schema {
 							Type:        genai.TypeInteger,
 							Description: "估计生命周期（分钟）",
 							Minimum:     &min1,
-						},
-						"metadata": {
-							Type:        genai.TypeObject,
-							Description: "Worker元数据",
 						},
 					},
 					Required: []string{"worker_type", "worker_name", "required_capabilities", "system_prompt", "tasks_to_handle", "estimated_lifetime_minutes"},

@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/m4n5ter/another-me/internal/task_based_core/system"
 	"github.com/m4n5ter/another-me/pkg/i18n"
@@ -34,6 +35,12 @@ func main() {
 		logger.Error("启动多智能体系统失败", "error", err)
 		return
 	}
+
+	// 3 秒后发送一个任务请求
+	go func() {
+		time.Sleep(3 * time.Second)
+		system.ProcessUserRequest("调查一下当前文件系统布局")
+	}()
 
 	// 等待信号
 	waitForShutdown(system, logger)
