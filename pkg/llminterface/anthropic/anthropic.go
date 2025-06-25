@@ -142,7 +142,11 @@ func (a *AnthropicAdapter) Chat(ctx context.Context, input llminterface.ChatInpu
 						},
 					}
 					outputChan <- chunk
-
+				case anthropic.ThinkingDelta:
+					chunk := llminterface.ChatOutputChunk{
+						Reasoning: Some(deltaVariant.JSON.Thinking.Raw()),
+					}
+					outputChan <- chunk
 				case anthropic.InputJSONDelta:
 					// 工具调用参数增量
 					currentToolArgs.WriteString(deltaVariant.PartialJSON)
@@ -190,7 +194,11 @@ func (a *AnthropicAdapter) Chat(ctx context.Context, input llminterface.ChatInpu
 			chunk := llminterface.ChatOutputChunk{
 				Error: stream.Err(),
 			}
-			outputChan <- chunk
+
+			// 只有当有实际内容时才发送 chunk
+			if len(chunk.ContentParts) > 0 || chunk.Reasoning.IsSome() {
+				outputChan <- chunk
+			}
 		}
 	}()
 
