@@ -128,7 +128,6 @@ func TestAgentLoadBalancing(t *testing.T) {
 
 	agent1.On("Execute", mock.Anything, mock.Anything, mock.Anything).
 		Return(expectedResult, nil).Once()
-	
 	agent2.On("Execute", mock.Anything, mock.Anything, mock.Anything).
 		Return(expectedResult, nil).Once()
 
@@ -142,7 +141,7 @@ func TestAgentLoadBalancing(t *testing.T) {
 	}
 
 	task2 := types.Task{
-		ID:        "load-balance-task-2", 
+		ID:        "load-balance-task-2",
 		Type:      "gui_click",
 		AgentType: types.AgentTypeGUI,
 		CreatedAt: time.Now(),
@@ -282,4 +281,4 @@ func TestSpecializedAgentSelection(t *testing.T) {
 	sysOpsAgent.AssertExpectations(t)
 	socialAgent.AssertExpectations(t)
 	financeAgent.AssertExpectations(t)
-} 
+}
