@@ -6,6 +6,22 @@ import (
 	"github.com/m4n5ter/another-me/pkg/llminterface"
 )
 
+// ReActAgent 代表一个 ReAct 智能体
+type ReActAgent struct {
+	ReAct
+	Capabilities []string
+}
+
+// NewReActAgent 创建一个 ReAct 智能体
+func NewReActAgent(react ReAct, capabilities []string) *ReActAgent {
+	return &ReActAgent{
+		ReAct:        react,
+		Capabilities: capabilities,
+	}
+}
+
+var _ ReAct = (*ReActAgent)(nil)
+
 // AgentOutputChunk 代表 ReAct Agent 流式输出的一个数据块。
 // 注意：工具调用的具体结果不会通过此通道流式传输，它们会被合并到内部消息历史中，
 // LLM 对工具结果的后续思考（文本）才会通过此通道流式输出。

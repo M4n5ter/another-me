@@ -1,256 +1,709 @@
-# Another Me - 智能体编排架构设计
+# Another Me - 智能体编排架构设计 v1.0
 
 ## 1. 概述 (Overview)
 
-"Another Me" 旨在成为一个持续运行的智能体系统，通过不断学习用户行为和偏好，逐渐成为用户的数字助手或"另一个我"。本系统区别于传统的基于请求-响应模式的智能体，它将主动感知、决策，并在无明确任务时，依赖 `Mindscape` 进行智能监控和在适当时机被唤醒。
+"Another Me" 是一个先进的智能体编排系统，通过智能任务编排、持续决策引擎和反馈分析，实现了真正的自主运行和自适应工作流。系统区别于传统的基于请求-响应模式，采用**智能编排 + 持续决策**的架构，能够基于Agent输出进行持续分析和决策，自主判断何时继续执行、生成新任务或进入等待状态。
 
-核心目标：
-- **持续运行 (Continuous Operation):** 系统7x24小时不间断运行，具备自主性。
-- **自主学习与适应 (Autonomous Learning and Adaptation):** 通过与 `Mindscape` 交互，持久化观察、经验和用户偏好，不断学习并调整自身行为。
-- **主动感知与决策 (Proactive Sensing and Decision Making):** 基于当前上下文、从 `Mindscape` 检索的记忆以及 `Mindscape` 的唤醒信号，自主决定下一步行动。
-- **成本效益 (Cost-Effectiveness):** 在系统判断无明确任务执行时，将监控责任委托给 `Mindscape`，系统进入低功耗等待状态，以显著降低不必要的Token消耗和计算资源占用。`Mindscape` 在满足预设条件时唤醒 "Another Me"。
+### 核心特性：
+- **智能任务编排：** 支持串行、并行、混合执行模式的复杂工作流
+- **持续决策循环：** 基于Agent输出反馈的智能决策，支持多轮自适应执行
+- **自主资源管理：** 并发控制、资源监控、性能优化
+- **深度反馈分析：** LLM驱动的Agent输出分析和洞察生成
+- **成本效益运行：** 智能等待模式和监控任务委托
 
-## 2. 核心组件 (Core Components)
+## 2. 系统架构概览
 
-系统核心编排逻辑将主要位于 `internal/core` 目录下（后续创建），主要包含以下组件：
+```mermaid
+graph TB
+    subgraph "Another Me 智能编排系统"
+        subgraph "核心编排层 (Core Orchestration Layer)"
+            SML[SmartMainLoop<br/>智能主循环]
+            STO[SmartTaskOrchestrator<br/>智能任务编排器]
+            CDE[ContinuousDecisionEngine<br/>持续决策引擎]
+            FA[FeedbackAnalyzer<br/>反馈分析器]
+        end
+        
+        subgraph "决策与调度层 (Decision & Dispatch Layer)"
+            DM[DecisionMaker<br/>决策器]
+            AD[AgentDispatcher<br/>Agent调度器]
+            TE[TaskEvaluator<br/>任务评估器]
+        end
+        
+        subgraph "连接与监控层 (Connection & Monitoring Layer)"
+            MC[MindscapeConnector<br/>Mindscape连接器]
+            WL[WakeupListener<br/>唤醒监听器]
+            MM[MemoryManager<br/>记忆管理器]
+        end
+        
+        subgraph "执行层 (Execution Layer)"
+            GA[GUIAgent<br/>图形界面智能体]
+            RA[ReActAgent<br/>反应式智能体]
+            AA[AdaptiveAgent<br/>自适应智能体]
+        end
+        
+        subgraph "外部服务 (External Services)"
+            MS[Mindscape<br/>记忆与监控服务]
+            LLM[LLM Services<br/>大语言模型服务]
+        end
+    end
+    
+    %% 主要数据流
+    SML --> STO
+    STO --> CDE
+    CDE --> FA
+    FA --> SML
+    SML --> DM
+    DM --> AD
+    AD --> GA
+    AD --> RA
+    AD --> AA
+    SML --> MC
+    MC --> MS
+    MC --> WL
+    
+    %% 反馈循环
+    GA -.->|ExecutionResult| STO
+    RA -.->|ExecutionResult| STO
+    AA -.->|ExecutionResult| STO
+    STO -.->|Analysis| CDE
+    CDE -.->|Decision| SML
+    
+    %% 外部交互
+    MS -->|WakeupEvent| WL
+    WL -->|Trigger| SML
+    FA --> LLM
+    DM --> LLM
+    
+    classDef coreLayer fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef decisionLayer fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef connectionLayer fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
+    classDef executionLayer fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef externalLayer fill:#fafafa,stroke:#424242,stroke-width:2px
+    
+    class SML,STO,CDE,FA coreLayer
+    class DM,AD,TE decisionLayer
+    class MC,WL,MM connectionLayer
+    class GA,RA,AA executionLayer
+    class MS,LLM externalLayer
+```
 
-### 2.1. `MainLoop` (主循环)
-- **设想位置:** `internal/core/mainloop.go`
-- **职责:**
-    - 系统的心跳，驱动 "Another Me" 的持续运行和状态管理。
-    - 初始化系统，加载配置，并确保与 `MindscapeConnector` 建立稳定连接。
-    - 周期性地（或在被 `Mindscape` 唤醒时）激活 `DecisionMaker` 进行决策。
-    - 根据 `DecisionMaker` 的决策结果，通过 `AgentDispatcher` 分发任务给具体的执行单元 (`GUIAgent`, `ReActAgent`)。
-    - 当 `DecisionMaker` 判断系统应进入监控等待状态时，协调 `MindscapeConnector` 向 `Mindscape` 注册或更新监控任务，并使系统进入低功耗等待模式，直到接收到 `Mindscape` 的唤醒信号。
-    - 处理来自 `MindscapeConnector` 的唤醒事件，并将唤醒数据传递给 `DecisionMaker`。
+## 3. 核心组件详解
 
-### 2.2. `DecisionMaker` (决策器)
-- **设想位置:** `internal/core/decision_maker.go`
-- **职责:**
-    - "Another Me" 的大脑，负责制定行动计划或决定进入监控状态。
-    - 整合当前上下文信息进行决策：
-        - `MainLoop` 传递的 `Mindscape` 唤醒数据（如果适用）。
-        - 通过 `MindscapeConnector` 从 `Mindscape` 检索到的相关记忆（例如，用户习惯、历史任务模式、当前目标等）。
-        - 系统内部状态和最近的活动历史。
-        - （可选）外部事件或传感器数据接口。
-    - 判断当前是否有可执行的任务，或者是否需要基于唤醒数据启动新任务。
-    - 如果有任务：确定任务目标、优先级，选择合适的执行单元 (`GUIAgent` 或 `ReActAgent`)，并构建任务执行所需的初始上下文。
-    - 如果无明确任务或当前任务完成：定义需要 `Mindscape` 监控的条件和场景（例如，监控特定应用启动、用户长时间无交互后的首次交互、特定关键词出现等），以便在合适时机被唤醒。这些监控条件应具体且可操作。
-    - 将决策结果（执行任务、更新监控、或继续等待）返回给 `MainLoop`。
+### 3.1. 智能主循环 (SmartMainLoop)
 
-### 2.3. `MindscapeConnector` (Mindscape 连接器)
-- **设想位置:** `internal/core/mindscape_connector.go`
-- **职责:**
-    - 作为 "Another Me" 与 `Mindscape` 服务交互的唯一、统一接口层。
-    - 封装 `Mindscape` SDK (`internal/mindscape`) 的所有调用细节，对其他内部组件屏蔽 `Mindscape` 的具体实现。
-    - **记忆管理:**
-        - `StoreMemory(ctx context.Context, memoryData any)`: 将新的观察、学习成果、用户偏好、任务执行摘要等结构化或非结构化数据安全地存入 `Mindscape`。
-        - `RetrieveMemories(ctx context.Context, queryContext any) ([]MemoryItem, error)`: 根据 `DecisionMaker` 或 `Agent` 提供的查询上下文（例如，当前任务描述、用户意图关键词、时间范围等）从 `Mindscape` 检索相关记忆。`Mindscape` 负责实现高级检索逻辑（如联想、图谱、向量相似度）。
-    - **监控任务委派:**
-        - `DelegateMonitoringTask(ctx context.Context, taskDetails MonitoringTask)`: 接收 `DecisionMaker` 定义的监控任务，将其转换为 `Mindscape` 可理解的格式，并注册到 `Mindscape` 服务。这包括监控条件、触发频率、回调配置等。
-        - `ClearOrUpdateMonitoringTasks(ctx context.Context, taskUpdate TaskUpdate)`: 根据需要清除或更新已在 `Mindscape` 注册的监控任务。
-    - **唤醒机制接口:**
-        - `SetupWakeUpListener(handler func(wakeupData WakeupEvent) error)`: 初始化并管理用于接收 `Mindscape` 唤醒信号的机制（例如，启动一个轻量级HTTP服务器监听Webhook回调，或订阅指定的消息队列主题）。当收到唤醒信号时，调用注册的 `handler`（通常由 `MainLoop` 提供）。
-        - 对唤醒信号进行初步验证和解析，确保数据完整性，但不负责具体业务逻辑处理。
+**位置:** `internal/core/mainloop.go`
 
-### 2.4. `AgentDispatcher` (智能体调度器)
-- **设想位置:** `internal/core/agent_dispatcher.go`
-- **职责:**
-    - 根据 `DecisionMaker` 的指令，负责实例化、配置和调用具体的执行单元 (`Agent`)。
-    - 将任务目标、执行所需的上下文信息（可能包含从 `Mindscape` 检索的记忆片段）传递给选定的 `Agent`。
-    - 管理 `Agent` 的执行生命周期，包括启动、监控执行状态、处理超时和基本错误。
-    - 收集 `Agent` 的执行结果（成功、失败、产出数据等），并将其反馈给 `MainLoop`，以便 `DecisionMaker` 进行后续评估和可能的记忆存储。
+智能主循环是整个系统的核心驱动器，负责协调所有组件的协作，实现真正的智能编排。
 
-### 2.5. 执行单元 (Execution Units)
-- **`GUIAgent`:**
-    - **位置:** `internal/gui_agent/gui_agent.go` (已存在)
-    - **职责:** 负责执行与图形用户界面 (GUI) 相关的原子化或简单指令，如点击特定元素、在输入框输入文本、读取屏幕上的特定信息等。其操作通常是确定性的。
-- **`ReActAgent`:**
-    - **位置:** `pkg/reactagent/agent.go` (已存在)
-    - **职责:** 通用的基于 ReAct (Reasoning and Acting) 范式的智能体，能够执行更复杂的、需要多轮思考、工具调用和决策的任务。它本身可能包含一个小的 ReAct 循环。
+```mermaid
+stateDiagram-v2
+    [*] --> 初始化
+    初始化 --> 主动循环
+    主动循环 --> 智能工作流: 用户输入/唤醒事件
+    智能工作流 --> 持续执行循环
+    持续执行循环 --> 决策分析: 每轮执行后
+    决策分析 --> 持续执行循环: 继续执行
+    决策分析 --> 等待模式: 停止执行
+    决策分析 --> 主动循环: 无更多任务
+    等待模式 --> 智能工作流: 监控触发
+    主动循环 --> [*]: 系统停止
 
-### 2.6. 接口定义 (Interfaces)
-- **设想位置:** `internal/core/interfaces.go`
-- **职责:** 定义核心组件间的契约，促进模块化和可测试性。
-    - `Agent` 接口: `GUIAgent` 和 `ReActAgent` 都需要实现此接口。
-      ```go
-      type Agent interface {
-          Execute(ctx context.Context, taskDescription Task, initialContext map[string]any) (ExecutionResult, error)
-          // 可能还有 Name() string, Type() AgentType 等方法
-      }
-      ```
-    - `MindscapeService` 接口: `MindscapeConnector` 实现此接口，供其他组件依赖注入和调用。
-      ```go
-      type MindscapeService interface {
-          StoreMemory(ctx context.Context, memoryData any) error
-          RetrieveMemories(ctx context.Context, queryContext any) ([]MemoryItem, error)
-          DelegateMonitoringTask(ctx context.Context, taskDetails MonitoringTask) (string, error) // 返回监控任务ID
-          ClearOrUpdateMonitoringTasks(ctx context.Context, taskUpdate TaskUpdate) error
-          SetupWakeUpListener(handler func(wakeupData WakeupEvent) error) error
-      }
-      ```
-    - 其他如 `Task`, `ExecutionResult`, `MonitoringTask`, `WakeupEvent`, `MemoryItem` 等数据结构也在此定义。
+    note right of 智能工作流
+        统一工作流处理
+        智能计划创建
+        多模式任务编排
+    end note
 
-### 2.7. 关键数据结构释义 (Key Data Structures Explained)
-- **`Task`**: 描述一个需要 `Agent` 执行的具体任务。
-  ```go
-  type Task struct {
-      ID          string // 任务唯一标识
-      Type        string // 任务类型 (例如 "gui_click", "react_plan_and_execute")
-      Description string // 任务的自然语言描述
-      AgentType   AgentType // 指定执行此任务的Agent类型
-      Parameters  map[string]any // 任务执行所需的具体参数 (例如，点击坐标，ReAct Agent的目标)
-      Priority    int    // 任务优先级
-      // ... 其他元数据
-  }
-  ```
-- **`ExecutionResult`**: `Agent` 执行任务后的结果。
-  ```go
-  type ExecutionResult struct {
-      TaskID      string // 对应的任务ID
-      Status      string // 执行状态 ("success", "failure", "in_progress")
-      Output      any    // Agent执行的主要产出物 (例如，GUI Agent的截图路径，ReAct Agent的最终答案)
-      Observations []string // Agent在执行过程中的重要观察或中间步骤的文本描述
-      Error       string // 如果执行失败，记录错误信息
-      // ... 其他性能指标或元数据
-  }
-  ```
-- **`MonitoringTask`**: 定义一个需要委托给 `Mindscape` 的监控任务。这是 "Another Me" 内部的数据结构，`MindscapeConnector` 会将其转换为 `Mindscape` API 所需的格式。
-  ```go
-  type MonitoringTask struct {
-      ID                  Option[string]   // 监控任务的唯一ID (由Mindscape生成并返回，对应Mindscape的UUID)
-      Description         string           // 监控任务的自然语言描述 (Another Me 内部使用)
-      MindscapeTaskType   string           // 期望在Mindscape中使用的任务类型 (例如 "generic_condition_monitor")
-                                        // MindscapeConnector 将基于此类型和以下Conditions/TargetData构造发送给Mindscape的Parameters
-      Conditions          []MonitorCondition // 触发唤醒的一组条件
-      TargetData          []string         // 满足条件时，Mindscape需要采集并返回的数据点 (用于填充WakeupEvent.ObservedData)
-      NotificationMethods []string         // 通知方式，如 ["webhook", "mq"]
-      WebhookURL          Option[string]   // 如果 NotificationMethods 含 "webhook", 此为回调URL
-      MQTopic             Option[string]   // 如果 NotificationMethods 含 "mq", 此为消息队列主题
-      MaxRetries          Option[int]      // 通知传递的最大重试次数 (可选, Mindscape有默认值)
-      IsEnabled           bool             // Another Me 内部标记，是否希望此任务在Mindscape中实际处于活动状态
-      // ... 其他配置，如频率限制、持续时间等
-  }
-  type MonitorCondition struct {
-      Type     string // e.g., "application_start", "text_on_screen", "user_idle_then_active"
-      Property string // e.g., "application_name", "text_pattern", "idle_duration_seconds"
-      Operator string // e.g., "equals", "contains", "greater_than"
-      Value    any    // The value to compare against
-  }
-  ```
-- **`TaskUpdate`**: 用于更新或清除 `Mindscape` 中的监控任务。
-  ```go
-  type TaskUpdate struct {
-      TasksToUpdate []MonitoringTask // 需要更新的监控任务详情
-      TaskIDsToDelete []string     // 需要删除的监控任务ID
-  }
-  ```
-- **`WakeupEvent`**: `Mindscape` 唤醒 "Another Me" 时传递的数据。
-  ```go
-  type WakeupEvent struct {
-      MonitoringTaskID string         // 触发唤醒的监控任务ID
-      TriggerTime      time.Time      // 唤醒条件满足的时间
-      ObservedData     map[string]any // Mindscape观测到的数据 (根据MonitoringTask.TargetData定义)
-      Reason           string         // 简述唤醒原因
-      // ... 其他元数据
-  }
-  ```
-- **`MemoryItem`**: 表示存储在 `Mindscape` 中的一条记忆。
-  ```go
-  type MemoryItem struct {
-      ID          string         // 记忆唯一标识
-      Timestamp   time.Time      // 记忆产生的时间
-      Type        string         // 记忆类型 (例如 "observation", "user_preference", "task_summary", "error_log")
-      Content     any            // 记忆的具体内容 (可以是文本、结构化数据、指向其他资源的指针等)
-      Keywords    []string       // 用于检索的关键词
-      Importance  float64        // 记忆的重要性评分 (0.0 - 1.0)
-      RelatedIDs  []string       // 与此记忆相关的其他记忆ID (用于构建记忆图谱)
-      // ... 其他元数据，如来源、置信度等
-  }
-  ```
+    note right of 持续执行循环
+        迭代执行任务
+        实时反馈分析
+        自适应策略调整
+    end note
 
-## 3. 工作流程 (Workflow)
+    note right of 决策分析
+        Agent输出分析
+        持续决策引擎
+        风险评估
+    end note
+```
 
-### 3.1. 启动与初始化 (Startup & Initialization)
-1.  `MainLoop` 启动。
-2.  加载配置、初始化日志系统。
-3.  `MindscapeConnector` 初始化，与 `Mindscape` 服务建立连接。
-4.  `MindscapeConnector` 调用 `SetupWakeUpListener`，传入一个由 `MainLoop` 实现的回调函数，用于处理接收到的唤醒信号。
-5.  `MainLoop` 可选地尝试从 `Mindscape` 加载初始状态或核心记忆。
-6.  进入主运行循环。
+**核心职责:**
+- **统一工作流编排:** 处理用户输入和唤醒事件，转换为智能工作流
+- **持续执行管理:** 支持多轮迭代执行，基于反馈进行自适应调整
+- **智能状态切换:** 在主动执行和等待监控之间智能切换
+- **资源协调:** 协调所有组件的协作，确保系统稳定运行
 
-### 3.2. 主动运行循环 (Active Operational Cycle)
-1.  `MainLoop` 激活 `DecisionMaker`。
-2.  `DecisionMaker` 整合当前所有可用信息：
-    *   如果是被 `Mindscape` 唤醒，则包含唤醒数据。
-    *   调用 `MindscapeConnector.RetrieveMemories()` 获取与当前情境相关的记忆。
-    *   分析系统内部状态。
-3.  **决策分支:**
-    a.  **有任务执行 / 基于唤醒数据需执行新任务:**
-        i.  `DecisionMaker` 确定任务目标、所需 `Agent` 类型及任务上下文。
-        ii. `MainLoop` 通过 `AgentDispatcher` 实例化并派发任务给选定的 `Agent` (`GUIAgent` 或 `ReActAgent`)，传递必要的上下文。
-        iii. `Agent` 执行任务。在执行过程中，`Agent` 可能会通过 `MindscapeConnector` 存储临时的观察或检索更细粒度的记忆。
-        iv. `AgentDispatcher` 将 `Agent` 的执行结果（成功/失败、输出、观察）返回给 `MainLoop`。
-        v.  `MainLoop` 将结果传递给 `DecisionMaker` 进行评估。`DecisionMaker` 判断是否有新的学习成果或重要观察需要持久化。
-        vi. 如果需要，`MainLoop` (或 `DecisionMaker` 指示) 调用 `MindscapeConnector.StoreMemory()` 将新信息存入 `Mindscape`。
-        vii.返回步骤1，开始新的决策周期。
-    b.  **无任务执行 / 当前任务完成，进入监控模式:**
-        i.  `DecisionMaker` 判断当前无明确主动任务，并定义需要 `Mindscape` 监控的具体条件（例如，用户打开了特定应用如 "VSCode"，或屏幕上出现文本 "项目已完成"，或特定时间段内无交互后首次出现键盘/鼠标活动）。
-        ii. `MainLoop` 指示 `MindscapeConnector.DelegateMonitoringTask()` 将这些监控任务注册到 `Mindscape`。
-        iii. `MainLoop` 使系统进入低功耗等待状态，主要依赖 `MindscapeConnector` 的唤醒监听器。
+### 3.2. 智能任务编排器 (SmartTaskOrchestrator)
 
-### 3.3. 监控与唤醒 (Monitoring & Wake-up)
-1.  "Another Me" 系统处于低功耗等待状态，CPU 和网络活动降至最低。
-2.  `Mindscape` 服务根据 `MindscapeConnector` 注册的条件独立进行外部环境或用户行为的监控。
-3.  当任一监控条件满足时，`Mindscape` 通过预设的机制 (如 Webhook 或 MQ 消息) 发送唤醒信号，信号中包含触发唤醒的事件类型和观测到的相关数据。
-4.  `MindscapeConnector` 的唤醒监听器（例如，HTTP端点或MQ消费者）接收到该信号和数据。
-5.  监听器调用 `MainLoop` 注册的回调函数，将解析后的 `WakeupEvent` 数据传递给 `MainLoop`。
-6.  `MainLoop` 被唤醒，恢复活动状态。它将唤醒数据作为重要上下文输入，传递给 `DecisionMaker`。
-7.  系统返回到 "主动运行循环" 的步骤 2.a，`DecisionMaker` 将基于唤醒数据和新检索的记忆来决定下一步行动。
+**位置:** `internal/core/orchestrator.go`
 
-## 4. 数据流 (Data Flow)
+智能任务编排器是系统的执行引擎，支持复杂的并行、串行、混合任务编排。
 
-- **记忆 (Memory):**
-    - **产生:** `Agents` 执行任务产生观察/学习 -> `AgentDispatcher` -> `MainLoop` -> `DecisionMaker` (评估) -> `MindscapeConnector.StoreMemory()` -> `Mindscape` (持久化存储)。
-    - **使用:** `DecisionMaker` (决策前) / `Agents` (执行中，按需) -> `MindscapeConnector.RetrieveMemories()` -> 从 `Mindscape` 获取。
-- **任务 (Tasks):**
-    - `DecisionMaker` (根据上下文和记忆) 产生任务定义 -> `MainLoop` -> `AgentDispatcher` -> `Agents` (执行)。
-- **上下文 (Context for Decision Making):**
-    - `Mindscape` (通过唤醒信号) -> `MindscapeConnector` -> `MainLoop` -> `DecisionMaker`.
-    - `Agent` 执行结果 -> `AgentDispatcher` -> `MainLoop` -> `DecisionMaker`.
-    - 系统内部状态 -> `DecisionMaker`.
-- **监控指令 (Monitoring Instructions):**
-    - `DecisionMaker` (判断无任务时) 定义监控条件 -> `MainLoop` -> `MindscapeConnector.DelegateMonitoringTask()` -> `Mindscape` (执行监控)。
-- **唤醒数据 (Wake-up Data):**
-    - `Mindscape` (监控条件满足) -> 唤醒机制 (Webhook/MQ) -> `MindscapeConnector` 的监听器 -> `MainLoop` -> `DecisionMaker`。
+```mermaid
+graph LR
+    subgraph "任务编排流程"
+        A[任务输入] --> B{分析任务特性}
+        B --> C[创建执行计划]
+        C --> D[优化计划]
+        D --> E{执行模式选择}
+        
+        E -->|串行| F[串行执行器]
+        E -->|并行| G[并行执行器]
+        E -->|混合| H[混合执行器]
+        
+        F --> I[并发控制]
+        G --> I
+        H --> I
+        
+        I --> J[Agent调度]
+        J --> K[结果收集]
+        K --> L[状态更新]
+        L --> M{持续决策}
+        
+        M -->|继续| N[生成新计划]
+        M -->|停止| O[完成执行]
+        
+        N --> D
+    end
+    
+    subgraph "支持特性"
+        P[重试机制]
+        Q[超时控制]
+        R[依赖解析]
+        S[资源监控]
+        T[性能优化]
+    end
+    
+    I -.-> P
+    I -.-> Q
+    C -.-> R
+    L -.-> S
+    D -.-> T
+```
 
-## 5. 与 `mindscape` 的交互 (Interaction with `mindscape`)
+**核心特性:**
+- **多模式执行:** 串行、并行、混合执行模式
+- **智能计划创建:** 基于任务特性自动生成最优执行计划
+- **动态优化:** 基于历史性能数据进行计划优化
+- **并发控制:** 信号量机制防止资源过载
+- **持续监控:** 实时监控执行状态和系统资源
 
-- **记忆的持久化与检索:** "Another Me" 依赖 `Mindscape` 作为其长期记忆库。所有重要的学习成果、用户画像、任务历史、关键事件等都通过 `MindscapeConnector` 存入 `Mindscape`。在决策和任务执行前，也通过 `MindscapeConnector` 从 `Mindscape` 获取相关的历史记忆、模式和知识，以提供上下文和指导。`Mindscape` 自身负责高级记忆管理功能，如联想推理、知识图谱构建、向量化检索和记忆衰减等。
-- **智能监控任务委托:** 当 "Another Me" 的 `DecisionMaker` 判断系统可以进入空闲或等待状态时，它会定义一系列具体的监控条件，并通过 `MindscapeConnector` 将这些监控任务委托给 `Mindscape`。例如："当比特币价格达到120000美元时通知我"，或者"Elon Musk 发推文时通知我"。
-- **唤醒机制与数据传递:** `Mindscape` 在其监控的条件满足后，会通过预先配置好的通道（如Webhook URL或MQ主题）向 "Another Me" 的 `MindscapeConnector` 发送唤醒信号。这个信号必须包含触发唤醒的事件详情和相关的上下文数据（例如，哪个应用被打开、屏幕上出现的文本片段、用户输入的初步内容等）。`MindscapeConnector` 负责监听这些信号，验证其来源，解析数据，并通过回调机制激活 `MainLoop`，将数据传递给 `DecisionMaker`。
+### 3.3. 持续决策引擎 (ContinuousDecisionEngine)
 
-## 6. 错误处理与韧性 (Error Handling & Resilience)
+**位置:** `internal/core/interfaces.go` (接口定义)
 
-- 各核心组件需实现健壮的错误处理，避免单点故障导致整个系统崩溃。
-- `MindscapeConnector` 与 `Mindscape` 的所有网络通信应包含超时控制、重试逻辑（针对可恢复错误）和熔断机制。
-- `MainLoop` 需要能够从其子组件（如 `DecisionMaker`, `AgentDispatcher`）的临时故障中优雅恢复，或在关键组件失败时记录详细错误并尝试安全重启或进入受限模式。
-- 鉴于系统的持续运行特性，必须高度关注资源管理，防止内存泄漏、句柄泄漏等问题。
-- `Mindscape` 不可用时的降级策略：`DecisionMaker` 应能感知到 `Mindscape` 的不可用状态，并采取备用逻辑（例如，基于短期记忆运行，或进入更长时间的本地化等待，定期尝试重连）。**此外，对于计划发送给 `Mindscape` 的数据（如新的记忆条目、监控任务更新），应实现一个本地持久化队列。当 `MindscapeConnector` 检测到 `Mindscape` 服务恢复时，会自动处理队列中的数据，确保信息最终一致性。**
+持续决策引擎是系统智能化的核心，基于Agent输出反馈进行深度分析和智能决策。
 
-## 7. 扩展性 (Extensibility)
+```mermaid
+flowchart TD
+    A[Agent执行结果] --> B[反馈分析器]
+    B --> C[输出深度分析]
+    C --> D[关键洞察提取]
+    D --> E[风险评估]
+    E --> F[持续决策引擎]
+    
+    F --> G{决策判断}
+    G -->|继续执行| H[生成新任务]
+    G -->|需要等待| I[进入监控模式]
+    G -->|用户确认| J[等待用户输入]
+    G -->|资源不足| K[优化资源分配]
+    
+    H --> L[创建执行计划]
+    I --> M[定义监控条件]
+    J --> N[用户交互接口]
+    K --> O[系统调优]
+    
+    subgraph "分析维度"
+        P[任务完成度分析]
+        Q[执行质量评估]
+        R[异常模式识别]
+        S[用户意图理解]
+        T[系统资源评估]
+    end
+    
+    C --> P
+    C --> Q
+    C --> R
+    C --> S
+    C --> T
+    
+    classDef analysis fill:#e3f2fd,stroke:#1976d2
+    classDef decision fill:#f3e5f5,stroke:#7b1fa2
+    classDef action fill:#e8f5e8,stroke:#388e3c
+    
+    class B,C,D,E,P,Q,R,S,T analysis
+    class F,G decision
+    class H,I,J,K,L,M,N,O action
+```
 
-- **新 Agent 类型:** 通过实现统一的 `Agent` 接口，可以方便地集成新的执行单元（例如，专门用于特定应用操作的 `Agent`）。`AgentDispatcher` 需要能够动态注册和调度新的 `Agent` 类型。
-- **决策逻辑的演进:** `DecisionMaker` 的内部逻辑可以设计为可插拔的策略模式。初期可能基于规则和启发式方法，未来可以逐步引入更复杂的基于机器学习模型的决策引擎。
-- **监控能力的增强:** 只要 `Mindscape` 服务支持新的监控维度和条件类型，`MindscapeConnector` 就可以相应扩展，使得 "Another Me" 能够利用这些新的监控能力。
-- **与外部服务的集成:** 可以通过定义新的 `Agent` 或在 `DecisionMaker` 中增加逻辑来与更多的外部服务和API交互。
+**智能决策特性:**
+- **深度反馈分析:** LLM驱动的Agent输出分析
+- **多维度评估:** 完成度、质量、风险、资源等综合评估
+- **自适应策略:** 基于分析结果动态调整执行策略
+- **智能循环控制:** 自主决定何时继续、等待或停止
 
-## 8. 待讨论/未来考虑 (Open Questions / Future Considerations)
+### 3.4. 反馈分析器 (FeedbackAnalyzer)
 
-- `MainLoop` 的具体调度策略：是完全依赖 `Mindscape` 唤醒，还是结合一个保底的低频自主检查周期？
-- `DecisionMaker` 的复杂性与演化路径：如何从简单的规则驱动平滑过渡到更智能的决策模型？
-- `Mindscape` 通信的加密与安全认证机制。
-- 本地缓存策略：对于频繁访问的记忆或 `Mindscape` 短暂不可用时的关键数据，是否需要在 "Another Me" 侧实现一定程度的本地缓存？
-- 用户隐私与数据安全：如何确保在学习用户行为和存储记忆时的隐私保护。
-- `Mindscape` 监控任务的优先级和冲突解决：如果定义了多个可能冲突或重叠的监控任务，`Mindscape` 如何处理？"Another Me" 如何管理这些任务？
-- "Another Me" 自身状态的持久化与恢复：除了 `Mindscape` 中的记忆，系统自身运行的一些核心状态（如当前目标、进行中的长任务上下文）是否也需要持久化，以便在重启后恢复？
+专门负责深度分析Agent执行结果，提取关键洞察和模式识别。
+
+**核心功能:**
+- **执行模式识别:** 成功/失败模式的自动识别
+- **质量评估:** 多维度的执行质量分析
+- **风险预测:** 基于历史数据的风险预测
+- **洞察生成:** 可执行的改进建议和下一步行动
+
+## 4. 智能工作流程
+
+### 4.1. 完整执行流程
+
+```mermaid
+sequenceDiagram
+    participant U as 用户/监控触发
+    participant SML as SmartMainLoop
+    participant DM as DecisionMaker
+    participant STO as SmartTaskOrchestrator
+    participant CDE as ContinuousDecisionEngine
+    participant FA as FeedbackAnalyzer
+    participant AD as AgentDispatcher
+    participant A as Agents
+    participant MC as MindscapeConnector
+
+    U->>SML: 输入/唤醒事件
+    SML->>DM: 初始决策请求
+    DM->>MC: 检索相关记忆
+    MC-->>DM: 返回记忆上下文
+    DM-->>SML: 返回初始决策
+
+    loop 持续执行循环
+        SML->>STO: 创建执行计划
+        STO->>STO: 优化计划
+        STO->>AD: 执行任务
+        AD->>A: 分发任务
+        A-->>AD: 执行结果
+        AD-->>STO: 收集结果
+        STO-->>SML: 执行状态
+
+        SML->>FA: 分析Agent输出
+        FA-->>SML: 分析结果
+        SML->>CDE: 持续决策请求
+        CDE-->>SML: 决策结果
+
+        alt 继续执行
+            SML->>STO: 新任务计划
+        else 进入等待
+            SML->>MC: 设置监控任务
+            break 等待模式
+            end
+        end
+    end
+
+    SML->>MC: 存储执行记忆
+```
+
+### 4.2. 决策流程详解
+
+```mermaid
+graph TD
+    A[触发事件] --> B[上下文收集]
+    B --> C[记忆检索]
+    C --> D[初始决策]
+    D --> E{有任务执行?}
+    
+    E -->|是| F[创建执行计划]
+    E -->|否| G[定义监控条件]
+    
+    F --> H[执行任务]
+    H --> I[收集结果]
+    I --> J[反馈分析]
+    J --> K[持续决策]
+    
+    K --> L{继续执行?}
+    L -->|是| M[生成新任务]
+    L -->|否| N[存储记忆]
+    
+    M --> F
+    N --> O[进入等待模式]
+    G --> O
+    
+    subgraph "分析引擎"
+        J --> P[质量评估]
+        J --> Q[模式识别]
+        J --> R[风险分析]
+        J --> S[洞察生成]
+    end
+    
+    subgraph "决策因子"
+        K --> T[任务完成度]
+        K --> U[用户满意度]
+        K --> V[系统资源]
+        K --> W[执行效率]
+    end
+```
+
+## 5. 数据结构与类型系统
+
+### 5.1. 核心数据流
+
+```mermaid
+graph LR
+    subgraph "输入数据"
+        A[用户输入]
+        B[唤醒事件]
+        C[系统状态]
+    end
+    
+    subgraph "决策数据"
+        D[DecisionContext]
+        E[DecisionResult]
+        F[ContinuousDecisionContext]
+        G[ContinuousDecisionResult]
+    end
+    
+    subgraph "执行数据"
+        H[Task]
+        I[ExecutionPlan]
+        J[ExecutionStep]
+        K[ExecutionState]
+        L[ExecutionResult]
+    end
+    
+    subgraph "分析数据"
+        M[AgentOutputAnalysis]
+        N[RiskAssessment]
+        O[SystemMetrics]
+        P[FeedbackInsights]
+    end
+    
+    subgraph "记忆数据"
+        Q[MemoryItem]
+        R[MonitoringTask]
+        S[WakeupEvent]
+    end
+    
+    A --> D
+    B --> D
+    C --> D
+    D --> E
+    E --> H
+    H --> I
+    I --> J
+    J --> K
+    K --> L
+    L --> M
+    M --> F
+    F --> G
+    G --> E
+    
+    L --> Q
+    E --> R
+    R --> S
+    S --> B
+```
+
+### 5.2. 执行模式架构
+
+```mermaid
+classDiagram
+    class ExecutionMode {
+        <<enumeration>>
+        SERIAL
+        PARALLEL
+        MIXED
+    }
+    
+    class ExecutionPlan {
+        +string id
+        +ExecutionStep[] steps
+        +ContinuationStrategy strategy
+        +Duration globalTimeout
+        +map context
+    }
+    
+    class ExecutionStep {
+        +string id
+        +ExecutionMode mode
+        +Task[] tasks
+        +string[] dependencies
+        +int maxRetries
+        +Duration timeout
+        +bool continueOnFailure
+    }
+    
+    class ExecutionState {
+        +string planId
+        +int currentStepIndex
+        +StepResult[] stepResults
+        +ExecutionStatus status
+        +int iterationCount
+        +SystemMetrics metrics
+    }
+    
+    class ContinuationStrategy {
+        +int maxIterations
+        +ContinueCondition[] continueConditions
+        +StopCondition[] stopConditions
+        +Duration idleThreshold
+        +FeedbackAnalysisType analysisType
+    }
+    
+    ExecutionPlan --> ExecutionStep
+    ExecutionPlan --> ContinuationStrategy
+    ExecutionStep --> ExecutionMode
+    ExecutionState --> ExecutionPlan
+```
+
+## 6. 智能特性详解
+
+### 6.1. 并发控制与资源管理
+
+```mermaid
+graph TB
+    subgraph "并发控制层"
+        A[信号量池<br/>Semaphore Pool]
+        B[任务队列<br/>Task Queue]
+        C[执行器池<br/>Executor Pool]
+    end
+    
+    subgraph "资源监控"
+        D[CPU监控]
+        E[内存监控]
+        F[Agent状态监控]
+        G[响应时间监控]
+    end
+    
+    subgraph "智能调度"
+        H[负载均衡器]
+        I[优先级调度器]
+        J[依赖解析器]
+        K[超时管理器]
+    end
+    
+    A --> H
+    B --> I
+    C --> J
+    D --> H
+    E --> H
+    F --> I
+    G --> K
+    
+    H --> L[任务分发]
+    I --> L
+    J --> L
+    K --> L
+```
+
+### 6.2. 智能决策算法
+
+**持续决策评估矩阵:**
+
+| 维度 | 评估因子 | 权重 | 决策影响 |
+|------|----------|------|----------|
+| 任务完成度 | 成功率、质量分数 | 0.3 | 继续/停止 |
+| 用户意图 | 满意度、需求匹配 | 0.25 | 任务调整 |
+| 系统资源 | CPU、内存、Agent可用性 | 0.2 | 并发控制 |
+| 执行效率 | 响应时间、吞吐量 | 0.15 | 优化策略 |
+| 风险评估 | 错误率、异常模式 | 0.1 | 安全控制 |
+
+## 7. 与 Mindscape 的高级集成
+
+### 7.1. 智能记忆管理
+
+```mermaid
+graph LR
+    subgraph "Another Me"
+        A[执行结果] --> B[记忆提取器]
+        B --> C[重要性评分]
+        C --> D[关联分析]
+        D --> E[记忆存储]
+    end
+    
+    subgraph "Mindscape"
+        F[记忆索引]
+        G[联想引擎]
+        H[知识图谱]
+        I[向量搜索]
+    end
+    
+    E --> F
+    F --> G
+    G --> H
+    H --> I
+    
+    subgraph "智能检索"
+        J[上下文查询] --> K[多维检索]
+        K --> L[相关性排序]
+        L --> M[记忆融合]
+    end
+    
+    I --> J
+    M --> N[决策上下文]
+```
+
+### 7.2. 监控任务智能化
+
+**监控条件类型:**
+- **环境感知:** 应用启动、屏幕内容变化、用户行为模式
+- **时间触发:** 定时任务、周期性检查、时间窗口监控
+- **状态监控:** 系统状态变化、资源阈值、错误模式
+- **用户意图:** 隐式需求识别、行为预测、偏好学习
+
+## 8. 性能优化与可扩展性
+
+### 8.1. 系统性能指标
+
+```mermaid
+graph TD
+    subgraph "性能监控"
+        A[任务吞吐量<br/>Tasks/Hour]
+        B[平均响应时间<br/>Response Time]
+        C[系统资源利用率<br/>Resource Usage]
+        D[错误率<br/>Error Rate]
+        E[决策质量<br/>Decision Quality]
+    end
+    
+    subgraph "优化策略"
+        F[执行计划优化]
+        G[并发数动态调整]
+        H[缓存策略优化]
+        I[负载均衡优化]
+        J[决策算法调优]
+    end
+    
+    A --> F
+    B --> G
+    C --> H
+    D --> I
+    E --> J
+    
+    subgraph "自适应机制"
+        K[性能基准学习]
+        L[动态阈值调整]
+        M[策略A/B测试]
+        N[自动调优引擎]
+    end
+    
+    F --> K
+    G --> L
+    H --> M
+    I --> N
+    J --> N
+```
+
+### 8.2. 可扩展性设计
+
+**组件可扩展性:**
+- **Agent扩展:** 插件化Agent接口，支持动态加载
+- **决策引擎扩展:** 可插拔决策策略，支持自定义算法
+- **分析器扩展:** 模块化分析器，支持多种分析维度
+- **监控扩展:** 灵活的监控条件定义，支持自定义监控器
+
+## 9. 错误处理与系统韧性
+
+### 9.1. 多层错误处理
+
+```mermaid
+graph TB
+    subgraph "错误捕获层"
+        A[Agent执行错误]
+        B[网络连接错误]
+        C[资源不足错误]
+        D[决策引擎错误]
+    end
+    
+    subgraph "错误分类处理"
+        E[可重试错误]
+        F[不可恢复错误]
+        G[需要人工干预错误]
+        H[系统级错误]
+    end
+    
+    subgraph "恢复策略"
+        I[自动重试机制]
+        J[降级服务]
+        K[用户通知]
+        L[系统重启]
+    end
+    
+    A --> E
+    B --> E
+    C --> F
+    D --> G
+    
+    E --> I
+    F --> J
+    G --> K
+    H --> L
+    
+    subgraph "韧性保障"
+        M[熔断器]
+        N[限流器]
+        O[本地缓存]
+        P[健康检查]
+    end
+```
+
+### 9.2. 系统韧性机制
+
+**故障隔离:** 组件间故障隔离，防止级联失败
+**优雅降级:** 核心功能保障，非核心功能降级
+**自动恢复:** 智能故障检测和自动恢复机制
+**状态恢复:** 持久化关键状态，支持断点续传
+
+## 10. 未来演进方向
+
+### 10.1. 技术演进路线图
+
+```mermaid
+timeline
+    title Another Me 技术演进路线图
+    
+    section 当前版本 v1.0
+        智能编排系统 : 完成核心架构
+                    : 实现智能决策引擎
+                    : 支持多模式执行
+    
+    section 近期目标 v1.5
+        与Mindscape集成 : 协同工作方式确定
+    
+    section 中期目标 v2.0
+        多模态智能体 : 视觉理解Agent
+                     : 语音交互Agent
+                     : 跨模态协作机制
+    
+    section 长期愿景 v3.0
+        AGI级别能力 : 通用问题解决
+                     : 创造性任务执行
+                     : 深度用户理解
+```
+
+### 10.2. 架构演进
+
+**智能化程度提升:**
+- 从规则驱动到深度学习驱动
+- 从单一决策到多层次认知
+- 从被动响应到主动预测
+
+**生态系统扩展:**
+- Agent市场和插件生态
+- 第三方服务深度集成
+- 开放API和开发者平台
+
+**用户体验优化:**
+- 更自然的交互方式
+- 更精准的意图理解
+- 更个性化的服务提供
+
+---
+
+## 11. 总结
+
+Another Me v1.0 智能编排系统代表了AI Agent系统架构的重大进展。通过智能任务编排、持续决策引擎、深度反馈分析等创新机制，系统实现了真正的自主运行和自适应能力。
+
+**核心优势:**
+1. **智能化:** LLM驱动的深度分析和决策
+2. **自适应:** 基于反馈的持续优化和学习
+3. **高效性:** 智能并发控制和资源管理
+4. **可扩展:** 模块化设计和插件化架构
+5. **韧性强:** 多层错误处理和故障恢复
+
+这个架构为构建下一代智能助手和自主Agent系统提供了坚实的技术基础，能够支撑从个人助手到企业级自动化的各种应用场景。

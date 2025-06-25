@@ -127,7 +127,9 @@ func (b *ToolCallingAgentBuilder) Build() (*ToolCallingAgent, error) {
 	}, nil
 }
 
-// Run 方法执行 ReAct 代理的核心逻辑。
+var _ ReAct = (*ToolCallingAgent)(nil)
+
+// Run 方法执行 ReAct Agent的核心逻辑。
 // 它接收初始用户输入，并返回一个用于流式输出的只读通道。
 // 流式输出是通过 AgentOutputChunk 结构体实现的，它可包含文本块、工具执行信号或错误。
 // 客户端应从返回的通道中读取，直到通道关闭或收到 IsLast=true 的数据块。

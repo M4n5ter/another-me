@@ -22,8 +22,6 @@ func init() {
 
 	GlobalManager, err = NewManager(actualLocalesFS, "en")
 	if err != nil {
-		// slog 通常用于应用级别的日志，但在 init 中，如果 slog 本身还未完全配置，
-		// 或者这是一个关键到无法启动的错误，直接使用标准 log.Fatalf 更为稳妥。
 		slog.Error("i18n: 初始化全局 GlobalManager 失败", "错误", err)
 		os.Exit(1)
 	}

@@ -154,7 +154,9 @@ func (b *TextBasedAgentBuilder) Build() (*TextBasedAgent, error) {
 	}, nil
 }
 
-// Run 方法执行基于文本的 ReAct 代理的核心逻辑
+var _ ReAct = (*TextBasedAgent)(nil)
+
+// Run 方法执行基于文本的 ReAct Agent的核心逻辑
 // 它接收初始用户输入，并返回一个用于流式输出的只读通道
 func (a *TextBasedAgent) Run(ctx context.Context, userInput, conversationID string) (<-chan AgentOutputChunk, error) {
 	a.logger.Info("Text-based ReAct Agent Run started", "conversationID", conversationID, "userInput", userInput)
