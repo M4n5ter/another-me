@@ -2,11 +2,12 @@ package core
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
 	"time"
+
+	json "github.com/json-iterator/go"
 
 	"github.com/m4n5ter/another-me/internal/core/types"
 	. "github.com/m4n5ter/another-me/pkg/option"
