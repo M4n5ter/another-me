@@ -25,7 +25,7 @@ func ToolCoreSchemaToGoogleFunctionDeclaration(tcSchema *toolcore.ToolSchema) *g
 	}
 
 	functionParams := &genai.Schema{}
-	err = functionParams.UnmarshalJSON(rawSchemaJSON)
+	err = json.Unmarshal(rawSchemaJSON, functionParams)
 	if err != nil {
 		slog.Error("Failed to unmarshal raw schema", "error", err)
 		return nil

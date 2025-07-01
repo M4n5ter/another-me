@@ -7,24 +7,24 @@ toolchain go1.24.3
 require (
 	github.com/BurntSushi/toml v1.5.0
 	github.com/JohannesKaufmann/html-to-markdown v1.6.0
-	github.com/adshao/go-binance/v2 v2.8.2
+	github.com/adshao/go-binance/v2 v2.8.3
 	github.com/anthropics/anthropic-sdk-go v1.4.0
-	github.com/chromedp/cdproto v0.0.0-20250530212709-4dcc110a7b92
-	github.com/chromedp/chromedp v0.13.6
-	github.com/cloudwego/eino v0.3.38
-	github.com/cloudwego/eino-ext/components/model/ark v0.1.10
-	github.com/cloudwego/eino-ext/components/model/deepseek v0.0.0-20250530094010-bd1c4fc20bbe
+	github.com/chromedp/cdproto v0.0.0-20250630014756-b7288190f53c
+	github.com/chromedp/chromedp v0.13.7
+	github.com/cloudwego/eino v0.3.46
+	github.com/cloudwego/eino-ext/components/model/ark v0.1.13
+	github.com/cloudwego/eino-ext/components/model/deepseek v0.0.0-20250626134119-cf4f96ea0039
 	github.com/go-shiori/go-readability v0.0.0-20250217085726-9f5bf5ca7612
 	github.com/go-vgo/robotgo v0.110.8
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/schema v1.4.1
 	github.com/json-iterator/go v1.1.12
 	github.com/m4n5ter/mindscape v0.0.0-20250528053507-3082210e9ea3
-	github.com/mark3labs/mcp-go v0.31.0
-	github.com/openai/openai-go v1.3.0
+	github.com/mark3labs/mcp-go v0.32.0
+	github.com/openai/openai-go v1.8.2
 	github.com/stretchr/testify v1.10.0
 	github.com/temoto/robotstxt v1.1.2
-	google.golang.org/genai v1.8.0
+	google.golang.org/genai v1.13.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -40,7 +40,7 @@ require (
 	github.com/bytedance/sonic/loader v0.2.4 // indirect
 	github.com/chromedp/sysutil v1.1.0 // indirect
 	github.com/cloudwego/base64x v0.1.5 // indirect
-	github.com/cohesion-org/deepseek-go v1.2.8 // indirect
+	github.com/cohesion-org/deepseek-go v1.3.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dblohm7/wingoes v0.0.0-20240820181039-f2b84150679e // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
@@ -77,6 +77,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826 // indirect
 	github.com/nikolalohinski/gonja v1.5.3 // indirect
+	github.com/ollama/ollama v0.7.1 // indirect
 	github.com/otiai10/gosseract v2.2.1+incompatible // indirect
 	github.com/otiai10/mint v1.6.3 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
@@ -106,7 +107,7 @@ require (
 	github.com/vcaesar/screenshot v0.11.1 // indirect
 	github.com/vcaesar/tt v0.20.1 // indirect
 	github.com/volcengine/volc-sdk-golang v1.0.23 // indirect
-	github.com/volcengine/volcengine-go-sdk v1.1.8 // indirect
+	github.com/volcengine/volcengine-go-sdk v1.1.16 // indirect
 	github.com/yargevad/filepathx v1.0.0 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
